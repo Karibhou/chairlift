@@ -103,6 +103,9 @@ are listed in [org-adrs.md](org-adrs.md).
   — printer applications publish on 127.0.0.1 only (no LAN printing or
   DNS-SD), run their image's moving `:stable` tag, and update through
   `podman-auto-update.timer`
+- [adr/0021-active-model-selection-from-downloaded-models.md](adr/0021-active-model-selection-from-downloaded-models.md)
+  — Active Model selects among downloaded models in llmman via a live combo row,
+  mapping `aliases.bluefin-active` in-app while retaining Manage Models for downloads
 
 ### Design
 

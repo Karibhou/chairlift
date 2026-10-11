@@ -264,7 +264,10 @@ class Node(BaseHTTPRequestHandler):
         if self.path != "/llmman/node":
             self.send_error(404)
             return
-        stored = {}
+        stored = {
+            "hf.co/unsloth/Qwen3-8B-GGUF:Q4_K_M": {},
+            "hf.co/unsloth/Ministral-3-8B-Instruct-2512-GGUF:Q4_K_M": {},
+        }
         if alias_path.exists():
             alias = alias_path.read_text(encoding="utf-8").strip()
             if alias:

@@ -2,12 +2,14 @@ package views
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 	"github.com/projectbluefin/chairlift/internal/aistack"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -16,9 +18,9 @@ import (
 )
 
 // Agent Mode is a loopback model server managed by a systemd user unit;
-// Troubleshooting is Goose on that server's model. Model selection happens
-// in llmman's own web UI; ChairLift links there rather than re-implementing
-// a picker (#568). No operation on this page is privileged.
+// Troubleshooting is Goose on that server's model. Active Model lets users
+// select from downloaded models; Manage Models links to llmman's web UI.
+// No operation on this page is privileged.
 func (uh *UserHome) buildAgentsPage() {
 	page := uh.agentsPrefsPage
 	if page == nil {
@@ -60,10 +62,15 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	row.SetActivatableWidget(&uh.agentModeToggle.widget.Widget)
 	group.Add(&row.Widget)
 
-	modelRow := adw.NewActionRow()
+	modelRow := adw.NewComboRow()
 	modelRow.SetTitle(pageview.AgentModeActiveModelTitle())
-	modelRow.SetUseMarkup(false)
 	uh.agentModelRow = modelRow
+	uh.agentModelSpinner = newActivitySpinner()
+	modelRow.AddSuffix(&uh.agentModelSpinner.Widget)
+	uh.agentModelNotify = func(_ gobject.Object, _ uintptr) {
+		uh.onAgentModelSelected()
+	}
+	modelRow.ConnectNotify(&uh.agentModelNotify)
 	group.Add(&modelRow.Widget)
 
 	// Models, chat, and everything else llmman manages live in its own web
@@ -150,17 +157,94 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
-		modelRef, err := aistack.ReadActiveModel(ctx)
+		node, errNode := aistack.FetchNodeStatus(ctx)
+		modelRef, errAlias := aistack.ReadActiveModel(ctx)
 		sgtk.RunOnMainThread(func() {
 			if !uh.agentRefresh.IsCurrent(generation) {
 				return
 			}
-			if err != nil {
-				log.Printf("views: read active model failed: %v", err)
+			if errNode != nil || errAlias != nil {
+				log.Printf("views: read active model failed: node=%v alias=%v", errNode, errAlias)
+				uh.agentModelRow.SetSensitive(false)
 				uh.agentModelRow.SetSubtitle("Couldn't check the model. Use Manage Models to pick one.")
 				return
 			}
-			uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
+			models := node.Models()
+			uh.agentModelSuppress = true
+			uh.agentModelList = models
+			uh.agentModelActive = modelRef
+			uh.agentModelRow.SetModel(gtk.NewStringList(models))
+			if len(models) == 0 {
+				uh.agentModelRow.SetSensitive(false)
+				uh.agentModelRow.SetSubtitle(pageview.AgentModeNoModelsStoredSubtitle())
+			} else {
+				uh.agentModelRow.SetSensitive(true)
+				selectedIndex := -1
+				for i, m := range models {
+					if m == modelRef || "hf.co/"+m == modelRef || m == "hf.co/"+modelRef {
+						selectedIndex = i
+						break
+					}
+				}
+				if selectedIndex >= 0 {
+					uh.agentModelRow.SetSelected(uint32(selectedIndex))
+					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
+				} else {
+					uh.agentModelRow.SetSelected(gtk.INVALID_LIST_POSITION)
+					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(""))
+				}
+			}
+			uh.agentModelSuppress = false
+		})
+	}()
+	uh.refreshGooseState()
+}
+
+func (uh *UserHome) onAgentModelSelected() {
+	if uh.agentModelSuppress || uh.agentModeState != aistack.StateReady {
+		return
+	}
+	pos := uh.agentModelRow.GetSelected()
+	if pos == gtk.INVALID_LIST_POSITION || int(pos) >= len(uh.agentModelList) {
+		return
+	}
+	targetModel := uh.agentModelList[pos]
+	if targetModel == uh.agentModelActive || "hf.co/"+targetModel == uh.agentModelActive || targetModel == "hf.co/"+uh.agentModelActive {
+		return
+	}
+	if !uh.agentModeGate.TryStart() {
+		return
+	}
+	uh.agentModelActive = targetModel
+	uh.agentRefresh.Begin()
+	uh.agentModeToggle.widget.SetSensitive(false)
+	uh.agentModelRow.SetSensitive(false)
+	setActivitySpinner(uh.agentModelSpinner, true)
+	go func() {
+		ctx, cancel := aistack.DefaultContext()
+		defer cancel()
+		var err error
+		if dryrun.Enabled() {
+			log.Printf("[DRY-RUN] would configure alias %s to %s", aistack.ActiveModelAlias, targetModel)
+		} else {
+			err = aistack.ConfigureActiveModel(ctx, targetModel)
+		}
+		sgtk.RunOnMainThread(func() {
+			uh.agentModelSuppress = true
+			uh.agentModeGate.Reset()
+			uh.agentModeToggle.widget.SetSensitive(true)
+			uh.agentModelRow.SetSensitive(true)
+			setActivitySpinner(uh.agentModelSpinner, false)
+			if err != nil {
+				log.Printf("views: configure active model failed: %v", err)
+				uh.toastAdder.ShowErrorToast("Could not select the model.")
+			} else if dryrun.Enabled() {
+				uh.toastAdder.ShowToast(fmt.Sprintf("[DRY-RUN] Would switch to %s", targetModel))
+			} else {
+				uh.toastAdder.ShowToast(fmt.Sprintf("Selected %s.", targetModel))
+			}
+			uh.showAgentModeState(uh.agentModeState)
+			uh.agentModelSuppress = false
 		})
 	}()
 }

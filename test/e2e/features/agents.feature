@@ -38,6 +38,7 @@ Feature: Agents page
     And the "Agent Mode" row says "Ready."
     And the llmman node endpoint was probed
     And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
+    And the model chooser is sensitive
     And the "Manage Models" row says "Open llmman's web UI to pull, remove, or chat with models."
     And the "Goose" row says "Set up Goose to start troubleshooting."
     And the "Set Up" button in the "Goose" row is sensitive
@@ -110,6 +111,16 @@ Feature: Agents page
     And the systemctl tool was never asked to mutate
     And the action journal is empty
 
+  @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias
+  Scenario: Selecting a downloaded model in a dry run logs preview and keeps active model
+    Given ChairLift is running
+    When I open the "Agents" page
+    Then the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
+    And the model chooser is sensitive
+    When I select "hf.co/unsloth/Ministral-3-8B-Instruct-2512-GGUF:Q4_K_M" in the model selector
+    Then the application log contains "[DRY-RUN] would configure alias bluefin-active to hf.co/unsloth/Ministral-3-8B-Instruct-2512-GGUF:Q4_K_M"
+    And llmman was never asked to "config set"
+    And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
   # ------------------------------------------------------------ troubleshooting
 
   Scenario: Troubleshooting sits between Agent Mode and Contribute
