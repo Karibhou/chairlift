@@ -2,12 +2,13 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 
+	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/distrobox"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/powerwash"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -28,9 +29,9 @@ import (
 // response before anything runs, per the HIG's rule that destructive
 // dialogs are reserved for genuinely non-undoable actions — which these are.
 //
-// The reset rows are built on the Recovery detail page, so the dialogs are
-// parented to the Recovery page, never the Maintenance page. A reset is a
-// deliberate Recovery action, not a routine cleanup control. maintenance_page
+// The reset rows are built on the Powerwash detail page, so the dialogs are
+// parented to the Powerwash page, never the Maintenance page. A reset is a
+// deliberate Powerwash action, not a routine cleanup control. maintenance_page
 // guards reset_group and builds these rows on the recovery page; the rows are
 // gated by reset_group (disabled by shipped default), the same default
 // maintenance_cleanup_group uses.
@@ -55,8 +56,8 @@ const (
 // of them.
 func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle("Recovery")
-	group.SetDescription("For when something has gone wrong. Each one asks you to confirm, and cannot be undone.")
+	group.SetTitle("Powerwash")
+	group.SetDescription("For when something has gone wrong. These can't be undone.")
 
 	powerwashRow := adw.NewActionRow()
 	presentation := pageview.PowerwashRow()
@@ -72,7 +73,9 @@ func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 
 	// Factory Reset runs the helper; an image that does not provide the
 	// command gets no row rather than one that fails after authentication.
-	if ublue.StatusCached().Supports(ubluehelper.CommandFactoryReset) {
+	// Neither does a composefs host: `bootc install reset` needs OSTree
+	// storage and fails there with "OSTree storage not initialized".
+	if ublue.StatusCached().Supports(ubluehelper.CommandFactoryReset) && !bootc.ComposefsBooted() {
 		resetRow := adw.NewActionRow()
 		resetPresentation := pageview.FactoryResetRow()
 		resetRow.SetTitle(resetPresentation.Title)
@@ -101,7 +104,7 @@ func (uh *UserHome) onPowerwashClicked(button *gtk.Button, row *adw.ActionRow) {
 	title, body := pageview.PowerwashConfirmation()
 	dialog := adw.NewAlertDialog(title, body)
 	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("confirm", "Remove Everything")
+	dialog.AddResponse("confirm", "Remove Apps and Containers")
 	dialog.SetResponseAppearance("confirm", adw.ResponseDestructiveValue)
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {
@@ -124,8 +127,10 @@ func (uh *UserHome) runPowerwash(button *gtk.Button, row *adw.ActionRow) {
 
 		runner := powerwash.Runner{
 			FlatpakInstalled:   flatpak.IsInstalledCached,
+			FlatpaksPresent:    func(context.Context) (bool, error) { return flatpak.HasUserRefs() },
 			RemoveFlatpaks:     func(context.Context) error { return flatpak.RemoveAllUser() },
 			DistroboxInstalled: distrobox.IsInstalled,
+			DistroboxesPresent: distrobox.HasContainers,
 			RemoveDistroboxes:  distrobox.RemoveAll,
 		}
 		results := runner.Run(ctx)
@@ -191,7 +196,8 @@ func (uh *UserHome) runFactoryReset(button *gtk.Button, row *adw.ActionRow) {
 			button.SetLabel(factoryResetButtonLabel)
 
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Factory reset failed: %v", err))
+				log.Printf("views: factory reset failed: %v", err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't reset this computer. Try again."))
 				return
 			}
 

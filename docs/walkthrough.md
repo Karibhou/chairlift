@@ -1,8 +1,10 @@
 # Control Center walkthrough
 
-Every screen below was captured from the real application in an isolated
-Dakota Wayland session on 2026-10-01 — not mockups. The regular release
-capture command remains documented [below](#how-these-are-made).
+The screenshots below come from the real application, not mockups. They are
+committed captures, not a live report of this checkout; the isolated Dakota
+capture command and release refresh workflow are documented [below](#how-these-are-made).
+Screenshots can show optional groups that the shipped profile hides; available
+controls also depend on this computer's tools and administrator configuration.
 
 One app for the Bluefin family (Bluefin, Bluefin LTS, Dakota).
 Everything here is one control per decision — no strategy pickers, no
@@ -30,26 +32,29 @@ launch failure leaves the conclusion available to retry. **Dismiss setup**
 
 ![Updates](screenshots/1-updates.png)
 
-The Bluefin wordmark leads the page. **System updates** groups System
-components and Operating system; **Apps and tools** groups Applications and
-Developer tools. Each row shows its own state, so you can see which source
-is holding you up without opening anything. A source your administrator
-turned off says **Disabled by administrator**; one this computer has no
-software for says **Not available on this system** instead.
-
-Normally the page also reports **System is up to date**, or how many updates
-are waiting. When only a restart remains, that status panel disappears
-entirely, including its padding: the wordmark is followed directly by
-**System updates**, as shown above.
+The Bluefin wordmark leads the page, with the one action button directly
+under it and a single line of status under the button: **Up to date ·
+checked at** a time, how many updates are available, or **Restart to finish
+updating**. If something went wrong, a second line says what. **System
+updates** groups System components and Operating system; **Apps and tools**
+groups Applications and Developer tools. Each row shows its own state, so you
+can see which source is holding you up without opening anything. A source
+your administrator turned off says **Disabled by administrator**; one this
+computer has no software for says **Not available on this computer** instead.
+**Preferences** (Ctrl+,) has a switch per source: a source you turn off there
+says **Disabled in preferences** as soon as you change it, and a source you
+cannot turn on shows its switch off, greyed out, with the same words as its row
+here.
 
 One button covers all of them. It reads **Check again** when nothing is
 pending, **Update all** when something is, and **Retry failed** if a source
 didn't finish. A staged system version adds its own **Restart now** to the
-right of the **Operating system** row; the source that fails does not stop
-the others. A run long enough that you wandered off finishes with a desktop
-notification.
-While checking or installing, an animated activity bar stays moving even
-when the underlying tool has no new output. It does not claim a percentage.
+right of the **Operating system** row, so the header offers no button then;
+the source that fails does not stop the others. A run long enough that you
+wandered off finishes with a desktop notification.
+While checking or installing, an animated activity bar takes the button's
+place and stays moving even when the underlying tool has no new output. It
+does not claim a percentage.
 
 Everything else on the page sits below the sources, each part only where it
 applies (not all of it fits in the shot above).
@@ -67,7 +72,7 @@ On systems that update as a whole, **Operating system** holds
 **System Updates**, which downloads the next system version by itself, and
 **What's changing**, which lists exactly what software a pending update will
 add, remove, or upgrade once you press **Compare**. **Roll Back** — returning to
-the previous version if an update went badly — lives under **Recovery**, and
+the previous version if an update went badly — lives under **Powerwash**, and
 only appears where a previous deployment actually exists.
 
 Each other source keeps its own group for when you want to update just one
@@ -94,17 +99,23 @@ duplicate it.
 
 ![Apps](screenshots/2-applications.png)
 
-**Browse** and **Search** lead the page; search across both Homebrew formulae
-and casks. Apps already installed follow, then **App collections**, then
-explicit command-line tools (the packages Homebrew manages) and export controls.
-Dependency runtimes do not crowd the app inventory. Collections identify
-Homebrew as a third-party source. Installs show native activity and streamed command progress
-while they run, using the same controls in the explicit setup flow.
+**App collections** lead the page: each installs a group of apps and tools in
+one step. Expanding a collection reveals the names and kinds of the apps and
+tools inside, so you can read what an install will add before pressing the
+button. Installs show native activity and streamed command progress while
+they run, using the same controls in the explicit setup flow. A collection whose
+apps and tools are all already on the system reads **Installed** when the page
+loads, not only after an install in the same session.
 
-Removing an installed app asks first, and says whether
-it leaves only your account (user Flatpak) or everyone's (system Flatpak).
-**Export package list** saves what
-you have installed so you can put it back on another machine.
+**Installed apps** and **Command line tools** follow: installed casks first,
+then explicitly requested formulae (the packages Homebrew manages).
+Dependency-only formulae do not crowd the inventory. Removing a package asks
+first; formulae also offer pin and unpin actions. There is no Flatpak inventory,
+external catalog launcher, or package search here.
+
+Finally, **Backup** contains **Export app list**, which saves a list of your
+apps and tools to your home folder (named Brewfile, replacing any file already
+there) so you can reinstall them later.
 Export shows **Exporting…** and an activity spinner until it finishes, then
 becomes available again, including after a failed export.
 
@@ -114,23 +125,34 @@ becomes available again, including after a failed export.
 
 ![Agents](screenshots/3-agents.png)
 
-**Agent Mode** is one switch that runs AI models on this computer. Answers are
-generated locally — nothing you type is sent to a cloud service — and prompts
-are not saved. Turning it on installs the llmman model server from Homebrew,
+**Agent Mode** is one switch that runs AI models on this computer. Its owned
+server binds only to loopback, disables peers and prompt history, and does not
+offload inference. A client such as Goose can separately use a cloud provider;
+check that client's settings before sending sensitive information.
+Turning Agent Mode on installs the llmman model server from Homebrew,
 downloads the engine that suits your hardware, and starts it on this computer
 only. Turning it off stops the server and keeps the software and any models you
 downloaded. The row shows an activity spinner throughout setup and shutdown, then
 restores the switch if the operation fails.
 
-**Active Model** and **Recommended Presets** remain visible, becoming usable
-only when the local server is ready. **Goose** is the Agent Mode desktop GUI,
-launched with the active model through llmman without rewriting your persistent
-configuration. It becomes launchable once Goose Desktop, linux-mcp-server, and
-the verified Linux diagnostic toolset are in place. The desktop shortcut and
-`chairlift --ask-bluefin` launch Goose Desktop directly when ready, or open
-Control Center to the Agents page naming the missing requirement. **Show Ask
-Bluefin in menu** toggles the shortcut in GNOME's top panel menu. The connection
-address is directly selectable, not hidden in Details. Apps and terminals opened
+**Active Model** remains visible, becoming usable only when the local server
+is ready; **Manage Models** opens llmman's own models page so users pull,
+remove, and try models there rather than through ChairLift's picker. The
+connection address is directly selectable, not hidden in Details.
+
+**Troubleshooting** sits below Agent Mode where Homebrew is installed. Its
+**Goose** row is the Agent Mode desktop GUI with read-only tools for this
+computer's logs, services, and network, plus searches of the Project Bluefin
+knowledge base, which go online. While Goose Desktop or linux-mcp-server is
+missing, the row offers **Set Up**, which installs them with Homebrew (Goose
+Desktop is published for x86_64 computers only). Once they are installed it
+asks for Agent Mode, then a model, and then offers **Launch**. Goose runs in a
+profile Control Center writes for it on every launch, so your own Goose
+configuration is never read or changed, and one session runs at a time. The
+desktop shortcut and `chairlift --ask-bluefin` launch Goose Desktop directly
+when ready, or open Control Center to the Agents page naming the missing
+requirement. **Show Ask Bluefin in menu** toggles the distribution's shortcut
+in GNOME's top panel menu, and reads on only when the menu actually lists it. Apps and terminals opened
 after Agent Mode is on receive `OLLAMA_HOST`; already-open ones need restarting.
 Everything here runs in your own account, without an administrator password.
 
@@ -138,9 +160,10 @@ Everything here runs in your own account, without an administrator password.
 contribute tasks to Project Bluefin. Before launch, preflight verifies that
 `xdg-terminal-exec`, `ujust`, the `contribute` recipe, and `podman` are
 available, and that a Hive registration file is present. When a requirement is
-missing, the row explains what is needed and keeps the action button
-unavailable until ready. In dry-run mode, it previews the launch without opening
-a terminal.
+missing, the row says in plain words what is needed and keeps the action
+button unavailable until ready; a missing sign-up also shows **Registration Guide**,
+which opens the setup instructions. In dry-run mode, it previews the launch
+without opening a terminal.
 
 ---
 
@@ -151,8 +174,9 @@ a terminal.
 **Desktop integrations** offers **Tailscale Integration** and **Sync Folder
 Integration** switches for GNOME Quick Settings. Tailscale's initial switch
 position is on and Sync Folder's is off; once GNOME answers, the switches show
-its actual saved choices. Sync Folder is marked as not ready yet. A missing
-extension or GNOME session leaves its control unavailable and explains why.
+its actual saved choices. Sync Folder is labelled experimental. A missing
+extension or GNOME session leaves its switch off and unavailable and explains
+why.
 Changing a switch enables or disables that extension for your account; it does
 not install software or start Tailscale or Sync Folder services. Preview mode
 leaves GNOME preferences unchanged.
@@ -165,26 +189,36 @@ a curated list of developer feeds in your home folder once you switch it on —
 both are off by default, and turning Developer tools back off never removes the
 reader, the file, or anything you imported from it.
 Developer options also offer **WSL Mode** (nsl persistent Linux machines by
-default, with Lima Ubuntu LTS as an alternative), **Enable
-Docker**, and individually selected IDEs and terminal editors, including one
-JetBrains Toolbox entry. WSL needs hardware virtualization and access to
+default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64),
+**Enable Docker**, and individually selected IDEs and terminal editors, including
+one JetBrains Toolbox entry. Each editor row says what the tool is, and its
+Install button names the tool for screen readers. Installed state is read again
+whenever the page is shown, so a tool removed on Apps or in a terminal is
+offered again. WSL needs hardware virtualization and access to
 `/dev/kvm`; permission grants require a new login. Docker needs the base
 image's daemon and a socket this session can actually access; installing CLI
 tools is not readiness. Missing installed helper actions leave the affected
 switch visible but locked with its prerequisite explained.
-**Gaming** lets you select individual applications and tools. Installed states
-distinguish applications from runtime extensions and user from system scope.
-Only selected user-scope entries can be removed. Partial failures stay visible
-instead of being reported as an all-or-nothing success.
+Use **Virtual machine engine** to choose the built-in engine or Lima;
+both run Ubuntu. An existing Lima Ubuntu machine is kept as the choice when no
+built-in machine exists, rather than creating a second one. Likewise, a Debian
+machine the built-in engine made in an earlier release keeps being used, and
+the chooser says so, instead of an Ubuntu machine being created beside it.
+**Gaming** lets you select individual applications and tools, and installs
+them system-wide for every account on the computer, which may ask for an
+administrator password. Each row says whether that app is installed
+system-wide, for your account only (as earlier releases installed it), or
+both. **Remove Selected** asks first, then removes each selected app wherever
+it is installed, except a system-wide copy that came with the system (such as
+Flatseal), which is left in place. Partial failures stay visible instead of
+being reported as an all-or-nothing success.
 **Printers** is one switch per printer driver family — Ghostscript, HP
-(HPLIP), and Gutenprint — for printers that need more than built-in
-driverless printing. Each runs as a small container in your own account,
-adds nothing to the system, and shares its printers with this computer and
-your network; when one is running, its row names the local web page where you
-add and manage printers. The switches are locked for now, and each row says
-why: a family can be turned on only once its driver image accepts an
-administrator credential for that web page, so nothing on your network can
-reach an unprotected administration screen. The rows evaluate systemd state,
+(HPLIP), and Gutenprint — offering extra drivers for printers that don't work
+on their own. Each runs as a small container in your own account and only
+this computer can use it: other computers on your network can't print to it
+or reach its settings page. When one is running, its row names the local web
+page where you add and manage printers, and the driver updates itself in the
+background. The rows evaluate systemd state,
 journal logs, and container images to diagnose and surface actionable failures
 — device access permissions, image availability, plugin verification, or
 service crashes — rather than displaying a false enabled or running state.
@@ -194,8 +228,7 @@ where the distribution ships none. When a computer offers none of these —
 no Developer tools, no Gaming, no Printers, no optional features — the page
 says **Nothing to set up here** rather than showing an empty screen.
 
-Agent Mode has its own **Agents** page, and Enhanced Troubleshooting is on
-**Help**.
+Agent Mode and Troubleshooting have their own **Agents** page.
 Developer and Gaming actions show an activity spinner while their changes
 are running, and errors are shown immediately rather than hidden behind an
 older message.
@@ -218,7 +251,7 @@ Project Bluefin's dinosaurs and Control Center downloads that one illustration
 to preview it; nothing changes until you press Apply. If the download or the
 change fails, the chooser says so and your old picture stays put. Where
 AccountsService is unavailable the picture is saved to your home folder
-instead and appears after you next sign in, and the confirmation says which of
+instead and appears after you log out and back in, and the confirmation says which of
 the two happened.
 
 **App Launcher Icon** is your own mark on the Show Applications button on
@@ -248,7 +281,7 @@ straight from
 [cncf/artwork](https://github.com/cncf/artwork).
 
 Both **Top Bar Icon** and **Files Icon** can **Rotate at Login**, which moves
-one step down the list each time you sign in — so you stand somewhere slightly
+one step down the list each time you log in — so you stand somewhere slightly
 different every day without ever picking again.
 
 Any section will also take an SVG of your own, which is the way in for
@@ -262,9 +295,10 @@ one icon per app, not one per place; Plasma's Dolphin is a separate surface.
 Only the Files icon is in color: GNOME's top bar and app-grid glyph draw
 single-color silhouettes, recolored to match your theme.
 
-On GNOME, turning a section off puts back exactly what was there before,
-including a mark your distribution set rather than one you chose. KDE Plasma
-app-grid reset behavior is being completed separately.
+On GNOME, turning a section off restores the previous override or resets to
+the distribution default. On KDE Plasma, turning App Grid Livery off removes
+ChairLift's icon key from Kickoff applets still using it, restoring Plasma's
+default; an applet changed to another icon is left alone.
 
 ---
 
@@ -272,23 +306,19 @@ app-grid reset behavior is being completed separately.
 
 ![Maintenance](screenshots/6-maintenance.png)
 
-One button. **Free up space** removes old downloads and supporting software
-nothing uses any more, and leaves your apps, files, and containers alone. It
+One button. **Free up space** deletes old downloads and app parts nothing uses,
+and leaves your apps, files, and containers alone. It
 tells you how much it reclaimed only when it could measure it. An activity
 spinner remains visible while cleanup is running. Below it sit any
-**Maintenance tasks** whoever set up this computer added. **Recovery**
-holds the actions you can't undo (under **Maintenance → Recovery**): **Roll Back**
-returns to the previous system version if an update went badly, **Powerwash**
-removes the apps you installed and your development containers, and **Factory Reset**
-reinstalls the system from scratch.
-Those stay hidden normally until turned on or until a rollback exists.
-Recovery also has **Published versions**, which asks the image registry for
-the versions of your release stream from the last 90 days and lists one per
-day, marking the one you are running and the one Roll Back returns to. Each
-published build offers a **Pin** button to freeze updates at that specific
-dated version. When booted on a dated version, Recovery offers **Return to stream**
-to switch back to receiving regular stream updates. Both pin and return-to-stream
-ask you to confirm before applying the switch at the next restart.
+**Maintenance tasks** whoever set up this computer added. **Powerwash**
+holds the actions you can't undo (under **Maintenance → Powerwash**): **Roll Back**
+returns to the previous version if an update caused problems, **Powerwash**
+removes your Flatpak apps and Distrobox containers (everything on the Apps page
+stays), and **Factory Reset** reinstalls the operating system, warning first
+that its reset method is still experimental.
+Those stay hidden normally until turned on or until a rollback exists; the
+Powerwash entry's subtitle names only what the detail currently offers, and
+when the reset actions are off the detail says so at the top.
 
 ---
 
@@ -296,23 +326,18 @@ ask you to confirm before applying the switch at the next restart.
 
 ![Help](screenshots/7-help.png)
 
-**Enhanced Troubleshooting** comes first where Homebrew is installed: it sets
-up an AI assistant that can read your logs, services, and network to help
-work out what's wrong, then launches it. The premade configuration chooses no
-AI service; select one in Goose, and the row names the service you configured.
-Setup shows activity while it runs and wires the recognized diagnostic entry
-to fixed tools with SSH-key discovery disabled. It can repair that entry in
-your existing Goose configuration while preserving provider, model and unrelated
-settings. Already-usable configuration is left alone; unsafe or ambiguous
-policies are refused rather than silently replaced.
+**Troubleshooting**, the AI troubleshooting assistant, is on the Agents page.
 
-Three links, each shown only when it is configured: **Visit project
-website**, **Report a problem** (the `issues` URL, where bug reports go), and
-**Browse documentation**.
+Three links, each shown only when it is configured: **Browse documentation**
+(the `website` URL), **Report a problem** (the `issues` URL, where bug reports
+go), and **Ask for help** (the `chat` URL, Ask Bluefin on Bluefin).
 
-A **Diagnostics** group offers a *Copy system diagnostics* row that places
-scrubbed system information — OS, image, kernel, desktop, and GPU — onto the
-clipboard to include when asking for help.
+A **Diagnostics** group offers a **System diagnostics** row that copies
+details about this computer — OS, image, system version, full build digest,
+kernel, desktop, and GPU, without your user name or home folder — to the
+clipboard for a help request.
+The version and digest come from the same unprivileged status read as the
+Updates page's Details row, and are omitted where no deployment is readable.
 
 When the configuration turns on something this computer cannot run — Flatpak
 or Homebrew is absent, or the machine is not a native A/B install — **Feature
@@ -341,10 +366,10 @@ pretending an operation was tested. It needs podman and Go on the host.
 
 Run it locally when something's appearance changes and you want to preview
 before a release. It isn't regenerated per commit, since font and theme
-drift would churn the repo — instead, `.github/workflows/release-screenshots.yml`
-runs it automatically after each published GitHub Release (building from that
-release's tag) and opens a `release-screenshots` pull request against `main`
-with any changed PNGs, so what ships is what's pictured here without anyone
-remembering to do it by hand. That pull request goes through the merge queue
+drift would churn the repo — instead, [the release screenshot workflow](../.github/workflows/release-screenshots.yml)
+runs after a successful `goreleaser` workflow (or a manual dispatch), builds
+from the selected release tag, and opens a `release-screenshots` pull request
+against `main` with changed PNGs. The release-completion trigger is
+`workflow_run`, not `release: published`. That pull request goes through the merge queue
 like any other and still needs one approval. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.

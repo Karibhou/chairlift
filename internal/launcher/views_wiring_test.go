@@ -21,26 +21,13 @@ func TestViewsReportAsyncLauncherFailuresOnMainThread(t *testing.T) {
 		required []string
 	}{
 		{
-			name: "desktop application launcher",
-			file: filepath.Join(repoRoot, "internal", "views", "applications_page.go"),
-			required: []string{
-				`cmd := exec.Command("gtk-launch", appID)`,
-				`if err := launcher.Start(cmd, func(err error) {`,
-				`sgtk.RunOnMainThread(func() {`,
-				// Copy-agnostic on purpose: the guard is that an async
-				// failure surfaces a toast from the main thread, not the
-				// exact sentence, which the HIG rewrite owns.
-				`uh.toastAdder.ShowErrorToast(`,
-			},
-		},
-		{
 			name: "URL launcher",
 			file: filepath.Join(repoRoot, "internal", "views", "help_page.go"),
 			required: []string{
 				`cmd := exec.Command("xdg-open", url)`,
 				`if err := launcher.Start(cmd, func(err error) {`,
 				`sgtk.RunOnMainThread(func() {`,
-				`uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))`,
+				`uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't open %s.", url))`,
 			},
 		},
 	} {

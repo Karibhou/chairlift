@@ -23,6 +23,13 @@ const (
 
 	// RegistrationURL is the link to documentation explaining how to register with Hive.
 	RegistrationURL = "https://github.com/projectbluefin/contribute#configuration"
+
+	// RegistrationGuideLabel labels the control that opens RegistrationURL.
+	RegistrationGuideLabel = "Registration Guide"
+
+	// missingRegistrationSubtitle is shown with the RegistrationURL link
+	// control rather than spelling the URL out as unclickable text.
+	missingRegistrationSubtitle = "Sign up as a contributor first."
 )
 
 // DefaultRegistrationPath returns ~/.config/hive/contributor.env given a home directory.
@@ -91,6 +98,9 @@ type Result struct {
 	Status   Status
 	Ready    bool
 	Subtitle string
+	// HelpURL, when set, is a page that resolves the unmet requirement; the
+	// view offers it as a link control labelled RegistrationGuideLabel.
+	HelpURL string
 }
 
 // Prober provides external system probes for preflight.
@@ -126,7 +136,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingRunner,
 			Ready:    false,
-			Subtitle: "xdg-terminal-exec is required to launch the terminal session.",
+			Subtitle: "Contribute needs a terminal app this computer doesn't have.",
 		}
 	}
 
@@ -135,7 +145,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingUjust,
 			Ready:    false,
-			Subtitle: "ujust is required to run the contribute recipe.",
+			Subtitle: "This computer is missing a part Contribute needs.",
 		}
 	}
 
@@ -144,7 +154,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingRecipe,
 			Ready:    false,
-			Subtitle: "The contribute recipe is not available in ujust.",
+			Subtitle: "This version of Bluefin can't run Contribute yet.",
 		}
 	}
 	summary, err := p.RecipeSummary(ctx)
@@ -152,7 +162,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingRecipe,
 			Ready:    false,
-			Subtitle: "The contribute recipe is not available in ujust.",
+			Subtitle: "This version of Bluefin can't run Contribute yet.",
 		}
 	}
 
@@ -161,7 +171,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingPodman,
 			Ready:    false,
-			Subtitle: "podman is required to run the contributor container.",
+			Subtitle: "This computer is missing a part Contribute needs.",
 		}
 	}
 
@@ -169,25 +179,25 @@ func Preflight(ctx context.Context, p Prober) Result {
 	homeDir, _ := homeDirFn()
 	regPath := RegistrationPath(getenv, homeDir)
 	if regPath == "" {
-		return Result{
-			Status:   StatusMissingRegistration,
-			Ready:    false,
-			Subtitle: "Register this machine first — see " + RegistrationURL,
-		}
+		return missingRegistration()
 	}
-	fi, err := stat(regPath)
-	if err != nil || fi.IsDir() {
-		return Result{
-			Status:   StatusMissingRegistration,
-			Ready:    false,
-			Subtitle: "Register this machine first — see " + RegistrationURL,
-		}
+	if fi, err := stat(regPath); err != nil || fi.IsDir() {
+		return missingRegistration()
 	}
 
 	return Result{
 		Status:   StatusReady,
 		Ready:    true,
-		Subtitle: "Run the Hive contributor appliance in a terminal.",
+		Subtitle: "Opens a terminal to help build Bluefin.",
+	}
+}
+
+func missingRegistration() Result {
+	return Result{
+		Status:   StatusMissingRegistration,
+		Ready:    false,
+		Subtitle: missingRegistrationSubtitle,
+		HelpURL:  RegistrationURL,
 	}
 }
 

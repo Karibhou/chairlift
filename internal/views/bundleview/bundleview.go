@@ -17,6 +17,8 @@ import (
 	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 const (
@@ -33,12 +35,9 @@ type Presentation struct {
 	PlaceholderSubtitle string
 }
 
-// GroupDescription states what the group does and the two consequences that
-// matter once, at the group, rather than repeating them on every row: the
-// software comes from a third party, and a whole collection is a large
-// download.
-const GroupDescription = "Install a set of apps and tools together in one step. " +
-	"Collections come from Homebrew, a third-party source, and can be a large download."
+// GroupDescription states what the group does and the one consequence that
+// matters before pressing Install: a whole collection can be a large download.
+const GroupDescription = "Install a group of apps and tools in one step. Some are large downloads."
 
 // Present derives the collection group's complete loaded state. warning is
 // empty when every existing configured location was read successfully; it is
@@ -50,12 +49,12 @@ func Present(count int, warning string) Presentation {
 	switch {
 	case count == 0 && warning == "":
 		result.PlaceholderTitle = "No collections available"
-		result.PlaceholderSubtitle = "This system does not offer any app collections."
+		result.PlaceholderSubtitle = "This computer has no app collections."
 	case count == 0:
-		result.PlaceholderTitle = "Collections could not be loaded"
-		result.PlaceholderSubtitle = "Something went wrong while looking for app collections."
+		result.PlaceholderTitle = "Couldn't load collections"
+		result.PlaceholderSubtitle = "Try again later."
 	case warning != "":
-		result.Description += " Some collections could not be read."
+		result.Description += " Some collections couldn't be loaded."
 	}
 	return result
 }
@@ -76,7 +75,7 @@ type catalogEntry struct {
 // comments are headings or provenance notes, so both the name and the
 // description a person reads are written here.
 var catalog = map[string]catalogEntry{
-	"ai-tools":            {"AI tools", "Assistants and model runners you can use from the terminal."},
+	"ai-tools":            {"AI tools", "AI assistants and model runners for the terminal."},
 	"artwork":             {"Wallpapers", "Wallpapers and artwork for your desktop."},
 	"cli":                 {"Command line tools", "A modern set of everyday terminal utilities."},
 	"cncf":                {"Cloud native tools", "Tools for building and running cloud native software."},
@@ -88,12 +87,15 @@ var catalog = map[string]catalogEntry{
 	"full-desktop":        {"Full desktop", "A complete set of desktop apps for everyday use."},
 	"ide":                 {"Code editors", "Popular code editors and development environments."},
 	"k8s-tools":           {"Kubernetes tools", "Command line tools for working with Kubernetes clusters."},
+	"nsl":                 {"Linux machines", "Run persistent Linux virtual machines from your account."},
 	"swift":               {"Swift development", "Everything needed to build Swift projects."},
 	"system-dx-flatpaks":  {"Developer apps", "Desktop apps for development work."},
 	"system-flatpaks":     {"Everyday apps", "The desktop apps recommended for everyday use."},
+	"video-wallpaper":     {"Video wallpaper", "Use a video as your desktop background."},
+	"wallpaper-slideshow": {"Wallpaper slideshow", "Change your desktop background on a schedule."},
 }
 
-const fallbackSummary = "A set of apps and tools put together for this system."
+const fallbackSummary = "A set of apps and tools put together for this computer."
 
 // jargonMarkers are the substrings that disqualify a collection's leading
 // comment from being shown to a person. Each one is either a packaging term,
@@ -233,9 +235,38 @@ func (g *InstallGate) Reset() {
 	g.state.CompareAndSwap(gateRunning, gateIdle)
 }
 
-// Complete permanently closes a successfully installed collection action.
+// Complete closes a successfully installed collection action. Only an
+// observation that the collection is no longer installed reopens it.
 func (g *InstallGate) Complete() {
 	g.state.CompareAndSwap(gateRunning, gateComplete)
+}
+
+// Observe applies an observed installed state to an action that is not
+// running: installed closes an idle action as Installed, and not installed
+// reopens a closed one, so the row shows what the system holds rather than
+// only what this session did. A running install is never touched; its own
+// outcome decides the row. It reports whether the state changed.
+func (g *InstallGate) Observe(installed bool) bool {
+	if installed {
+		return g.state.CompareAndSwap(gateIdle, gateComplete)
+	}
+	return g.state.CompareAndSwap(gateComplete, gateIdle)
+}
+
+// ObservedInstalled maps a `brew bundle check` status onto a collection's
+// installed state. known is false when the check could not decide, which
+// must leave the row as it was. Update Available counts as installed: every
+// item is present, and upgrading them is the Updates page's job, not a
+// reason to offer the collection again.
+func ObservedInstalled(status homebrew.BundleStatus) (installed, known bool) {
+	switch status {
+	case homebrew.BundleInstalled, homebrew.BundleUpdateAvailable:
+		return true, true
+	case homebrew.BundleNotInstalled:
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 // Running reports whether an install is in progress behind the gate.
@@ -255,6 +286,14 @@ const (
 	InstallLabelCompleted = "Installed"
 )
 
+// InstallButtonName is the accessible name of a collection's button: its
+// label, without a progress ellipsis, followed by the collection's title, so
+// a screen reader announces "Install Team tools" rather than an "Install"
+// every row shares.
+func InstallButtonName(label, title string) string {
+	return strings.TrimSuffix(label, "…") + " " + title
+}
+
 // InstallPhase is the label and sensitivity every button bound to a
 // collection shows for the gate's current state. A button connected while a
 // run is in progress, or after one completed, joins at this phase rather
@@ -268,4 +307,119 @@ func (g *InstallGate) InstallPhase() (label string, sensitive bool) {
 	default:
 		return InstallLabelReady, true
 	}
+}
+
+// ContentsHiddenTitle is what the list rows call themselves when nothing
+// is left to show: it appears once a parse produced no recognised entries,
+// so the user knows the row is not a glitch and that the Install button is
+// still safe to press.
+const ContentsHiddenTitle = "No entries could be read for this collection."
+
+// ContentsHiddenSubtitle names the limit that hid them: a Brewfile too
+// large for one read. Keeping the message concrete avoids the "could not
+// load" tone that would otherwise admit a real failure has happened.
+const ContentsHiddenSubtitle = "The Brewfile is larger than the display limit."
+
+// ContentsRowName is the accessible name of an entry inside the expanded
+// list. The bare formula or cask token is enough for a screen reader to
+// distinguish one item from the next, so the affordance stays predictable
+// without inventing a description a person may not recognize.
+func ContentsRowName(name string) string {
+	return name
+}
+
+// PresentContents derives the package-list presentation one collection row
+// renders when a person opens it. The items come in the order the Brewfile
+// named them, deduplicated by the homebrew layer. Truncation is reported
+// separately from emptiness, because a real Brewfile that exceeds the
+// display cap and a Brewfile that holds no installable entries must look
+// different: one hides details behind a count, the other says so outright.
+//
+// items is the slice the homebrew layer actually returned. total is the
+// raw entry count the same layer reported; it can be larger than
+// len(items) when the parser hit its own cap and stopped reading. When the
+// parser produced nothing at all (an empty or unrecognised file), total
+// will be 0 too — that case is the "no recognised entries" placeholder
+// rather than the "Brewfile is larger" one.
+func PresentContents(items []homebrew.BundleItem, total int) ContentsPresentation {
+	if len(items) == 0 {
+		if total > 0 {
+			return ContentsPresentation{
+				EmptyTitle:    ContentsHiddenTitle,
+				EmptySubtitle: ContentsHiddenSubtitle,
+			}
+		}
+		return ContentsPresentation{
+			EmptyTitle:    ContentsHiddenTitle,
+			EmptySubtitle: "This collection's Brewfile has no recognised entries.",
+		}
+	}
+
+	rows := make([]ContentsRow, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, ContentsRow{
+			Name:           item.Name,
+			KindLabel:      ContentsKindLabel(item.Kind),
+			AccessibleName: ContentsRowName(item.Name),
+		})
+	}
+
+	var overflow string
+	if total > len(items) {
+		overflow = fmt.Sprintf("Showing %d of %d entries.", len(items), total)
+	}
+
+	return ContentsPresentation{
+		Rows:           rows,
+		OverflowNotice: overflow,
+	}
+}
+
+// ContentsKindLabel names the kind of one entry as a person would read it:
+// formulae are "Command-line tool", casks are "App", the rest keep their
+// on-disk identifiers so an "App Store" item does not read like a "Flatpak".
+// The labels are stable across collections so a screen reader user can
+// tell the shape of an entry from its kind text alone.
+func ContentsKindLabel(kind homebrew.BundleItemKind) string {
+	switch kind {
+	case homebrew.BundleItemBrew:
+		return "Command-line tool"
+	case homebrew.BundleItemCask:
+		return "App"
+	case homebrew.BundleItemFlatpak:
+		return "Flatpak"
+	case homebrew.BundleItemMas:
+		return "App Store"
+	case homebrew.BundleItemVSCode:
+		return "VS Code extension"
+	default:
+		return ""
+	}
+}
+
+// ContentsPresentation is the immutable view of one collection's expanded
+// list. It holds the rows to render and, when a row was cropped, the note
+// that explains why; the empty placeholders are non-empty only when the
+// underlying Brewfile had nothing to show.
+type ContentsPresentation struct {
+	Rows           []ContentsRow
+	OverflowNotice string
+	EmptyTitle     string
+	EmptySubtitle  string
+}
+
+// HasRows reports whether there is at least one entry to render. Views
+// use it to decide between the row list and the empty placeholder.
+func (p ContentsPresentation) HasRows() bool {
+	return len(p.Rows) > 0
+}
+
+// ContentsRow is one entry in the expanded package list. Name is the
+// on-disk identifier a person sees, KindLabel is the human-readable kind
+// used as the row's subtitle, and AccessibleName is the name a screen
+// reader announces when this row is focused.
+type ContentsRow struct {
+	Name           string
+	KindLabel      string
+	AccessibleName string
 }

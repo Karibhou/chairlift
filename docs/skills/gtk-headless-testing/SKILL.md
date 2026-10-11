@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.0.0
-last_updated: 2026-10-01
+version: 2.1.1
+last_updated: 2026-10-04
 tags:
   - testing
   - gtk
@@ -187,6 +187,26 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 - **AdwAboutDialog is a separate top-level frame** at the suite's window
   size; `current_dialog` searches in-window `dialog`/`alert` nodes first, then
   extra top-level frames.
+- **The content pseudo-root is not an AT-SPI node.** `common.content` returns
+  `_ContentRoot`, so traverse it with `atspi.search_nodes`, not `descendants`.
+  Named `grouping` nodes also include window and page wrappers. For exact
+  preference-group order, locate a known group and compare its shared parent's
+  grouping children; do not slice off a guessed number of wrappers. See the
+  Apps ordering scenario in `steps/apps.py`.
+- **A tool-call assertion needs isolated readers.** Gaming's capability floor
+  is `ImageDescriptor`, so it can read Flatpak inventories even when the
+  `Flatpak` capability is absent. An Apps-only no-list assertion must omit the
+  image descriptor or disable Gaming, rather than treating a legitimate
+  Gaming read as evidence the Apps page still manages Flatpaks.
+- **Never read tags from `scenario.effective_tags`.** It is a set, so
+  `@stub.a @stub.b` ran `b` before `a` and a refining stub was overwritten by
+  its base. `environment.py`'s `before_scenario` builds the list from
+  `feature.tags`, the rule's tags and `scenario.tags` in written order, so
+  stubs apply left to right and a later stub may replace an earlier one's fake.
+- **A switch cannot be moved back inside its own `state-set` emission.**
+  `guardedSwitch.set` called synchronously from the user-change handler is
+  overridden when the emission finishes, so a refused toggle stays on. Revert
+  through `sgtk.RunOnMainThread` (the refused branch of `onChannelToggled`).
 - **dogtail.tree connects to the bus at import.** The helper library imports
   it lazily so `TestATSPIFeaturesHaveNoUndefinedSteps` (behave `--dry-run`)
   needs no display. dogtail's `checkForA11y` must be off before import: the
@@ -219,6 +239,20 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   fake first on `PATH`.
 - **A skipping gate proves nothing.** Before the E2E job installed the stack,
   the suite skipped in CI and a real failure on `main` went unnoticed.
+- **Assert a control's own name, not `label_text`.** `label_text` falls back
+  to descendant text, so a button that publishes an empty accessible name
+  still passes. On GTK 4.24 a button built with `gtk_button_new_with_label`
+  and then given another child (`SetChild`) reports an empty name even with
+  an explicit `LABEL` property; build such buttons with `gtk.NewButton()`
+  (#508, every Apps collection Install button).
+- **An `AdwActionRow` activatable widget is named by the row title.**
+  `SetActivatableWidget` adds a `LABELLED_BY` relation to the title, so a
+  "Choose…" button in an "Avatar" row (whose title describes the current
+  picture, e.g. "No picture set") announces itself as "No picture set" — a
+  name without its visible label (WCAG 2.5.3). Call
+  `ResetRelation(gtk.AccessibleRelationLabelledByValue)` after
+  `SetActivatableWidget`, and have the scenario click the button by its
+  visible label.
 
 **Learned from:** #366/#375 (turning the probe on in CI) and #357's Wave 0,
 which replaced the one-probe-per-feature TSV harness — every community PR
@@ -267,12 +301,14 @@ goreleaser job sets `cache: false` on `actions/setup-go`: caches the image
 wrote must never reach release binaries.
 `CHAIRLIFT_ATSPI_KNOWN_ISSUES=1` also runs `@known_issue` scenarios.
 This fixture suite runs on bare headless Mutter; it is not a live GNOME Shell
-desktop walkthrough. For GNOME Shell diagnosis on ghost, read testing-lab's
-`docs/reference/workflow-reference.md` and `docs/skills/argo-workflows/patterns.md`
-first. Dakota's VM install path is documented as blocked by its missing UKI.
-Reuse `run-container-tests`' nested systemd/GDM target, headless GNOME Shell,
-test-user linger, and `qecore-headless --session-type wayland`; do not invent
-another disk installer.
+desktop walkthrough. For live-shell QA, read the target lab repository's local
+router and current workflow before selecting its supported isolated Wayland
+runner. Reuse that workflow rather than inventing another disk installer; keep
+its deployment flags and installation prerequisites in the lab's source docs.
+One harness accommodation exists for that runner: in a GNOME Shell session,
+Mutter's focus-stealing prevention leaves each new window unfocused, so
+`environment.py` activates it through `Shell.Eval` after launch. On bare
+Mutter there is no `org.gnome.Shell` on the bus, and the step is skipped.
 
 ### Generating walkthrough screenshots
 
@@ -313,13 +349,15 @@ Assert that opening the page and toggling in dry-run never execute `enable` or
 provider. A successful CLI exit alone is not proof of changed GNOME state, so
 production handlers must reload and compare before confirming the switch.
 
-## Empty status panels and announcements
+## Empty status headers and announcements
 
-For compact layouts, hide an empty `AdwStatusPage`; clearing its strings
-leaves internal padding in the allocation. Keep visibility decisions in the
-pure presenter and retain panels with an action or active progress. Emit
-phase announcements from a widget that stays mapped, such as the shell's
-toast overlay, rather than the panel being hidden.
+Keep status-header visibility decisions in the pure presenter, hide a header
+box that has nothing to show rather than only clearing its strings, and retain
+it with an action or active progress. (An `AdwStatusPage` is worse still:
+clearing its strings leaves its internal padding allocated.) Emit phase
+announcements from a widget that stays mapped, such as the shell's toast
+overlay. When a status line can repeat a row's words ("Up to date"), give it
+an accessible description and find it by that in the suite, not by text.
 
 A staged-deployment fixture needs both a fake `bootc status` with a non-null
 staged entry and the fixed stage-helper marker. The Dakota AT-SPI container

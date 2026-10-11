@@ -1,4 +1,4 @@
-"""Prelaunch stubs for the Maintenance page and its Recovery detail.
+"""Prelaunch stubs for the Maintenance page and its Powerwash detail.
 
 Every fake tool appends its argv to <scenario>/tool-calls.log, so a scenario
 can prove a mutation stayed a dry-run preview: the fake was consulted for
@@ -67,7 +67,7 @@ exit 0
 
 @stub("maintenance_bootc_rollback")
 def maintenance_bootc_rollback(context):
-    """A bootc host that still keeps the previous deployment, so Recovery offers Roll Back."""
+    """A bootc host that still keeps the previous deployment, so Powerwash offers Roll Back."""
     _fake_bootc(context, BOOTC_STATUS_WITH_ROLLBACK)
 
 
@@ -116,99 +116,40 @@ exit 0
     fake_executable(context, "distrobox", _recorder(context) + "exit 0\n")
 
 
-@stub("maintenance_bootc_pinned")
-def maintenance_bootc_pinned(context):
-    """A bootc host booted on a dated tag (e.g. latest.20260920), offering Return to stream."""
-    status = json.loads(json.dumps(BOOTC_STATUS_WITH_ROLLBACK))
-    status["status"]["booted"]["image"]["image"]["image"] = "ghcr.io/projectbluefin/dakota:latest.20260920"
-    status["status"]["booted"]["image"]["version"] = "44.20260920"
-    _fake_bootc(context, status)
+@stub("maintenance_powerwash_inventory")
+def maintenance_powerwash_inventory(context):
+    """Flatpak and Distrobox that each hold something for Powerwash to remove.
 
-    image_info_path = os.path.join(context.scenario_dir, "image-info.json")
-    with open(image_info_path, "w", encoding="utf-8") as handle:
-        json.dump({
-            "image-name": "dakota",
-            "image-tag": "latest.20260920",
-            "image-ref": "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota",
-            "image-vendor": "projectbluefin",
-            "image-flavor": "main",
-        }, handle)
-
-
-@stub("maintenance_published_versions")
-def maintenance_published_versions(context):
-    """A local registry proxy that answers tags/list with dated builds."""
-    import socket
-    import ssl
-    import subprocess
-    import threading
-
-    cert_file = os.path.join(context.scenario_dir, "cert.pem")
-    key_file = os.path.join(context.scenario_dir, "key.pem")
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048",
-            "-keyout", key_file, "-out", cert_file,
-            "-days", "1", "-nodes", "-subj", "/CN=ghcr.io",
-            "-addext", "subjectAltName=DNS:ghcr.io",
-        ],
-        check=True, capture_output=True,
-    )
-    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ssl_ctx.load_cert_chain(cert_file, key_file)
-
-    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_sock.bind(("127.0.0.1", 0))
-    port = server_sock.getsockname()[1]
-    server_sock.listen(5)
-
-    def handle_client(conn):
-        try:
-            req = conn.recv(4096)
-            if b"CONNECT" in req:
-                conn.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-                tls_conn = ssl_ctx.wrap_socket(conn, server_side=True)
-                data = tls_conn.recv(4096)
-                if b"/token" in data:
-                    body = b'{"token": "test"}'
-                else:
-                    body = b'{"tags": ["latest.20260920", "latest.20260913"]}'
-                resp = (
-                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
-                    + str(len(body)).encode() + b"\r\n\r\n" + body
-                )
-                tls_conn.sendall(resp)
-                tls_conn.close()
-            else:
-                conn.close()
-        except Exception:
-            pass
-
-    def run_server():
-        while True:
-            try:
-                conn, _ = server_sock.accept()
-                threading.Thread(target=handle_client, args=(conn,), daemon=True).start()
-            except Exception:
-                break
-
-    thread = threading.Thread(target=run_server, daemon=True)
-    thread.start()
-
-    context.launch_env["HTTPS_PROXY"] = f"http://127.0.0.1:{port}"
-    context.launch_env["https_proxy"] = f"http://127.0.0.1:{port}"
-    context.launch_env["SSL_CERT_FILE"] = cert_file
-
-
-@stub("maintenance_registry_unreachable")
-def maintenance_registry_unreachable(context):
-    """No route to any image registry.
-
-    Go's default transport honours HTTPS_PROXY; pointing it at a closed
-    loopback port makes every registry request fail at once, without the
-    scenario depending on (or making) an outbound request.
+    Applies @stub.maintenance_package_tools first and replaces its empty
+    Flatpak and Distrobox fakes: behave hands tags over as an unordered set,
+    so a scenario cannot rely on listing one stub after another. Powerwash
+    reads the user installation and the container list before removing, so
+    only a non-empty inventory previews a removal.
     """
-    for key in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
-        context.launch_env[key] = "http://127.0.0.1:9"
-    for key in ("NO_PROXY", "no_proxy"):
-        context.launch_env.pop(key, None)
+    maintenance_package_tools(context)
+    fake_executable(
+        context,
+        "flatpak",
+        _recorder(context)
+        + """
+case "$*" in
+  --version) echo "Flatpak 1.16.1" ;;
+  "list --user --app "*) printf 'Firefox\\torg.mozilla.firefox\\t128.0\\n' ;;
+esac
+exit 0
+""",
+    )
+    fake_executable(
+        context,
+        "distrobox",
+        _recorder(context)
+        + """
+case "$1" in
+  list)
+    echo "ID           | NAME                 | STATUS             | IMAGE"
+    echo "2f3a9c1b0d4e | fedora               | Up 2 hours         | registry.fedoraproject.org/fedora-toolbox:41"
+    ;;
+esac
+exit 0
+""",
+    )

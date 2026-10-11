@@ -15,9 +15,9 @@ func TestBundleDump(t *testing.T) {
 		wantExact    string
 	}{
 		{
-			name:      "live run confirms the export in plain words",
-			dryRun:    false,
-			wantExact: "Package list exported to your home folder",
+			name:         "live run confirms the export in plain words",
+			dryRun:       false,
+			wantContains: []string{"home folder"},
 		},
 		{
 			name:         "dry-run previews without claiming a save happened",
@@ -86,48 +86,7 @@ func TestBundleInstallDecision(t *testing.T) {
 	}
 }
 
-// TestPackageInstallMessage covers both dry-run states for the Homebrew
-// package-install toast text.
-func TestPackageInstallMessage(t *testing.T) {
-	tests := []struct {
-		name         string
-		dryRun       bool
-		pkgName      string
-		wantExact    string
-		wantContains []string
-	}{
-		{
-			name:      "live run reports the package as installed",
-			dryRun:    false,
-			pkgName:   "ripgrep",
-			wantExact: "ripgrep installed",
-		},
-		{
-			name:         "dry-run previews without claiming an install happened",
-			dryRun:       true,
-			pkgName:      "ripgrep",
-			wantContains: []string{"[DRY-RUN]", "ripgrep", "no changes made"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := Install(tt.dryRun, tt.pkgName)
-
-			if tt.wantExact != "" && got != tt.wantExact {
-				t.Errorf("Install(%v, %q) = %q, want %q", tt.dryRun, tt.pkgName, got, tt.wantExact)
-			}
-			for _, want := range tt.wantContains {
-				if !strings.Contains(got, want) {
-					t.Errorf("Install(%v, %q) = %q, want it to contain %q", tt.dryRun, tt.pkgName, got, want)
-				}
-			}
-		})
-	}
-}
-
-// TestUninstall covers both dry-run states for shared Homebrew/Flatpak
-// uninstall toast text.
+// TestUninstall covers both dry-run states for Homebrew uninstall toast text.
 func TestUninstall(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -163,6 +122,24 @@ func TestUninstall(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Homebrew refuses to uninstall a package other installed packages need;
+// the toast names them instead of a bare, unactionable failure (W2-APPS-3).
+func TestUninstallFailureNamesDependents(t *testing.T) {
+	for _, tt := range []struct {
+		dependents []string
+		want       string
+	}{
+		{nil, "Could not uninstall node"},
+		{[]string{"yarn"}, "Could not uninstall node because yarn needs it"},
+		{[]string{"yarn", "pnpm"}, "Could not uninstall node because yarn and pnpm need it"},
+		{[]string{"glib", "pipx", "yarn"}, "Could not uninstall node because glib, pipx and yarn need it"},
+	} {
+		if got := UninstallFailure("node", tt.dependents); got != tt.want {
+			t.Errorf("UninstallFailure(node, %q) = %q, want %q", tt.dependents, got, tt.want)
+		}
 	}
 }
 
@@ -328,7 +305,7 @@ func TestSelfUpdate(t *testing.T) {
 // staging providers. Dry-run cannot claim that a status re-read is work done
 // by this click, while live staging retains its fixed completion messages.
 func TestSystemStage(t *testing.T) {
-	const stagedMsg = "System update staged. Restart to apply."
+	const stagedMsg = "Update downloaded. Restart to install it."
 	const upToDateMsg = "System is up to date"
 
 	tests := []struct {
@@ -391,6 +368,18 @@ func TestSystemStage(t *testing.T) {
 	}
 }
 
+// A dry-run Update all returned the panel to "Updates available" with no
+// feedback, unlike every other dry-run action on the Updates page. Its toast
+// follows the page's preview convention and never claims an install.
+func TestUpdateAllPreviewSaysNothingWasInstalled(t *testing.T) {
+	if !strings.HasPrefix(UpdateAllPreview, "[DRY-RUN] Preview: ") || !strings.HasSuffix(UpdateAllPreview, "— no changes made") {
+		t.Fatalf("UpdateAllPreview = %q, want the [DRY-RUN] Preview: … — no changes made shape", UpdateAllPreview)
+	}
+	if !strings.Contains(UpdateAllPreview, "would be installed") {
+		t.Fatalf("UpdateAllPreview = %q, want it to say updates would be installed", UpdateAllPreview)
+	}
+}
+
 // TestTapTrust covers both dry-run states for Homebrew tap trust, asserting
 // both the UI-mutation gate (MutateUI) and the Toast text. MutateUI is the
 // criterion that directly proves the Untrusted Homebrew Taps UI does not
@@ -411,7 +400,7 @@ func TestTapTrust(t *testing.T) {
 			dryRun:       false,
 			tapName:      "some/tap",
 			wantMutateUI: true,
-			wantToast:    "Trusted some/tap. Its packages can update again.",
+			wantToast:    "Trusted some/tap. Its software can update again.",
 		},
 		{
 			name:             "dry-run previews without mutating the UI",
@@ -517,20 +506,20 @@ func TestFeatureToggle(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name:        "live enable confirms the switch",
-			dryRun:      false,
-			enable:      true,
-			featName:    "docker",
-			wantConfirm: true,
-			wantToast:   "docker enabled. Update to download, reboot to apply.",
+			name:         "live enable confirms the switch",
+			dryRun:       false,
+			enable:       true,
+			featName:     "docker",
+			wantConfirm:  true,
+			wantContains: []string{"docker", "turned on", "restart"},
 		},
 		{
-			name:        "live disable confirms the switch",
-			dryRun:      false,
-			enable:      false,
-			featName:    "docker",
-			wantConfirm: true,
-			wantToast:   "docker disabled. Update to apply, reboot to complete.",
+			name:         "live disable confirms the switch",
+			dryRun:       false,
+			enable:       false,
+			featName:     "docker",
+			wantConfirm:  true,
+			wantContains: []string{"docker", "turned off", "restart"},
 		},
 		{
 			name:         "dry-run enable previews without confirming the switch",
@@ -585,9 +574,9 @@ func TestFeatureUpdate(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name:      "live run reports fixed completion message",
-			dryRun:    false,
-			wantExact: "Features updated. Changes apply after reboot.",
+			name:         "live run says a restart applies it",
+			dryRun:       false,
+			wantContains: []string{"updated", "Restart"},
 		},
 		{
 			name:         "dry-run previews without claiming completion",
@@ -615,19 +604,38 @@ func TestFeatureUpdate(t *testing.T) {
 	}
 }
 
-func TestLiveryToggleGatesMirrorsAndPreviewFeedback(t *testing.T) {
+// TestLiveryDecisionsGateTheMirrorAndAnnounceEveryPreview covers every Livery
+// decision. Selections and rotation once had no preview toast at all, so under
+// dry-run a pick closed its chooser and a rotate switch sprang back with
+// nothing on screen saying why (ADR-0009).
+func TestLiveryDecisionsGateTheMirrorAndAnnounceEveryPreview(t *testing.T) {
+	const name = "the Files icon"
 	for _, preview := range []bool{false, true} {
-		for _, enabled := range []bool{false, true} {
-			decision := LiveryToggle(preview, enabled, "the panel icon")
+		decisions := map[string]LiveryDecision{
+			"toggle on":    LiveryToggle(preview, true, name),
+			"toggle off":   LiveryToggle(preview, false, name),
+			"selection":    LiverySelection(preview, name),
+			"rotation on":  LiveryRotation(preview, true, name),
+			"rotation off": LiveryRotation(preview, false, name),
+		}
+		for action, decision := range decisions {
 			if decision.MutateUI == preview {
-				t.Fatalf("preview=%t allowed wrong mirror decision", preview)
+				t.Errorf("%s preview=%t: MutateUI=%t", action, preview, decision.MutateUI)
 			}
-			if preview && decision.Toast == "" {
-				t.Fatal("restored preview lacks feedback")
+			if !preview {
+				if decision.Toast != "" {
+					t.Errorf("%s: live run emits preview feedback %q", action, decision.Toast)
+				}
+				continue
 			}
-			if !preview && decision.Toast != "" {
-				t.Fatal("live switch emits redundant preview feedback")
+			if !strings.HasPrefix(decision.Toast, "[DRY-RUN] Preview: ") ||
+				!strings.HasSuffix(decision.Toast, " — no changes made") ||
+				!strings.Contains(decision.Toast, name) {
+				t.Errorf("%s: preview toast %q breaks the dry-run convention or omits the section", action, decision.Toast)
 			}
 		}
+	}
+	if on, off := LiveryRotation(true, true, name).Toast, LiveryRotation(true, false, name).Toast; on == off {
+		t.Errorf("rotation preview does not say which way it would go: %q", on)
 	}
 }

@@ -58,8 +58,16 @@ def _recorder(context):
     return f'printf "%s\\n" "$(basename "$0") $*" >> "{log}"\n'
 
 
+# The branch Steam's runtime is on, which MangoHud is installed in.
+STEAM_PLATFORM_BRANCH = "26.08"
+
+
 def _listing(components):
-    return "".join(f"{name}\t{app_id}\t1.0\n" for name, app_id, _ in components)
+    """`flatpak list --columns=name,application,version,branch` rows."""
+    return "".join(
+        f"{name}\t{app_id}\t1.0\t{STEAM_PLATFORM_BRANCH if kind == 'runtime' else 'stable'}\n"
+        for name, app_id, kind in components
+    )
 
 
 def _fake_flatpak(context, user=(), system=(), list_fails=False):
@@ -99,6 +107,7 @@ case "$1" in
   --version) echo "Flatpak 1.16.0" ;;
   list) {list_branch}
     ;;
+  info|remote-info) echo "org.freedesktop.Platform/x86_64/{STEAM_PLATFORM_BRANCH}" ;;
 esac
 exit 0
 """,
@@ -113,20 +122,20 @@ def gaming_none(context):
 
 @stub("features-gaming-installed")
 def gaming_installed(context):
-    """Every gaming component installed in the user scope."""
-    _fake_flatpak(context, user=GAMING_COMPONENTS)
+    """Every gaming component installed system-wide, where ChairLift puts it."""
+    _fake_flatpak(context, system=GAMING_COMPONENTS)
 
 
 @stub("features-gaming-partial")
 def gaming_partial(context):
     """Only Steam installed: one core component of two, so gaming is off."""
-    _fake_flatpak(context, user=GAMING_COMPONENTS[:1])
+    _fake_flatpak(context, system=GAMING_COMPONENTS[:1])
 
 
-@stub("features-gaming-system")
-def gaming_system(context):
-    """Every gaming component preinstalled system-wide by the image."""
-    _fake_flatpak(context, system=GAMING_COMPONENTS)
+@stub("features-gaming-user")
+def gaming_user(context):
+    """Every gaming component installed per-user, as earlier releases did."""
+    _fake_flatpak(context, user=GAMING_COMPONENTS)
 
 
 @stub("features-gaming-unlistable")
@@ -223,7 +232,7 @@ def no_descriptor(context):
 
 @stub("features-developer")
 def developer_options(context):
-    """A running nsl machine, running Ubuntu guest, and Docker CLI with no system daemon."""
+    """The debian nsl machine an older ChairLift created (running), a running Ubuntu guest, and Docker CLI with no system daemon."""
     fake_executable(context, "nsl", _recorder(context) + """
 case "$1" in
   list) printf '%s\n' 'VM\tSTATE\tIMAGE\tRESOURCES\tDATA DISK' 'shared\trunning\t-\t4 CPUs, 8 GiB\t20 GiB' '' 'MACHINE\tSTATE\tIMAGE\tTIER\tDEFAULT' 'debian\trunning\tdebian:13\tshared\t*' ;;
@@ -249,6 +258,37 @@ exit 0
 case "$1" in
   --version) echo 'Homebrew 5.0.0' ;;
   info) echo '{"formulae":[{"name":"docker","installed":[{"version":"29.0"}]}],"casks":[]}' ;;
+esac
+exit 0
+""")
+
+
+MICRO_MARKER = "brew-micro-installed"
+
+
+@stub("features-developer-micro")
+def developer_options_with_micro(context):
+    """features-developer, with Homebrew listing micro until the marker goes.
+
+    A scenario removes the marker to model an uninstall made outside the
+    Features page (Apps, or a terminal).
+    """
+    developer_options(context)
+    marker = os.path.join(context.scenario_dir, MICRO_MARKER)
+    open(marker, "w", encoding="utf-8").close()
+    fake_executable(context, "brew", _recorder(context) + f"""
+case "$1" in
+  --version) echo 'Homebrew 5.0.0' ;;
+  info)
+    case "$*" in
+      *--formula*)
+        if [ -e '{marker}' ]; then
+          echo '{{"formulae":[{{"name":"micro","installed":[{{"version":"2.0.14","installed_on_request":true}}]}}],"casks":[]}}'
+        else
+          echo '{{"formulae":[],"casks":[]}}'
+        fi ;;
+      *) echo '{{"formulae":[],"casks":[]}}' ;;
+    esac ;;
 esac
 exit 0
 """)

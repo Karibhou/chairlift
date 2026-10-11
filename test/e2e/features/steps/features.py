@@ -15,7 +15,7 @@ from behave import step, then
 
 import chairlift_atspi as atspi
 from apps import expander_header, expander_rows, focus_by_tab
-from stubs_features import CALLS_LOG, GAMING_COMPONENTS, account_is_developer
+from stubs_features import CALLS_LOG, GAMING_COMPONENTS, MICRO_MARKER, account_is_developer
 from stubs_printers import quadlet_dir
 
 UBLUE_HELPER = "/usr/bin/chairlift-helper"
@@ -221,15 +221,20 @@ def step_gaming_component_status(context, status):
         assert atspi.poll(observed), name + " never reported " + status
 
 
-@then('the gaming preview {operation:w} only "{name}"')
-def step_gaming_selected_preview(context, operation, name):
+@then('the gaming preview {operation:w} only "{name}" {preposition:w} the {scope:w} scope')
+def step_gaming_selected_preview(context, operation, name, preposition, scope):
     verb = {"installs": "install", "removes": "uninstall"}[operation]
+    if scope not in ("system", "user"):
+        raise NotImplementedError(f"unknown Flatpak scope {scope!r}")
     chosen = next(app_id for title, app_id, _ in GAMING_COMPONENTS if title == name)
-    expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --user {chosen}"
+    expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --{scope} {chosen}"
     assert atspi.poll(lambda: expected in _log(context)), "chosen app was not previewed"
+    other = "user" if scope == "system" else "system"
+    assert f"flatpak {verb} -y --{other} {chosen}" not in _log(context), f"chosen app was mutated in the {other} scope"
     for _, app_id, _ in GAMING_COMPONENTS:
         if app_id != chosen:
-            assert f"flatpak {verb} -y --user {app_id}" not in _log(context), "unchosen app was mutated: " + app_id
+            for each in ("user", "system"):
+                assert f"flatpak {verb} -y --{each} {app_id}" not in _log(context), "unchosen app was mutated: " + app_id
 
 
 @then("the developer editor choices match the documented catalog")
@@ -243,6 +248,12 @@ def step_developer_editors(context):
     assert titles == expected, f"developer editor rows {titles} != {expected}"
 
 
+@step('Homebrew stops listing "{formula}"')
+def step_brew_stops_listing(context, formula):
+    # Only the features-developer-micro stub models a listing that changes.
+    if formula != "micro":
+        raise NotImplementedError(f"no stub models removing {formula!r}")
+    os.remove(os.path.join(context.scenario_dir, MICRO_MARKER))
 
 
 @then("the Gaming inventory is read again after the change")
@@ -319,12 +330,8 @@ def step_features_not_blank(context):
 
 PRINTERS_GROUP = "Printers"
 
-# pageview.PrinterAppSubtitle for printerapp.StateBlocked: the ADR-0016
-# condition as a person meets it.
-PRINTER_BLOCKED_SUBTITLE = (
-    "Can't be turned on yet. This printer application's administration page cannot be "
-    "secured until its image accepts an administrator credential; the switch unlocks once it does."
-)
+# pageview.PrinterAppSubtitle for printerapp.StateOff.
+PRINTER_OFF_SUBTITLE = "Turn on to use these printers from this computer."
 
 
 def _printer_rows(context):
@@ -334,20 +341,19 @@ def _printer_rows(context):
     return atspi.find_all(groups[0], lambda n: atspi.role(n) in atspi.ROW_ROLES)
 
 
-@then("the Printers group offers exactly these rows, each off and locked")
-def step_printer_rows_locked(context):
+@then("the Printers group offers exactly these rows, each off and ready to turn on")
+def step_printer_rows_off(context):
     want = [row["row"] for row in context.table]
     assert atspi.poll(lambda: _groups(context, PRINTERS_GROUP)), f"no {PRINTERS_GROUP!r} group on the Features page"
     group = _groups(context, PRINTERS_GROUP)[0]
     for title in want:
         row = atspi.row_containing(group, title)
         switch = atspi.find(row, lambda n: atspi.role(n) == "switch", f"a switch in the {title!r} row")
-        # ADR-0016: shown, off, and locked — never a switch that silently
-        # does nothing, never a false enabled indicator.
+        # Shown, off, and offered — never a false enabled indicator.
         assert atspi.checked(switch) is False, f"{title!r} switch is not off"
-        assert not atspi.sensitive(switch), f"{title!r} switch accepts input while its family is blocked"
+        assert atspi.sensitive(switch), f"{title!r} switch does not accept input"
         texts = atspi.all_text_under(row)
-        assert PRINTER_BLOCKED_SUBTITLE in texts, f"{title!r} row does not say why it is locked: {texts}"
+        assert PRINTER_OFF_SUBTITLE in texts, f"{title!r} row does not say what turning it on does: {texts}"
     got = [atspi.label_text(r) for r in _printer_rows(context)]
     assert len(got) == len(want), f"Printers group rows {got} != {want}"
 

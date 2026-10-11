@@ -1,6 +1,7 @@
 package pageview
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/capability"
@@ -30,7 +31,7 @@ func TestUnavailableFeaturesListsConfiguredGroupsTheHostCannotBack(t *testing.T)
 
 	got := UnavailableFeatures(set, configured)
 	want := []Row{
-		{Title: "Recovery", Subtitle: "Needs Flatpak or Distrobox"},
+		{Title: "Powerwash", Subtitle: "Needs Flatpak or Distrobox"},
 		{Title: "App updates", Subtitle: "Needs Flatpak"},
 	}
 	if len(got) != len(want) {
@@ -89,6 +90,15 @@ func TestEveryCapabilityGatedGroupHasATitle(t *testing.T) {
 	for key := range featureTitles {
 		if required, ok := capability.Required(key[0], key[1]); !ok || len(required) == 0 {
 			t.Errorf("%s/%s is titled but not capability-gated", key[0], key[1])
+		}
+	}
+}
+
+// A person reads these rows; a file path is nothing they can act on.
+func TestUnavailableFeaturesNameNoPaths(t *testing.T) {
+	for _, row := range UnavailableFeatures(capability.Set{}, allGroups) {
+		if strings.Contains(row.Subtitle, "/") {
+			t.Errorf("%s: subtitle %q names a path", row.Title, row.Subtitle)
 		}
 	}
 }

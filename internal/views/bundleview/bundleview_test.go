@@ -1,64 +1,50 @@
 package bundleview
 
 import (
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
-const wantGroupDescription = "Install a set of apps and tools together in one step. " +
-	"Collections come from Homebrew, a third-party source, and can be a large download."
-
 func TestPresentEnumeratesLoadOutcomes(t *testing.T) {
-	tests := []struct {
-		name               string
-		count              int
-		warning            string
-		wantDescription    string
-		wantPlaceholder    string
-		wantPlaceholderSub string
-	}{
-		{
-			name:               "empty",
-			wantDescription:    wantGroupDescription,
-			wantPlaceholder:    "No collections available",
-			wantPlaceholderSub: "This system does not offer any app collections.",
-		},
-		{
-			// The discovery warning names the directories that were
-			// searched, so it stays in the log and never reaches a row.
-			name:               "empty with errors",
-			warning:            "read bundle directory \"/usr/share/ublue-os/homebrew\": permission denied",
-			wantDescription:    wantGroupDescription,
-			wantPlaceholder:    "Collections could not be loaded",
-			wantPlaceholderSub: "Something went wrong while looking for app collections.",
-		},
-		{
-			name:            "one",
-			count:           1,
-			wantDescription: wantGroupDescription,
-		},
-		{
-			name:            "partial",
-			count:           2,
-			warning:         "read bundle directory \"/opt/extra\": permission denied",
-			wantDescription: wantGroupDescription + " Some collections could not be read.",
-		},
-	}
+	empty := Present(0, "")
+	// The discovery warning names the directories that were searched, so it
+	// stays in the log and never reaches a row.
+	failed := Present(0, "read bundle directory \"/usr/share/ublue-os/homebrew\": permission denied")
+	one := Present(1, "")
+	partial := Present(2, "read bundle directory \"/opt/extra\": permission denied")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := Present(tt.count, tt.warning)
-			if got.Description != tt.wantDescription {
-				t.Errorf("Present() description = %q, want %q", got.Description, tt.wantDescription)
+	for name, got := range map[string]Presentation{"empty": empty, "failed": failed, "one": one} {
+		if got.Description != GroupDescription {
+			t.Errorf("%s: description = %q, want the group description", name, got.Description)
+		}
+	}
+	if empty.PlaceholderTitle == "" || empty.PlaceholderSubtitle == "" {
+		t.Errorf("empty: want a placeholder row, got %+v", empty)
+	}
+	if failed.PlaceholderTitle == "" || failed.PlaceholderSubtitle == "" {
+		t.Errorf("failed: want a placeholder row, got %+v", failed)
+	}
+	if failed.PlaceholderTitle == empty.PlaceholderTitle {
+		t.Errorf("a failed search must not read like a computer with no collections: %q", failed.PlaceholderTitle)
+	}
+	if one.PlaceholderTitle != "" || one.PlaceholderSubtitle != "" || partial.PlaceholderTitle != "" {
+		t.Errorf("rows exist, so no placeholder: one=%+v partial=%+v", one, partial)
+	}
+	if !strings.HasPrefix(partial.Description, GroupDescription) || partial.Description == GroupDescription {
+		t.Errorf("partial: description = %q, want the group description plus a note", partial.Description)
+	}
+	for _, got := range []Presentation{empty, failed, one, partial} {
+		for _, text := range []string{got.Description, got.PlaceholderTitle, got.PlaceholderSubtitle} {
+			for _, jargon := range []string{"/", "Homebrew", "system", "Could not"} {
+				if strings.Contains(text, jargon) {
+					t.Errorf("collection text %q contains %q", text, jargon)
+				}
 			}
-			if got.PlaceholderTitle != tt.wantPlaceholder {
-				t.Errorf("Present() placeholder title = %q, want %q", got.PlaceholderTitle, tt.wantPlaceholder)
-			}
-			if got.PlaceholderSubtitle != tt.wantPlaceholderSub {
-				t.Errorf("Present() placeholder subtitle = %q, want %q", got.PlaceholderSubtitle, tt.wantPlaceholderSub)
-			}
-		})
+		}
 	}
 }
 
@@ -139,13 +125,13 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 			comment:      "Generated from /usr/share/vendor/list",
 			itemCount:    2,
 			wantTitle:    "Vendor pack",
-			wantSubtitle: "A set of apps and tools put together for this system. Includes 2 apps and tools.",
+			wantSubtitle: "A set of apps and tools put together for this computer. Includes 2 apps and tools.",
 		},
 		{
 			name:         "unknown collection keeps interior capitalization",
 			id:           "k9s_addons",
 			wantTitle:    "K9s addons",
-			wantSubtitle: "A set of apps and tools put together for this system.",
+			wantSubtitle: "A set of apps and tools put together for this computer.",
 		},
 	}
 
@@ -162,13 +148,28 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 	}
 }
 
+// Dakota ships these collections in /usr/share/ublue-os/homebrew (observed on
+// dakota:testing, 2026-10-07). An unnamed one falls back to its title-cased
+// file name and a generic summary, which is how "Nsl" reached the Apps page.
+func TestDakotaCollectionsAreAllNamed(t *testing.T) {
+	for _, id := range []string{
+		"ai-tools", "artwork", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
+		"experimental-ide", "fonts", "fonts-dev", "full-desktop", "ide", "k8s-tools",
+		"nsl", "swift", "system-dx-flatpaks", "system-flatpaks", "video-wallpaper",
+		"wallpaper-slideshow",
+	} {
+		if _, ok := catalog[id]; !ok {
+			t.Errorf("collection %q has no catalog entry", id)
+		}
+	}
+}
+
 // TestNoCollectionRowLeaksToolingIdentity holds the rule the group exists to
 // satisfy: a person reading a row never sees a file name, a location, or a
-// packaging term. Homebrew itself is exempt — the group description names it
-// deliberately, because the software comes from a third party.
+// packaging term.
 func TestNoCollectionRowLeaksToolingIdentity(t *testing.T) {
 	banned := []string{
-		"brewfile", "flatpak", "flathub", "ujust", "bootc", "quadlet",
+		"brewfile", "homebrew", "flatpak", "flathub", "ujust", "bootc", "quadlet",
 		"cask", "formula", "tap ", "/", "\\", "bundles_paths",
 	}
 
@@ -183,7 +184,7 @@ func TestNoCollectionRowLeaksToolingIdentity(t *testing.T) {
 	}
 
 	presentation := Present(0, "read bundle directory \"/usr/share/ublue-os/homebrew\": permission denied")
-	rows = append(rows, presentation.PlaceholderTitle, presentation.PlaceholderSubtitle)
+	rows = append(rows, GroupDescription, presentation.PlaceholderTitle, presentation.PlaceholderSubtitle)
 
 	for _, text := range rows {
 		lowered := strings.ToLower(text)
@@ -271,5 +272,148 @@ func TestGateInstallPhaseFollowsTheLifecycle(t *testing.T) {
 		if label != step.wantLabel || sensitive != step.wantSensitive {
 			t.Fatalf("%s: InstallPhase = (%q, %v), want (%q, %v)", step.name, label, sensitive, step.wantLabel, step.wantSensitive)
 		}
+	}
+}
+
+// TestGateObserveReflectsTheSystem covers W3-09: a collection installed
+// before this session must read "Installed" on load, an observation must
+// never overwrite a running install, and a collection observed missing
+// again (one of its items was uninstalled) must offer Install again.
+func TestGateObserveReflectsTheSystem(t *testing.T) {
+	var gate InstallGate
+	steps := []struct {
+		name          string
+		transition    func() bool
+		wantChanged   bool
+		wantLabel     string
+		wantSensitive bool
+	}{
+		{"not installed on load leaves Install", func() bool { return gate.Observe(false) }, false, InstallLabelReady, true},
+		{"installed on load reads Installed", func() bool { return gate.Observe(true) }, true, InstallLabelCompleted, false},
+		{"installed again changes nothing", func() bool { return gate.Observe(true) }, false, InstallLabelCompleted, false},
+		{"a completed gate cannot start", func() bool { return gate.TryStart() }, false, InstallLabelCompleted, false},
+		{"observed missing reopens Install", func() bool { return gate.Observe(false) }, true, InstallLabelReady, true},
+		{"an install starts", func() bool { return gate.TryStart() }, true, InstallLabelRunning, false},
+		{"installed never overwrites a run", func() bool { return gate.Observe(true) }, false, InstallLabelRunning, false},
+		{"missing never overwrites a run", func() bool { return gate.Observe(false) }, false, InstallLabelRunning, false},
+	}
+	for _, step := range steps {
+		if changed := step.transition(); changed != step.wantChanged {
+			t.Fatalf("%s: changed = %v, want %v", step.name, changed, step.wantChanged)
+		}
+		label, sensitive := gate.InstallPhase()
+		if label != step.wantLabel || sensitive != step.wantSensitive {
+			t.Fatalf("%s: InstallPhase = (%q, %v), want (%q, %v)", step.name, label, sensitive, step.wantLabel, step.wantSensitive)
+		}
+	}
+}
+
+func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
+	for _, tc := range []struct {
+		status        homebrew.BundleStatus
+		wantInstalled bool
+		wantKnown     bool
+	}{
+		{homebrew.BundleInstalled, true, true},
+		{homebrew.BundleUpdateAvailable, true, true},
+		{homebrew.BundleNotInstalled, false, true},
+		{homebrew.BundleIndeterminate, false, false},
+		{"", false, false},
+	} {
+		installed, known := ObservedInstalled(tc.status)
+		if installed != tc.wantInstalled || known != tc.wantKnown {
+			t.Errorf("ObservedInstalled(%q) = (%v, %v), want (%v, %v)", tc.status, installed, known, tc.wantInstalled, tc.wantKnown)
+		}
+	}
+}
+
+// Every collection row shows the same Install label, so the accessible name
+// carries the collection's title in each phase (W2-APPS-5).
+func TestCollectionButtonNameCarriesTheTitle(t *testing.T) {
+	for label, want := range map[string]string{
+		InstallLabelReady:     "Install Team tools",
+		InstallLabelRunning:   "Installing Team tools",
+		InstallLabelCompleted: "Installed Team tools",
+	} {
+		if got := InstallButtonName(label, "Team tools"); got != want {
+			t.Errorf("InstallButtonName(%q) = %q, want %q", label, got, want)
+		}
+	}
+}
+
+func TestPresentContentsBuildsRowsWithKindLabels(t *testing.T) {
+	items := []homebrew.BundleItem{
+		{Name: "jq", Kind: homebrew.BundleItemBrew},
+		{Name: "ripgrep", Kind: homebrew.BundleItemBrew},
+		{Name: "visual-studio-code", Kind: homebrew.BundleItemCask},
+		{Name: "org.gnome.TextEditor", Kind: homebrew.BundleItemFlatpak},
+		{Name: "Xcode", Kind: homebrew.BundleItemMas},
+		{Name: "golang.go", Kind: homebrew.BundleItemVSCode},
+	}
+
+	got := PresentContents(items, len(items))
+
+	if !got.HasRows() {
+		t.Fatalf("PresentContents() = %+v, want rows", got)
+	}
+	if got.EmptyTitle != "" || got.EmptySubtitle != "" {
+		t.Errorf("presentContents empty placeholders should be empty when rows exist: %+v", got)
+	}
+	if got.OverflowNotice != "" {
+		t.Errorf("OverflowNotice = %q, want empty when everything fits", got.OverflowNotice)
+	}
+	wantRows := []ContentsRow{
+		{Name: "jq", KindLabel: "Command-line tool", AccessibleName: "jq"},
+		{Name: "ripgrep", KindLabel: "Command-line tool", AccessibleName: "ripgrep"},
+		{Name: "visual-studio-code", KindLabel: "App", AccessibleName: "visual-studio-code"},
+		{Name: "org.gnome.TextEditor", KindLabel: "Flatpak", AccessibleName: "org.gnome.TextEditor"},
+		{Name: "Xcode", KindLabel: "App Store", AccessibleName: "Xcode"},
+		{Name: "golang.go", KindLabel: "VS Code extension", AccessibleName: "golang.go"},
+	}
+	if !reflect.DeepEqual(got.Rows, wantRows) {
+		t.Fatalf("PresentContents().Rows = %#v, want %#v", got.Rows, wantRows)
+	}
+}
+
+func TestPresentContentsReportsOverflowWhenCapped(t *testing.T) {
+	items := []homebrew.BundleItem{
+		{Name: "alpha", Kind: homebrew.BundleItemBrew},
+		{Name: "beta", Kind: homebrew.BundleItemBrew},
+	}
+
+	got := PresentContents(items, 5)
+
+	if !got.HasRows() {
+		t.Fatalf("PresentContents() = %+v, want rows", got)
+	}
+	if got.OverflowNotice != "Showing 2 of 5 entries." {
+		t.Errorf("OverflowNotice = %q, want %q", got.OverflowNotice, "Showing 2 of 5 entries.")
+	}
+}
+
+func TestPresentContentsReportsEmptyForUnrecognisedBrewfile(t *testing.T) {
+	got := PresentContents(nil, 0)
+	if got.HasRows() {
+		t.Fatalf("PresentContents() = %+v, want no rows", got)
+	}
+	if got.EmptyTitle != ContentsHiddenTitle {
+		t.Errorf("EmptyTitle = %q, want %q", got.EmptyTitle, ContentsHiddenTitle)
+	}
+	if got.EmptySubtitle == "" {
+		t.Errorf("EmptySubtitle = empty, want an explanation")
+	}
+}
+
+func TestPresentContentsReportsOverflowWhenItemsAreCropped(t *testing.T) {
+	// A Brewfile that the parser reached but yielded nothing of is not the
+	// same as a Brewfile that was bigger than the cap: the caller passes a
+	// total that exceeds the items it can show, so the row renders the
+	// overflow placeholder rather than the unrecognised-entries one.
+	got := PresentContents(nil, 12)
+	if got.HasRows() {
+		t.Fatalf("PresentContents() = %+v, want no rows", got)
+	}
+	if got.EmptySubtitle != ContentsHiddenSubtitle {
+		t.Errorf("EmptySubtitle = %q, want %q", got.EmptySubtitle, ContentsHiddenSubtitle)
 	}
 }

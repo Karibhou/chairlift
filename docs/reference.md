@@ -20,6 +20,13 @@ persistent toast with the path and cause. Fix the file and restart Control Cente
 If no file is found, built-in defaults apply: all groups are enabled except
 `maintenance_cleanup_group` and `reset_group`.
 
+The shipped [`config.yml`](../config.yml) enables Apps collections but disables
+the external catalog launcher, both Flatpak inventories, Homebrew inventory/export,
+and Homebrew search. Built-in defaults enable all six Apps groups. Collections
+remain independently configurable from inventory and export.
+The full group inventory below describes available controls, not a promise
+that every control appears with the shipped profile.
+
 Source installs (`make install`) provide the repository's maintainer defaults
 at `/usr/share/chairlift/config.yml`; an OS image may install the release
 archive's `config.yml` there instead. Whoever installs that file may replace it
@@ -48,10 +55,19 @@ Groups with `enabled: false` are hidden from the UI. Missing entries inherit
 their built-in values. Unknown page, group, or field names and wrong field
 types are errors. Changes require restarting ChairLift.
 
+The configuration is an overlay on built-in defaults: omitted or explicitly
+null fields inherit, while an explicit empty list or empty string clears the
+field. A non-empty list replaces the default rather than appending to it.
+See [`CONFIG.md`](../CONFIG.md#notes) for the complete overlay rules.
+
 When every builder-backed group on a functional page is disabled, the page is
 also omitted from the sidebar, content stack, shortcuts dialog, and
 Alt+number bindings. Alt+number is compacted over the remaining pages in the
 order below. Help is always retained.
+
+The host capability floor also participates in page visibility: enabling a
+group cannot supply its missing backing tool or asset. Runtime readiness is
+checked separately after the page is built.
 
 ## Pages and Groups
 
@@ -73,19 +89,14 @@ Its sidebar title is "Apps"; `applications_page` is the configuration key.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Installed Apps | `applications_installed_group` | Launcher for the external Flatpak manager used for discovery and installation |
-| User Flatpak | `flatpak_user_group` | User-installed Flatpak applications with uninstall actions |
-| System Flatpak | `flatpak_system_group` | System-wide Flatpak applications with uninstall actions |
-| Homebrew | `brew_group` | Installed Homebrew formulae/casks with uninstall actions and formula pin/unpin actions |
-| Brew Search | `brew_search_group` | Search and install Homebrew formulae and casks with an explicit package-type confirmation |
-| App Collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions |
+| App collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions; displayed first |
+| Homebrew packages | `brew_group` | Installed apps (installed casks), then Command line tools (explicitly requested formulae), then Backup containing the Export app list row (a Brewfile export); uninstall and formula pin/unpin actions |
 
-`applications_installed_group` supports:
-
-- `app_id` — Flatpak application ID to launch (default: `io.github.kolunmi.Bazaar`)
-
-ChairLift does not directly discover or install new Flatpak applications.
-Those operations belong to the configured external manager.
+Both groups are enabled in the shipped `config.yml`. Dependency-only formulae
+do not appear in the inventory. Apps has no Flatpak inventory, external catalog
+launcher, or package search. The retired `applications_installed_group`,
+`flatpak_user_group`, `flatpak_system_group`, and `brew_search_group` keys are
+accepted and ignored for compatibility, as described in [CONFIG.md](../CONFIG.md).
 
 `brew_bundles_group` supports:
 
@@ -119,7 +130,8 @@ to ChairLift's log, which is where to look when filing a bug report.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Agent Mode | `agents_group` | llmman installed with Homebrew and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Offers Goose Desktop (`ublue-os/tap/goose-linux`) launched via `llmman launch goose-desktop --model <active-model>` with verified Linux MCP diagnostic tools, "Show Ask Bluefin in menu" shortcut preference, and Contribute to Bluefin via `ujust contribute`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
+| Agent Mode | `agents_group` | llmman installed with Homebrew and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Offers a visible Active Model row that reads the `bluefin-active` alias back from llmman and a "Manage Models" row that opens llmman's models page at `http://127.0.0.1:17434/#/models` while it is ready, and Contribute to Bluefin via `ujust contribute`. When llmman is missing, enabling taps `llmmanorg/tap` and trusts exactly `llmmanorg/tap/llmman` before installing it. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
+| Troubleshooting | `troubleshooting_group` | The Goose row and the "Show Ask Bluefin in menu" shortcut preference. **Set Up** installs `ublue-os/tap/linux-mcp-server`, `cpio`, and the `ublue-os/tap/goose-linux` cask (x86_64 only) with Homebrew; **Launch** writes ChairLift's own Goose profile under `$XDG_DATA_HOME/chairlift/troubleshooting` — `linux-tools` with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the online Project Bluefin knowledge search, nothing else — then runs `llmman launch goose-desktop --model bluefin-active` inside it; if Goose is already running there, the request goes to that session and no second Goose starts (GNOME may show a "Goose is ready" notification instead of raising the window). `~/.config/goose` is never read or written. Crosses no privilege boundary. Hidden where Homebrew is absent. Formerly `help_page.troubleshooting_group`, still accepted |
 
 ### Features Page (`features_page`)
 
@@ -127,12 +139,14 @@ to ChairLift's log, which is where to look when filing a bug report.
 |-------|-----|-------------|
 | Desktop integrations | `desktop_integrations_group` | User-session GNOME extension switches for Tailscale and Sync Folder; unavailable extensions are explained, and existing GNOME choices are preserved |
 | Features | `features_group` | Toggle system features managed by updex |
-| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a confirmed live enable also opens the three developer onboarding tabs and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Gaming Mode | `gaming_group` | Selectively installs/removes chosen user-scope Flatpak applications and runtime extensions, reports installed scopes and persistent partial failures, and preserves system-scope entries; shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. A family may be turned on only when its web administration is authenticated or absent ([ADR-0016](adr/0016-printer-app-admin-denied-until-authenticated.md)); until the published images accept that setting every switch is locked and the row says what is needed. The rows evaluate systemd state, journal logs, and container images to diagnose and surface actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
+| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a group the image does not define is skipped and named in a warning rather than reported as granted. A confirmed live enable also opens one developer documentation page and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Gaming Mode | `gaming_group` | Selectively installs chosen Flatpak applications and runtime extensions system-wide (`flatpak install --system`) from the system Flathub remote Bluefin-family images configure, authorized by Flatpak's own PolicyKit rather than by ChairLift; reports user and system installed scopes and persistent partial failures. A copy an earlier release installed per-user counts as installed. Remove Selected removes each selected app from every scope it is installed in, after a confirmation that system-wide copies go for every account, except a system copy the OS image declares it ships (Flatpak `preinstall.d` or `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`), which is left in place; shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. Each unit runs `ghcr.io/projectbluefin/<id>-printer-app:stable` with `AutoUpdate=registry`; turning a family on enables `podman-auto-update.timer`. The port is published on `127.0.0.1` only ([ADR-0020](adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)), so IPP and the unauthenticated web administration are reachable only from this computer; there is no LAN printing or DNS-SD advertisement. The rows evaluate systemd state, journal logs, and container images to diagnose actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
 
-Developer options include WSL Mode (persistent Linux machines in systemd-vmspawn
-via nsl by default, or Ubuntu LTS in Lima), the base image's
+Developer options include WSL Mode (an Ubuntu machine in systemd-vmspawn via
+nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
+Lima supports amd64 and arm64. Both require hardware virtualization and
+`/dev/kvm` access. The group also offers the base image's
 Docker daemon, and individually chosen IDEs/editors with one JetBrains Toolbox
 entry. Missing fixed helper actions keep affected switches discoverable but
 insensitive. KVM permission requires a new login; Docker readiness requires
@@ -140,12 +154,18 @@ the real daemon socket to be accessible, not just installed CLI tools. These
 privileged operations use only `kvm-enable`, `docker-enable`, and
 `docker-disable` with fixed argv and the account derived from `PKEXEC_UID`.
 
+The **Virtual machine engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting
+YAML. `wsl_backend` supplies the initial choice; an existing Lima Ubuntu machine
+with no ChairLift nsl machine resolves the nsl default to Lima. nsl keeps using
+the `debian` machine an older ChairLift created instead of creating `ubuntu`
+beside it, and the chooser then says the built-in engine runs Debian.
+
 `dx_group` takes `wsl_backend`, the WSL Mode backend: `nsl` (default) or
 `lima`; any other value is a configuration error. It also supports optional steps that run off the GTK main
 thread after a confirmed live enable, and never on a disable, a page restore, a
 failed helper call, or a `--dry-run` preview:
 
-- `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a user-scope Flatpak from Flathub. No `pkexec`, no root: the same unprivileged posture as gaming mode
+- `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. No `pkexec`: like gaming mode, the `flatpak` CLI authorizes it through Flatpak's own PolicyKit
 - `stage_feeds` — writes the curated catalog to `~/.local/share/chairlift/developer-feeds.opml` and says so in a toast that names the path. Importing it is the user's own action inside Pulp; ChairLift never writes to Pulp's sandboxed store and never claims a subscription was imported
 
 The two outcomes are reported separately from developer access. The privileged
@@ -183,9 +203,14 @@ itself.
 
 Livery publishes selections and master-switch state through the pure
 `internal/views/liverystate` transitions. A failed save or dry-run preview
-keeps the confirmed selection and switch; when a selection saves but its
+keeps the confirmed selection and switch; every previewed switch flip, pick,
+and rotation change says so in a `[DRY-RUN] Preview:` toast built by the same
+`actionmsg` decision that withholds the commit. When a selection saves but its
 artwork fails, the persisted selection is shown and a toast names the failed
-step. Queued results recheck their shared serializer before publishing.
+step. Queued results recheck their shared serializer before publishing. Each
+section's master switch queues first-in-first-out in the same serializer as
+that section's picks and holds the section's rows insensitive until it lands,
+so turning a section off never races a pick's Apply.
 Rotation candidates overlay the confirmed pair while work is in flight.
 Unlike an artwork selection, a rotation preference commits only after the
 user manager accepts its unit; failure preserves the previous preference
@@ -196,9 +221,9 @@ pair and unit file, and dry-run restores both switches without writes.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Storage | `maintenance_freespace_group` | The single "Free up space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the post-update maintenance step of an update run, so cleanup cannot be on in one place and off in the other |
+| Storage | `maintenance_freespace_group` | The single "Free up space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the post-update maintenance step of an update run, so cleanup cannot be on in one place and off in the other; while it is disabled, Preferences locks "Run maintenance after updates" off |
 | Maintenance tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free up space" (disabled by default) |
-| Recovery | `reset_group` | Recovery utilities: Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`), irreversible actions disabled by default. Roll Back and Published versions (Pin, Return to stream) are gated by `updates_page.bootc_updates_group` |
+| Powerwash | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`), irreversible actions disabled by default. Roll Back is gated by `updates_page.bootc_updates_group`; the detail retains its `recovery` route identity |
 
 `maintenance_cleanup_group` supports:
 
@@ -224,29 +249,11 @@ Each action has:
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; moved here from Features (issue #249); shown only when Homebrew is present |
 | Resources | `help_resources_group` | Links to project resources |
 
-**Set Up** installs missing Goose components and connects its read-only Linux
-diagnostics. A fresh configuration comes from
-`/usr/share/ublue-os/goose/config.yaml`; an existing configuration keeps its
-provider, model, other extensions, and unknown settings. Setup adds `linux-tools`
-when absent, or enables a recognized `linux-tools` / `linux-mcp-server` entry
-with an empty policy using explicit `--toolset FIXED --no-search-for-ssh-key
---verify-host-keys` arguments. It does not replace a different command, transport,
-or an explicit conflicting tool policy. Malformed, duplicate-key, multiple-document,
-or merged affected YAML is refused without replacing user data.
-
-Configuration changes use an owned regular file and a private atomic replacement
-with mode `0600`; links, unsafe Goose directories, and detected concurrent edits
-are refused. Setup reads the resulting state before reporting connection. Dry-run
-leaves both new and existing configurations untouched.
-
-**Open Goose** means its Linux tools are connected, not that a model service has
-been authenticated or tested. The row discloses the selected provider and asks
-the user to choose a model when none is selected. ChairLift never chooses a
-provider, installs an API key, or changes a user's existing provider/model.
-
+`help_page.troubleshooting_group`, Troubleshooting's former Help
+key, is still accepted and moved to `agents_page.troubleshooting_group`
+(below); a value set under `agents_page` wins.
 
 Help also shows a **Feature availability** group — not configurable, and absent when empty — whose collapsed "Why is something missing?" row lists each group the configuration enables but the host cannot back, with the missing tool or file (`pageview.UnavailableFeatures`, from the capability set resolved at startup; issue #209).
 
@@ -254,9 +261,9 @@ Help also shows a **Feature availability** group — not configurable, and absen
 
 | Field | Description |
 |-------|-------------|
-| `website` | Project website URL (default: `https://projectbluefin.io`) |
-| `issues` | Issue tracker URL (default: `https://github.com/projectbluefin/dakota/issues`) |
-| `chat` | Documentation URL (default: `https://docs.projectbluefin.io/`). The key is named `chat` for backward compatibility; the link is titled "Documentation" |
+| `website` | Documentation URL, titled "Browse documentation" (default: `https://docs.projectbluefin.io/`) |
+| `issues` | Issue tracker URL, titled "Report a problem" (default: `https://github.com/projectbluefin/dakota/issues`) |
+| `chat` | Assistant or community help URL, titled "Ask for help" (default: `https://ask.projectbluefin.io/`) |
 
 ## Example
 
@@ -266,10 +273,18 @@ A configuration that disables all Homebrew features:
 applications_page:
   brew_group:
     enabled: false
-  brew_search_group:
-    enabled: false
   brew_bundles_group:
     enabled: false
+
+agents_page:
+  agents_group:
+    enabled: false
+  troubleshooting_group:
+    enabled: false
+
+features_page:
+  dx_group:
+    enabled: false # Also hides non-Homebrew Developer controls
 
 updates_page:
   automatic_updates_group:
@@ -281,10 +296,6 @@ updates_page:
 
 maintenance_page:
   maintenance_freespace_group:
-    enabled: false
-
-help_page:
-  troubleshooting_group:
     enabled: false
 ```
 

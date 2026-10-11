@@ -1,8 +1,8 @@
 ---
 name: factory-onboarding
-description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release; load issue-lifecycle for intake, label decisions, assignment and delivery verification.
-version: 1.3.0
-last_updated: 2026-10-04
+description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release; follow Common's Prow workflow page for intake, labels and commands.
+version: 1.5.0
+last_updated: 2026-10-07
 tags:
   - factory
   - onboarding
@@ -12,29 +12,25 @@ metadata:
 
 # Factory onboarding
 
-Use this local checklist before investigating, designing, or implementing a
-factory-assigned change:
+Follow Common's
+[agentic model](https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md),
+with ChairLift's [`AGENTS.md`](../../../AGENTS.md), [`task router`](../../SKILL.md)
+and [`canonical catalog`](../index.md) as local authority. Verify the repository,
+issue/PR, branch target, scope and corresponding Hive assignment before acting.
+Query Project Bluefin MCP knowledge before investigation, design or implementation;
+check live factory status/work queue when assignment state matters.
 
-1. Read the local [`AGENTS.md`](../../../AGENTS.md).
-2. Read [`docs/SKILL.md`](../../SKILL.md), then choose the task-matching
-   package from [`docs/skills/index.md`](../index.md).
-3. Verify the GitHub issue or pull request and the corresponding Hive factory
-   assignment before acting.
-4. Query the Project Bluefin MCP for relevant knowledge before investigation,
-   design, or implementation; check live factory status or the work queue when
-   the task depends on assignment state.
-5. Load Common's procedures as a sidecar rather than copying their policy:
-   [`factory-onboarding.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md)
-   and
-   [`agentic-model.md`](https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md).
+Common is a sidecar, not a replacement local contract. Keep transient task
+records in non-committed session state; preserve durable lessons through
+[`skill-improvement`](../skill-improvement/SKILL.md), not a tracked session log.
 
-This package is ChairLift's local entry point. Common remains authoritative for
-cross-repository factory rules.
-
-For issue intake, label/catalog decisions, acceptance and assignment, Prow
-commands, migration or reporter verification, load
-[`issue-lifecycle`](../issue-lifecycle/SKILL.md). It links shared policy and
-owns the local Homebrew-versus-image-helper delivery boundary.
+For issue intake, labels, acceptance (`/triage accepted`), assignment and the
+other Prow commands, follow Common's
+[how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
+Prow runs from [`prow.yml`](../../../.github/workflows/prow.yml) with approvers
+from [`OWNERS`](../../../OWNERS). Verify live issue state before changing labels.
+Common's documentation-only direct-push exception does not bypass ChairLift's
+pull-request and merge-queue contract.
 
 ## Local mechanic: the merge queue, and how to get back out of it
 
@@ -43,7 +39,9 @@ Human approval and independent security gates come from Common's linked
 and
 [`label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
 ChairLift's actual merge requirements are its native ruleset: one required
-approving review, **Tests Passed**, and the squash/ALLGREEN merge queue. Read
+approving review, **Tests Passed**, and the squash/ALLGREEN merge queue. On top
+of that, Prow enqueues a pull request once it has `lgtm` and `approved` and no
+`hold`, so `/lgtm` and `/approve` are merge actions, not comments. Read
 the live ruleset before publishing; an administrative bypass capability is
 not permission to use it. Issue acceptance is separate from PR approval.
 

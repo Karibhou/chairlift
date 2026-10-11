@@ -9,6 +9,14 @@
 agents_page:
   agents_group:
     enabled: true
+  # Troubleshooting: Goose on the Agent Mode model, with read-only
+  # tools for this system's logs, services, and network, plus online
+  # searches of the Project Bluefin knowledge base. Everything it installs
+  # comes from Homebrew, so the group hides itself where Homebrew is absent.
+  # Nothing is downloaded until the user presses Set Up. Accepted under
+  # help_page too, its old home. The Ask Bluefin menu entry opens it.
+  troubleshooting_group:
+    enabled: true
 
 updates_page:
   # Whether this system installs updates on its own schedule. Updating now
@@ -37,17 +45,8 @@ updates_page:
     enabled: true
 
 applications_page:
-  applications_installed_group:
-    enabled: false
-    app_id: io.github.kolunmi.Bazaar
-  flatpak_user_group:
-    enabled: false
-  flatpak_system_group:
-    enabled: false
   brew_group:
-    enabled: false
-  brew_search_group:
-    enabled: false
+    enabled: true
   brew_bundles_group:
     enabled: true
     bundles_paths:
@@ -82,7 +81,7 @@ features_page:
   #
   # install_pulp and stage_feeds are optional follow-on steps for a confirmed
   # Developer Mode enable, and both ship off. Turning the switch on grants
-  # developer access either way; these only add a user-scope Pulp Flatpak and
+  # developer access either way; these only add a system-wide Pulp Flatpak and
   # a staged feed list the user imports themselves. Switching Developer Mode
   # back off removes neither, and never touches feeds already imported.
   dx_group:
@@ -95,9 +94,8 @@ features_page:
   # Printer applications: one rootless Podman quadlet per driver family
   # (Ghostscript, HPLIP, Gutenprint), started with `systemctl --user` in the
   # invoking account; nothing here is privileged. The group hides itself where
-  # podman is absent. A family can be turned on only once its image's web
-  # administration can be secured (ADR-0016); until the published images
-  # accept that setting, every switch is shown locked and says so.
+  # podman is absent. Each application is published on 127.0.0.1 only
+  # (ADR-0020), so only this computer can print to it or open its settings.
   printers_group:
     enabled: true
   # Agent Mode (llmman, installed with Homebrew and run as a systemd user
@@ -128,14 +126,10 @@ livery_page:
     enabled: true
 
 help_page:
-  # An AI assistant that can read this system's logs, services, and network
-  # to help diagnose problems. Everything it installs comes from Homebrew, so
-  # the group hides itself where Homebrew is absent. Nothing is downloaded
-  # until the user presses Set Up.
-  troubleshooting_group:
-    enabled: true
+  # website is titled "Browse documentation" and chat "Ask for help", matching
+  # projectbluefin/common's shipped configuration.
   help_resources_group:
     enabled: true
-    website: https://projectbluefin.io
+    website: https://docs.projectbluefin.io/
     issues: https://github.com/projectbluefin/dakota/issues
-    chat: https://docs.projectbluefin.io/
+    chat: https://ask.projectbluefin.io/

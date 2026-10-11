@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -83,32 +84,13 @@ type Package struct {
 	Dependencies       []string `json:"dependencies,omitempty"`
 }
 
-// SearchResult represents a search result
-type SearchResult struct {
-	Name string
-	Kind PackageKind
-}
-
-// PackageKind identifies which Homebrew install namespace a search result
-// belongs to. Formulae and casks can share a name, so the kind must travel
-// with the result all the way to the install command.
+// PackageKind identifies the Homebrew formula or cask namespace.
 type PackageKind string
 
 const (
 	Formula PackageKind = "formula"
 	Cask    PackageKind = "cask"
 )
-
-// DisplayName returns what the kind is, in words a person recognizes.
-// "Formula" and "Cask" are Homebrew's own vocabulary and say nothing about
-// what the package turns out to be, which is the only thing a row or a
-// confirmation dialog needs to convey.
-func (k PackageKind) DisplayName() string {
-	if k == Cask {
-		return "Application"
-	}
-	return "Command line tool"
-}
 
 // stateChangingCommands are commands that modify system state
 var stateChangingCommands = map[string]bool{
@@ -160,18 +142,25 @@ func isStateChanging(args []string) bool {
 		return false
 	}
 	cmd := args[0]
-	if sub := bundleSubcommand(args); sub != "" {
+	if bundleSubcommand(args) != "" {
 		// Reclassify brew bundle subcommands: check and list are read-only,
 		// while install, dump, and any unrecognized subcommand remain
 		// state-changing.
-		switch sub {
-		case "check", "list":
-			return false
-		default:
-			return true
-		}
+		return !isReadOnlyBundle(args)
 	}
 	return stateChangingCommands[cmd]
+}
+
+// isReadOnlyBundle reports whether args is a read-only `brew bundle`
+// subcommand (check or list). Install, dump, and any unrecognized
+// subcommand are not.
+func isReadOnlyBundle(args []string) bool {
+	switch bundleSubcommand(args) {
+	case "check", "list":
+		return true
+	default:
+		return false
+	}
 }
 
 // commandTimeout returns the timeout class for a brew invocation: the
@@ -223,6 +212,25 @@ func runBrewCommandCtx(ctx context.Context, args ...string) (string, error) {
 // with it rather than being orphaned. cmd.Run still reaps the child.
 func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, exe, args...)
+	// brew's own children (a cask preflight's rpm2cpio | cpio) resolve
+	// tools on $PATH, which a direct launch does not give Homebrew.
+	cmd.Env = WithBrewPath(os.Environ(), exe)
+	if len(args) > 0 && args[0] == "tap-info" {
+		// tap-info's JSON includes each tap's "private" flag, which brew
+		// looks up on the GitHub API. On Linux its credential probe pipes
+		// into `git credential-osxkeychain`, which does not exist, and brew
+		// intermittently dies with "Error: Broken pipe" (Homebrew 7.0.8;
+		// 2 of 6 ChairLift launches on Dakota). ChairLift reads only
+		// "trusted", which is local, so the API lookup is switched off.
+		cmd.Env = append(cmd.Env, "HOMEBREW_NO_GITHUB_API=1")
+	}
+	if isReadOnlyBundle(args) {
+		// brew runs `brew update --auto-update` before every `bundle`
+		// subcommand, including the read-only check the Apps page runs for
+		// each collection on load. A read must not fetch and rewrite tap
+		// state (or do so under --dry-run), so it skips the auto-update.
+		cmd.Env = append(cmd.Env, "HOMEBREW_NO_AUTO_UPDATE=1")
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
@@ -310,6 +318,13 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 			if bundleInstall {
 				if tap, ok := untrustedTapFromErrorLine(diagnosticText); ok {
 					return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", message), Tap: tap}
+				}
+			}
+			// Gated on argv like the bundle check above: only an uninstall
+			// prints Homebrew's dependents refusal, read from its stderr.
+			if len(args) > 0 && args[0] == "uninstall" {
+				if dependents, ok := uninstallDependents(stderrText); ok {
+					return "", &DependentsError{Message: fmt.Sprintf("Brew command failed: %s", message), Dependents: dependents}
 				}
 			}
 			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", message), Err: err}
@@ -481,55 +496,6 @@ func ListOutdated() ([]Package, error) {
 	}
 
 	return packages, nil
-}
-
-// Search searches both Homebrew namespaces and returns typed results.
-func Search(query string) ([]SearchResult, error) {
-	return searchWith(runBrewCommand, query)
-}
-
-func searchWith(run func(...string) (string, error), query string) ([]SearchResult, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return nil, nil
-	}
-
-	formulae, err := searchKind(run, query, "--formula", Formula)
-	if err != nil {
-		return nil, err
-	}
-	casks, err := searchKind(run, query, "--cask", Cask)
-	if err != nil {
-		return nil, err
-	}
-	return append(formulae, casks...), nil
-}
-
-func searchKind(run func(...string) (string, error), query, flag string, kind PackageKind) ([]SearchResult, error) {
-	output, err := run("search", flag, query)
-	if err != nil {
-		// Homebrew exits 1 when one namespace has no matches, even if the
-		// other namespace may have results. Treat only that documented
-		// no-result diagnostic as an empty category.
-		if strings.Contains(err.Error(), "No formulae or casks found") {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return parseSearchOutput(output, kind), nil
-}
-
-func parseSearchOutput(output string, kind PackageKind) []SearchResult {
-	var results []SearchResult
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "==>") {
-			results = append(results, SearchResult{Name: line, Kind: kind})
-		}
-	}
-	return results
 }
 
 // Tap adds a third-party tap. It is required before installing a package by

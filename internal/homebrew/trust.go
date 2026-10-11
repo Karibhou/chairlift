@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
 // untrustedTapErrRe matches the tap name in brew's "from untrusted tap
@@ -227,4 +229,42 @@ func TrustPackages(tap UntrustedTap) error {
 		}
 	}
 	return nil
+}
+
+// TrustFormula trusts exactly one tap formula, by its qualified name, with
+// `brew trust --formula`. Its tap must already be tapped. Per-user, like
+// TrustPackages.
+//
+// It asks `brew tap-info --json` first and trusts only when brew reports the
+// tap untrusted. Homebrew before 6 has no tap trust and no `brew trust`
+// command — its tap-info carries no "trusted" key — so there the formula
+// loads as is and running `brew trust` would only fail with an unknown
+// command, aborting the install that needed nothing.
+func TrustFormula(name string) error { return trustPackage("--formula", name) }
+
+// TrustCask is TrustFormula for a tap cask: `brew trust --cask`, run only
+// when brew reports the cask's tap untrusted.
+func TrustCask(name string) error { return trustPackage("--cask", name) }
+
+func trustPackage(kind, name string) error {
+	i := strings.LastIndex(name, "/")
+	if i <= 0 {
+		return &Error{Message: fmt.Sprintf("not a qualified tap package: %q", name)}
+	}
+	// A preview never tapped, so there is nothing to ask; the trust command
+	// itself is skipped and logged by the dry-run gate.
+	if dryrun.Enabled() {
+		_, err := runBrewCommand("trust", kind, name)
+		return err
+	}
+	output, err := runBrewCommand("tap-info", "--json", name[:i])
+	if err != nil {
+		return err
+	}
+	untrusted, err := parseUntrustedTapNames([]byte(output))
+	if err != nil || len(untrusted) == 0 {
+		return err
+	}
+	_, err = runBrewCommand("trust", kind, name)
+	return err
 }

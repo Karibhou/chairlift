@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"slices"
 	"sync"
 	"sync/atomic"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
-	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/commands"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
@@ -26,7 +26,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
-	"codeberg.org/puregotk/puregotk/v4/gio"
 	"codeberg.org/puregotk/puregotk/v4/glib"
 	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
@@ -54,7 +53,9 @@ type UpdateShell struct {
 	closeBlocked        bool
 	toolbarView         *adw.ToolbarView
 	toastOverlay        *adw.ToastOverlay
-	statusPage          *adw.StatusPage
+	header              *gtk.Box
+	statusLine          *gtk.Label
+	statusDetail        *gtk.Label
 	refresh             *gtk.Button
 	primary             *gtk.Button
 	progress            *gtk.ProgressBar
@@ -69,10 +70,11 @@ type UpdateShell struct {
 	systemGroup         *adw.PreferencesGroup
 	appsGroup           *adw.PreferencesGroup
 	breakpointBin       *adw.BreakpointBin
-	// content is the vertical box inside the shell's clamp and scroller.
+	// page holds the shell's inset sections and, beside them, the secondary
+	// preferences page, inside the shell's clamp and scroller.
 	// SetSecondaryContent appends to it rather than building a second
 	// scroller, so the whole page scrolls as one.
-	content *gtk.Box
+	page *gtk.Box
 	// secondary is whatever SetSecondaryContent last parented, kept so a
 	// repeat call replaces it instead of adding a second copy.
 	secondary        *gtk.Widget
@@ -141,7 +143,7 @@ func (s *UpdateShell) ToolbarView() *adw.ToolbarView {
 // when it is added again. Nothing is connected here; the page's own handlers
 // were connected once, at build time.
 func (s *UpdateShell) SetSecondaryContent(page *adw.PreferencesPage) {
-	if s == nil || s.content == nil || page == nil {
+	if s == nil || s.page == nil || page == nil {
 		return
 	}
 	widget := &page.Widget
@@ -149,7 +151,7 @@ func (s *UpdateShell) SetSecondaryContent(page *adw.PreferencesPage) {
 		return
 	}
 	if s.secondary != nil {
-		s.content.Remove(s.secondary)
+		s.page.Remove(s.secondary)
 		s.secondary = nil
 	}
 	// views.createPage builds every preferences page inside a scroller of
@@ -162,20 +164,43 @@ func (s *UpdateShell) SetSecondaryContent(page *adw.PreferencesPage) {
 		gtk.ViewportNewFromInternalPtr(parent.GoPointer()).SetChild(nil)
 	}
 	growWithContent(widget)
-	s.content.Append(widget)
+	unclampPreferencesPage(widget)
+	s.page.Append(widget)
 	s.secondary = widget
+}
+
+// unclampPreferencesPage lets a mounted AdwPreferencesPage take the shell's
+// width. The page clamps its groups again inside the shell's own clamp, so
+// its rows came out narrower and further inset than the source rows above
+// them. Its built-in 12px side padding is what the shell's content inset
+// matches; only the second clamp is lifted. Any other child shape is left
+// untouched.
+func unclampPreferencesPage(widget *gtk.Widget) {
+	scroller := widget.GetFirstChild()
+	if scroller == nil || scroller.GetCssName() != "scrolledwindow" {
+		return
+	}
+	viewport := scroller.GetFirstChild()
+	if viewport == nil || viewport.GetCssName() != "viewport" {
+		return
+	}
+	inner := viewport.GetFirstChild()
+	if inner == nil || inner.GetCssName() != "clamp" {
+		return
+	}
+	clamp := adw.ClampNewFromInternalPtr(inner.GoPointer())
+	clamp.SetMaximumSize(math.MaxInt32)
+	clamp.SetTighteningThreshold(math.MaxInt32)
 }
 
 // growWithContent stops a widget that scrolls internally from doing so, so
 // it reports its content's full height instead of a scroller's small minimum.
 //
-// AdwStatusPage and AdwPreferencesPage are each built around a GtkScrolledWindow
-// as their only child. Nested in this shell's own scroller, both were
-// allocated that scroller-sized minimum once the preferences page was mounted
-// below the sources: the status page's title and description were clipped
-// away while its icon was cut in half, and the page scrolled inside the page.
-// The outer scroller alone scrolls the destination. Any other child shape is
-// left untouched.
+// AdwPreferencesPage is built around a GtkScrolledWindow as its only child.
+// Nested in this shell's own scroller, it was allocated that scroller-sized
+// minimum once mounted below the sources, and the page scrolled inside the
+// page. The outer scroller alone scrolls the destination. Any other child
+// shape is left untouched.
 func growWithContent(widget *gtk.Widget) {
 	child := widget.GetFirstChild()
 	if child == nil || child.GetCssName() != "scrolledwindow" {
@@ -209,7 +234,35 @@ func (s *UpdateShell) StartCheck() {
 	go func() {
 		defer cancel()
 		s.coordinator.Check(ctx, preferences, policy, s.publish)
+		// Queued after the check's last publish, so it sees that snapshot.
+		sgtk.RunOnMainThread(s.checkFinished)
 	}()
+}
+
+// checkFinished runs on the GTK main thread once a check returns. The check
+// captured the preferences it started from; one changed while it ran left
+// the rows describing the old ones (W3-15).
+func (s *UpdateShell) checkFinished() {
+	if s == nil || s.closed.Load() {
+		return
+	}
+	if updatepresent.RecheckAfterCheck(s.snapshot, s.currentPreferences()) {
+		s.StartCheck()
+	}
+}
+
+// PreferencesChanged runs on the GTK main thread when an update-source
+// preference changes, and starts a check when the snapshot on screen no
+// longer matches the preferences. The coordinator stays the only owner of
+// source enablement: the shell never flips a row itself. A mutation in
+// flight refuses the check; finishMutation calls this again once it ends.
+func (s *UpdateShell) PreferencesChanged() {
+	if s == nil || s.closed.Load() {
+		return
+	}
+	if updatepresent.RecheckForPreferences(s.snapshot, s.currentPreferences()) {
+		s.StartCheck()
+	}
 }
 
 // StartUpdate starts the current snapshot's serial mutation away from the GTK
@@ -236,6 +289,16 @@ func (s *UpdateShell) StartUpdate() {
 			s.publish(snapshot)
 		})
 		s.notifyUpdateComplete(final)
+		if final.Preview {
+			// A preview installs nothing and the panel returns to "Updates
+			// available"; say it was a preview, as every other dry-run action
+			// on the page does.
+			sgtk.RunOnMainThread(func() {
+				if s.toasts != nil && updatepresent.ShouldPublish(s.closed.Load()) {
+					s.toasts.ShowToast(actionmsg.UpdateAllPreview)
+				}
+			})
+		}
 		if s.onUpdateFinished != nil {
 			sgtk.RunOnMainThread(func() {
 				if s.onUpdateFinished != nil {
@@ -247,7 +310,8 @@ func (s *UpdateShell) StartUpdate() {
 }
 
 // beginMutation is the common admission point for unified, individual and
-// dedicated staging actions. Every caller runs on GTK's main thread.
+// dedicated staging actions, and for the channel and driver switches that
+// replace the operating system. Every caller runs on GTK's main thread.
 func (s *UpdateShell) beginMutation() bool {
 	if s == nil {
 		return false
@@ -289,6 +353,9 @@ func (s *UpdateShell) finishMutation() {
 			row.setRestartButtonSensitive(false)
 		}
 	}
+	// A preference changed while the run held admission left the rows
+	// describing the run's preferences, not the current ones.
+	s.PreferencesChanged()
 }
 
 func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflow.Item, row *adw.ActionRow) {
@@ -296,14 +363,16 @@ func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflo
 	if source == updateflow.DeveloperTools {
 		message = actionmsg.Upgrade(dryrun.Enabled(), item.Name)
 	}
-	s.startIndividualUpdate(row, func(ctx context.Context) (updateflow.ApplyResult, error) {
-		result, err := updateproviders.UpdateItem(ctx, source, item)
+	failed := func(err error) string {
 		var trustErr *homebrew.UntrustedTapError
 		if errors.As(err, &trustErr) {
-			return result, fmt.Errorf("%s", trustmsg.UpgradeMessage(item.Name, s.trustGroupAvailable))
+			return trustmsg.UpgradeMessage(item.Name, s.trustGroupAvailable)
 		}
-		return result, err
-	}, message)
+		return fmt.Sprintf("Couldn't update %s. %s", updatepresent.ItemTitle(item), updatepresent.FailureHint(err))
+	}
+	s.startIndividualUpdate(source, row, func(ctx context.Context) (updateflow.ApplyResult, error) {
+		return updateproviders.UpdateItem(ctx, source, item)
+	}, message, failed)
 }
 
 func (s *UpdateShell) startToolRefresh() {
@@ -311,11 +380,18 @@ func (s *UpdateShell) startToolRefresh() {
 	if row == nil {
 		return
 	}
-	s.startIndividualUpdate(row.row, updateproviders.RefreshDeveloperTools,
-		actionmsg.SelfUpdate(dryrun.Enabled(), "Tool catalog"))
+	s.startIndividualUpdate(updateflow.DeveloperTools, row.row, updateproviders.RefreshDeveloperTools,
+		actionmsg.SelfUpdate(dryrun.Enabled(), "Tool catalog"),
+		func(err error) string {
+			return "Couldn't check for new tool versions. " + updatepresent.FailureHint(err)
+		})
 }
 
-func (s *UpdateShell) startIndividualUpdate(row *adw.ActionRow, run func(context.Context) (updateflow.ApplyResult, error), result string) {
+// startIndividualUpdate runs one row's update. A live change reports source
+// as completed through the same finished hook an Update All run uses, so the
+// Apps inventory refreshes after a single Homebrew upgrade too. A failure is
+// logged with its raw error and shown as failed(err), which is plain words.
+func (s *UpdateShell) startIndividualUpdate(source updateflow.SourceID, row *adw.ActionRow, run func(context.Context) (updateflow.ApplyResult, error), result string, failed func(error) string) {
 	if !s.beginMutation() {
 		return
 	}
@@ -335,9 +411,11 @@ func (s *UpdateShell) startIndividualUpdate(row *adw.ActionRow, run func(context
 				return
 			}
 			if err != nil {
-				row.SetSubtitle(fmt.Sprintf("Update failed: %v", err))
+				log.Printf("updates: updating one item in %s: %v", source, err)
+				message := failed(err)
+				row.SetSubtitle(message)
 				if s.toasts != nil {
-					s.toasts.ShowErrorToast(fmt.Sprintf("Update failed: %v", err))
+					s.toasts.ShowErrorToast(message)
 				}
 				return
 			}
@@ -355,6 +433,9 @@ func (s *UpdateShell) startIndividualUpdate(row *adw.ActionRow, run func(context
 				s.renderSources(s.snapshot.Sources)
 			} else {
 				s.StartCheck()
+				if s.onUpdateFinished != nil {
+					s.onUpdateFinished(updateflow.Snapshot{CompletedSources: []updateflow.SourceID{source}})
+				}
 			}
 		})
 	}()
@@ -409,7 +490,8 @@ func (s *UpdateShell) StartRestart() {
 				return
 			}
 			if err != nil {
-				s.toasts.ShowErrorToast(fmt.Sprintf("Restart failed: %v", err))
+				log.Printf("updates: restart: %v", err)
+				s.toasts.ShowErrorToast(updatepresent.RestartFailedMessage())
 				return
 			}
 			if dryrun.Enabled() {
@@ -449,17 +531,11 @@ func (s *UpdateShell) notifyUpdateComplete(final updateflow.Snapshot) {
 		return
 	}
 
-	skipped := 0
-	for _, source := range final.Sources {
-		if !source.Enabled || !source.Configured || !source.Available {
-			skipped++
-		}
-	}
 	notification := notify.UpdateAllComplete(
 		len(final.CompletedSources),
 		len(final.FailedSources),
-		skipped,
 		final.RestartRequired(),
+		final.MaintenanceErr != nil,
 	)
 
 	sgtk.RunOnMainThread(func() {
@@ -504,9 +580,10 @@ func (s *UpdateShell) Render(snapshot updateflow.Snapshot) {
 	}
 
 	presentation := updatepresent.Snapshot(snapshot)
-	s.statusPage.SetTitle(presentation.Title)
-	s.statusPage.SetDescription(presentation.Description)
-	s.statusPage.SetVisible(presentation.ShowStatus(snapshot.Phase))
+	s.statusLine.SetLabel(presentation.Status)
+	s.statusDetail.SetLabel(presentation.Detail)
+	s.statusDetail.SetVisible(presentation.Detail != "")
+	s.header.SetVisible(presentation.ShowStatus(snapshot.Phase))
 	s.renderPrimaryAction(presentation)
 	s.renderProgress(snapshot)
 	if s.refresh != nil {
@@ -517,15 +594,14 @@ func (s *UpdateShell) Render(snapshot updateflow.Snapshot) {
 		s.banner.SetRevealed(true)
 	} else {
 		s.closeBlocked = false
-		s.banner.SetTitle(presentation.Banner)
-		s.banner.SetRevealed(presentation.Banner != "")
+		s.banner.SetRevealed(false)
 	}
 	s.renderSources(snapshot.Sources)
 	if s.toasts != nil {
 		s.toasts.SetUpdateBadge(snapshot.TotalUpdates)
 	}
 	if !s.havePhase || s.lastPhase != snapshot.Phase {
-		s.toastOverlay.Announce(presentation.Announce(), gtk.AccessibleAnnouncementPriorityMediumValue)
+		s.toastOverlay.Announce(presentation.Status, gtk.AccessibleAnnouncementPriorityMediumValue)
 		s.lastPhase = snapshot.Phase
 		s.havePhase = true
 	}
@@ -551,26 +627,20 @@ func (s *UpdateShell) build() {
 	s.refresh.SetActionName(commands.CheckAction)
 	header.PackStart(&s.refresh.Widget)
 
-	menu := gio.NewMenu()
-	menu.Append("Preferences", commands.PreferencesAction)
-	menu.Append("Keyboard Shortcuts", commands.ShowShortcutsAction)
-	menu.Append("Help", commands.HelpAction)
-	menu.Append("About "+branding.AppName, commands.ShowAboutAction)
-	menu.Append("Quit", commands.QuitAction)
-	menuButton := gtk.NewMenuButton()
-	menuButton.SetIconName("open-menu-symbolic")
-	menuButton.SetTooltipText("Main Menu")
-	SetAccessibleLabel(menuButton, "Main Menu")
-	menuButton.SetMenuModel(&menu.MenuModel)
-	header.PackEnd(&menuButton.Widget)
 	s.toolbarView.AddTopBar(&header.Widget)
 
 	content := gtk.NewBox(gtk.OrientationVerticalValue, 12)
 	content.SetMarginTop(12)
-	content.SetMarginBottom(24)
+	content.SetMarginBottom(12)
 	content.SetMarginStart(12)
 	content.SetMarginEnd(12)
-	s.content = content
+	// The secondary preferences page sits beside content, not inside it:
+	// its own 12px side padding then lines its rows up with the sections
+	// content insets by the same 12px.
+	pageBox := gtk.NewBox(gtk.OrientationVerticalValue, 0)
+	pageBox.SetMarginBottom(12)
+	pageBox.Append(&content.Widget)
+	s.page = pageBox
 
 	s.wordmark = gtk.NewPicture()
 	s.wordmark.SetCanShrink(true)
@@ -609,14 +679,16 @@ func (s *UpdateShell) build() {
 		s.themeHandler = s.styleManager.ConnectNotify(&changed)
 	}
 
-	s.statusPage = adw.NewStatusPage()
-	s.statusPage.SetVexpand(false)
-	s.statusPage.AddCssClass("compact")
-	controls := gtk.NewBox(gtk.OrientationVerticalValue, 12)
-	controls.SetHalign(gtk.AlignCenterValue)
+	// The header reads wordmark → primary action → one line of status, so
+	// the action sits directly under the wordmark and the supporting text
+	// under the action. While checking or updating there is no action and
+	// the progress bar takes its place.
+	s.header = gtk.NewBox(gtk.OrientationVerticalValue, 6)
+	s.header.SetHalign(gtk.AlignCenterValue)
 
 	s.primary = gtk.NewButtonWithLabel("")
 	s.primary.AddCssClass("pill")
+	s.primary.SetHalign(gtk.AlignCenterValue)
 	s.primary.SetVisible(false)
 	primaryClicked := func(_ gtk.Button) {
 		// The primary never starts a restart: the Operating system row owns
@@ -629,16 +701,30 @@ func (s *UpdateShell) build() {
 		}
 	}
 	s.primary.ConnectClicked(&primaryClicked)
-	controls.Append(&s.primary.Widget)
+	s.header.Append(&s.primary.Widget)
 
 	s.progress = gtk.NewProgressBar()
 	s.progress.SetShowText(false)
 	s.progress.SetVisible(false)
-	s.progress.SetHexpand(true)
-	controls.Append(&s.progress.Widget)
-	s.statusPage.SetChild(&controls.Widget)
-	growWithContent(&s.statusPage.Widget)
-	content.Append(&s.statusPage.Widget)
+	s.progress.SetSizeRequest(240, -1)
+	s.header.Append(&s.progress.Widget)
+
+	s.statusLine = gtk.NewLabel("")
+	s.statusLine.SetWrap(true)
+	s.statusLine.SetJustify(gtk.JustifyCenterValue)
+	// A stable description lets assistive technology, and the AT-SPI
+	// suite, tell the status line apart from a source row saying the same.
+	s.statusLine.UpdateProperty(gtk.AccessiblePropertyDescriptionValue, "Update status", -1)
+	s.header.Append(&s.statusLine.Widget)
+
+	s.statusDetail = gtk.NewLabel("")
+	s.statusDetail.SetWrap(true)
+	s.statusDetail.SetJustify(gtk.JustifyCenterValue)
+	s.statusDetail.AddCssClass("caption")
+	s.statusDetail.AddCssClass("dim-label")
+	s.statusDetail.SetVisible(false)
+	s.header.Append(&s.statusDetail.Widget)
+	content.Append(&s.header.Widget)
 
 	s.banner = adw.NewBanner("")
 	s.banner.SetRevealed(false)
@@ -676,7 +762,7 @@ func (s *UpdateShell) build() {
 	scrolled.SetVexpand(true)
 	clamp := adw.NewClamp()
 	clamp.SetMaximumSize(720)
-	clamp.SetChild(&content.Widget)
+	clamp.SetChild(&pageBox.Widget)
 	scrolled.SetChild(&clamp.Widget)
 	// The breakpoint bin wraps the scroller, not the other way round. An
 	// AdwBreakpointBin never asks for more height than its size request, so

@@ -67,25 +67,27 @@ existed. Every mutation is behind `dryrun.Enabled()`.
 
 The switch reflects the configured service after its first readiness probe;
 while that probe runs it is off and insensitive. `systemctl is-active` is
-never readiness on its own. The model and preset rows remain visible but
+never readiness on its own. The Active Model row remains visible but
 insensitive until ready, with the unmet prerequisite shown. An empty alias
 means no model is selected, never an invented Qwen default. Readiness and
-model reads are generation-guarded; selecting a preset and toggling the
-service share one mutation gate. A failed operation re-observes the unit and
-endpoint rather than assuming nothing changed.
-Selecting a model writes its canonical `hf.co/...` target to the
-`bluefin-active` alias, restarts the owned user unit, and waits for readiness
-before reporting selection. llmman reads aliases at startup: a saved alias
-alone does not prove that the running daemon can serve it. A missing alias is
-the ordinary no-selection state.
+model reads are generation-guarded. A failed operation re-observes the unit
+and endpoint rather than assuming nothing changed.
+The model alias lives in llmman's configuration: ChairLift only reads it
+back via `llmman config get`, never writes it (#568). Selection happens in
+llmman's own models page, which the Agents page's **Manage Models** row
+opens. llmman reads aliases at startup: a saved alias alone does not prove
+that the running daemon can serve it. A missing alias is the ordinary
+no-selection state.
 
 
 **Current Control Center surface (2026-10-03).** At the owner's request,
-the page focuses on this computer: one **Agent Mode** switch, visible
-**Active Model** and **Recommended Presets** rows, a **Goose** row with Launch
-action, a **Show Ask Bluefin in menu** preference, and the selectable local
-OpenAI-compatible connection address `http://127.0.0.1:17434/v1`.
-Connection instructions are not hidden behind an expander.
+the page focuses on this computer: one **Agent Mode** switch, a visible
+**Active Model** row, a **Manage Models** row that opens llmman's own
+models page at `http://127.0.0.1:17434/#/models`, a **Goose** row with
+Launch action, a **Show Ask Bluefin in menu** preference, and the
+selectable local OpenAI-compatible connection address
+`http://127.0.0.1:17434/v1`. Connection instructions are not hidden behind
+an expander.
 Goose Desktop (`ublue-os/tap/goose-linux`) is the Agent Mode desktop GUI.
 It is launched through llmman's invocation-scoped integration (`llmman launch goose-desktop --model <active-model>`)
 with the active model without persisting provider or model into Goose's configuration.
@@ -100,6 +102,32 @@ removed, avoiding a second configuration workflow on this local-mode page.
 ChairLift leaves unrelated llmman configuration intact; it changes only its
 selected-model alias through llmman's CLI and overrides aggregation in the unit.
 
+**Goose runs in a ChairLift-owned profile (2026-10-05).** This note
+replaces the 2026-10-03 paragraph's Goose readiness and launch sentences;
+the rest of that surface stands. Verifying, and repairing, the user's own
+`~/.config/goose` made ChairLift a second owner of a file Goose and the
+user also write, so Goose now runs in a dedicated profile under
+`$XDG_DATA_HOME/chairlift/troubleshooting` and the user's configuration is
+never read or written. The profile is rewritten immediately before every
+launch with exactly two enabled extensions — `linux-mcp-server` with
+`--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key`, and the
+Project Bluefin knowledge search at `https://mcp.projectbluefin.io/mcp`
+limited to `search_knowledge` — with every other extension disabled. The
+launch is `llmman launch goose-desktop --model bluefin-active` with
+`GOOSE_PATH_ROOT` and the desktop app's `XDG_CONFIG_HOME` inside that
+profile. Readiness is therefore the packages (`linux-mcp-server` and
+`goose-desktop` resolved, x86_64), the running daemon, and a selected
+model; when the packages are missing the Goose row offers Set Up, which
+installs them with Homebrew. One session runs at a time. The Goose row and
+the menu switch form the Agents page's **Troubleshooting** group,
+gated by `agents_page.troubleshooting_group`, the key it used on Help
+under `help_page` (still accepted and migrated); Help no longer offers a
+second Goose surface. The Ask Bluefin menu entry and `--ask-bluefin` are
+paths into it. Knowledge
+searches go online, so no copy claims a session's questions stay on this
+computer. The Agent Mode group also gains a **Manage Models** row that
+opens llmman's own models page (`http://127.0.0.1:17434/#/models`) while
+the daemon is ready.
 
 **Security boundaries.**
 
@@ -121,15 +149,19 @@ selected-model alias through llmman's CLI and overrides aggregation in the unit.
   SSH-key discovery and remote-host tools stay off unless separately opted in.
 - *Configuration ownership:* ChairLift writes no llmman TOML. Its selected
   model alias is read and written through `llmman config get/set`.
+  ChairLift owns the Goose configuration repair in-process. Before replacing an
+  existing user Goose configuration, it saves a recoverable backup
+  (`config.yaml.chairlift-backup`, 0600) atomically, only when contents change,
+  never under dry-run, and never on fresh creation.
 - *Secrets:* ChairLift stores and logs no API key, provider credential, or
   prompt, and this surface accepts no credentials.
 - *Privilege:* no pkexec route, helper subcommand, or PolicyKit action.
 
 **Issue map.** #253 (this decision), #254 (llmman provisioning and user
 unit), #262 (`OLLAMA_HOST` discovery) land with it. #255 model picker, #256
-control surface and launch intents, #257 Goose, #258/#259 Oh My Pi, #261
-Ask Bluefin dispatcher, #263 contributor flow, and
-#264 acceptance build on this contract.
+control surface and launch intents, #257 Goose (in-process configuration repair
+with recoverable backup), #258/#259 Oh My Pi, #261 Ask Bluefin dispatcher, #263
+contributor flow, and #264 acceptance build on this contract.
 
 ## Consequences
 

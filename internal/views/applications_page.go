@@ -1,17 +1,12 @@
 package views
 
 import (
+	"errors"
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
-	"sort"
-	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
-	"github.com/projectbluefin/chairlift/internal/launcher"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
@@ -33,94 +28,31 @@ func (uh *UserHome) buildApplicationsPage() {
 		uh.appInstallProgress.dispose()
 	}
 	page.ConnectDestroy(&destroyed)
-	var homebrewTools *adw.PreferencesGroup
 
-	// Installed Applications group
-	if uh.groupEnabled("applications_page", "applications_installed_group") {
+	// Collections are the first task; installed packages and export follow.
+	if uh.groupEnabled("applications_page", "brew_bundles_group") {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("Your apps")
-		group.SetDescription("Browse, install, and remove applications.")
-
-		row := adw.NewActionRow()
-		row.SetTitle("Browse all apps")
-		row.SetSubtitle("Opens the software catalog, where you can install and remove apps.")
-		row.SetActivatable(true)
-
-		icon := gtk.NewImageFromIconName("adw-external-link-symbolic")
-		row.AddSuffix(&icon.Widget)
-
-		groupCfg := uh.config.GetGroupConfig("applications_page", "applications_installed_group")
-		appID := "io.github.kolunmi.Bazaar"
-		if groupCfg != nil && groupCfg.AppID != "" {
-			appID = groupCfg.AppID
-		}
-
-		activatedCb := func(row adw.ActionRow) {
-			uh.launchApp(appID)
-		}
-		row.ConnectActivated(&activatedCb)
-
-		group.Add(&row.Widget)
+		group.SetTitle("App collections")
+		group.SetDescription("Looking for app collections…")
 		page.Add(group)
-	}
-	// Homebrew search group
-	if uh.groupEnabled("applications_page", "brew_search_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("Find more apps and tools")
-		group.SetDescription("Searches Homebrew, a third-party source. Anything you install from here comes from its publisher, not from this system.")
+		uh.brewBundlesGroup = group
 
-		// Search entry row
-		searchRow := adw.NewActionRow()
-		searchRow.SetTitle("Search")
-
-		uh.searchEntry = gtk.NewSearchEntry()
-		uh.searchEntry.SetHexpand(true)
-		uh.searchEntry.SetPlaceholderText(pageview.HomebrewSearchPlaceholder)
-		SetAccessibleLabel(uh.searchEntry, pageview.HomebrewSearchLabel)
-
-		searchActivateCb := func(entry gtk.SearchEntry) {
-			uh.onHomebrewSearch()
+		var bundlePaths []string
+		groupCfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group")
+		if groupCfg != nil {
+			bundlePaths = append(bundlePaths, groupCfg.BundlesPaths...)
 		}
-		uh.searchEntry.ConnectActivate(&searchActivateCb)
-
-		searchRow.AddSuffix(&uh.searchEntry.Widget)
-		group.Add(&searchRow.Widget)
-		page.Add(group)
-
-		// Search results are ordinary visible rows, not a collapsed expander.
-		uh.searchResults = adw.NewPreferencesGroup()
-		uh.searchResults.SetTitle("Results")
-		uh.searchResults.SetDescription("Nothing searched yet")
-		page.Add(uh.searchResults)
-
+		go uh.loadBrewBundles(bundlePaths)
 	}
-
-	// Flatpak Applications group
-	if uh.groupEnabled("applications_page", "flatpak_user_group") ||
-		uh.groupEnabled("applications_page", "flatpak_system_group") {
-		uh.flatpakApplications = adw.NewPreferencesGroup()
-		uh.flatpakApplications.SetTitle("Installed applications")
-		uh.flatpakApplications.SetDescription("Counting…")
-
-		page.Add(uh.flatpakApplications)
-	}
-
-	// Load flatpak applications if either group is enabled
-	if uh.groupEnabled("applications_page", "flatpak_user_group") ||
-		uh.groupEnabled("applications_page", "flatpak_system_group") {
-		go uh.loadFlatpakApplications()
-	}
-
 	// Homebrew group
 	if uh.groupEnabled("applications_page", "brew_group") {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("Packages from Homebrew")
-		group.SetDescription("Apps and tools installed with Homebrew, a third-party source.")
+		group.SetTitle("Backup")
 
 		// Package-list export row
 		dumpRow := adw.NewActionRow()
 		dumpRow.SetTitle("Export package list")
-		dumpRow.SetSubtitle("Saves a list of everything you installed here so you can put it back later. Replaces the list you exported last time.")
+		dumpRow.SetSubtitle(pageview.PackageListExportSubtitle)
 		dumpSpinner := newActivitySpinner()
 		dumpRow.AddSuffix(&dumpSpinner.Widget)
 
@@ -142,43 +74,23 @@ func (uh *UserHome) buildApplicationsPage() {
 
 		// Applications — Homebrew casks
 		uh.installedCasks = adw.NewPreferencesGroup()
-		uh.installedCasks.SetTitle("Homebrew applications")
+		uh.installedCasks.SetTitle("Installed apps")
 		uh.installedCasks.SetDescription("Counting…")
 		page.Add(uh.installedCasks)
-
-		homebrewTools = group
+		page.Add(uh.installedFormulae)
+		page.Add(group)
 
 		// Load packages asynchronously
 		go uh.loadHomebrewPackages()
 	}
-	// Collection choices follow visible apps and discovery controls.
-	if uh.groupEnabled("applications_page", "brew_bundles_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("App collections")
-		group.SetDescription("Looking for app collections…")
-		page.Add(group)
-		uh.brewBundlesGroup = group
 
-		var bundlePaths []string
-		groupCfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group")
-		if groupCfg != nil {
-			bundlePaths = append(bundlePaths, groupCfg.BundlesPaths...)
-		}
-		go uh.loadBrewBundles(bundlePaths)
-	}
-
-	// Advanced command-line inventory follows apps and collection choices.
-	if uh.installedFormulae != nil {
-		page.Add(uh.installedFormulae)
-	}
-	if homebrewTools != nil {
-		page.Add(homebrewTools)
-	}
 }
 
 // loadBrewBundles discovers configured collections off the GTK thread and
 // builds their rows on the main thread. ConnectBundleInstall owns the shared
 // callback and per-collection action gate; setup navigates these same widgets.
+// Once the rows exist, refreshBundleStatuses observes which collections the
+// system already holds.
 func (uh *UserHome) loadBrewBundles(paths []string) {
 	bundles, discoveryErr := homebrew.AvailableBundles(paths)
 	warning := ""
@@ -188,38 +100,81 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 	}
 	presentation := bundleview.Present(len(bundles), warning)
 
+	// Parse every Brewfile off the main thread before marshalling: the
+	// discovery path already runs off-thread, BundleContents is a buffered
+	// file scan, and the contract documented on the function above
+	// promises off-thread discovery + main-thread row construction only.
+	type parsed struct {
+		bundle homebrew.Bundle
+		items  []homebrew.BundleItem
+		total  int
+	}
+	parsedBundles := make([]parsed, 0, len(bundles))
+	for _, bundle := range bundles {
+		items, itemsErr := homebrew.BundleContents(bundle.Path)
+		if itemsErr != nil {
+			// The Brewfile moved or became unreadable between discovery
+			// and listing. Keep whatever was read before the failure and
+			// make the total match it, so the presenter neither claims a
+			// "Showing N of M" overflow nor blames the display limit.
+			log.Printf("Could not list contents of app collection %q: %v", bundle.Name, itemsErr)
+		}
+		total := bundle.ItemCount
+		if itemsErr != nil {
+			total = len(items)
+		}
+		parsedBundles = append(parsedBundles, parsed{bundle: bundle, items: items, total: total})
+	}
+
 	sgtk.RunOnMainThread(func() {
 		if uh.brewBundlesGroup == nil {
 			return
 		}
 		uh.brewBundlesGroup.SetDescription(presentation.Description)
 
-		if len(bundles) == 0 {
+		if len(parsedBundles) == 0 {
 			row := adw.NewActionRow()
+			row.SetUseMarkup(false)
 			row.SetTitle(presentation.PlaceholderTitle)
 			row.SetSubtitle(presentation.PlaceholderSubtitle)
 			uh.brewBundlesGroup.Add(&row.Widget)
 			return
 		}
 
-		for _, bundle := range bundles {
-			row, installBtn, progress := newBundleRow(bundle)
-			uh.ConnectBundleInstall(bundle, installBtn, progress)
+		for _, p := range parsedBundles {
+			row, installBtn, progress := newBundleRow(p.bundle, p.items, p.total)
+			uh.ConnectBundleInstall(p.bundle, installBtn, progress)
 			uh.brewBundlesGroup.Add(&row.Widget)
 		}
+		uh.refreshBundleStatuses()
 	})
 }
 
 // newBundleRow builds one collection row with its Install button, unwired:
-// the caller connects the button through ConnectBundleInstall.
-func newBundleRow(bundle homebrew.Bundle) (*adw.ActionRow, *gtk.Button, *gtk.ProgressBar) {
+// the caller connects the button through ConnectBundleInstall. The row is
+// an AdwExpanderRow so the user can reveal the list of packages the
+// collection will install; the Install button lives as a suffix of the
+// expander itself, so it stays in view while the list is collapsed. The
+// description and the count go on the expander's own subtitle because a
+// person scanning the closed row needs both before deciding to expand.
+func newBundleRow(bundle homebrew.Bundle, items []homebrew.BundleItem, total int) (*adw.ExpanderRow, *gtk.Button, *gtk.ProgressBar) {
 	collection := bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount)
-	row := adw.NewActionRow()
-	row.SetTitle(collection.Title)
+	row := adw.NewExpanderRow()
+	// Collection titles and descriptions may carry free-form text from a
+	// shipped Brewfile (comment lines, the humanize() fallback for unknown
+	// collections); AdwExpanderRow parses both as Pango markup by default,
+	// so a '&' or '<' would garble the row with a GTK warning (#437, the
+	// same shape as the bootc stage expander on the Updates page).
 	row.SetUseMarkup(false)
+	row.SetTitle(collection.Title)
 	row.SetSubtitle(collection.Subtitle)
+	row.SetTitleLines(1)
 
-	installBtn := gtk.NewButtonWithLabel("Install")
+	// ConnectBundleInstall gives the button its label-and-spinner child. A
+	// button built with a label and then given another child publishes an
+	// empty accessible name even with an explicit LABEL property (GTK 4.24,
+	// reproduced without ChairLift), so it starts empty.
+	installBtn := gtk.NewButton()
 	installBtn.SetValign(gtk.AlignCenterValue)
 	progress := newInstallProgress("Installing collection…")
 	controls := gtk.NewBox(gtk.OrientationVerticalValue, 6)
@@ -227,7 +182,62 @@ func newBundleRow(bundle homebrew.Bundle) (*adw.ActionRow, *gtk.Button, *gtk.Pro
 	controls.Append(&installBtn.Widget)
 	controls.Append(&progress.Widget)
 	row.AddSuffix(&controls.Widget)
+
+	addContentsRows(row, items, total)
 	return row, installBtn, progress
+}
+
+// addContentsRows fills the expander with one row per package the
+// collection would install. The expander starts collapsed (AdwExpanderRow's
+// default); the Install button stays in view on the expander's suffix
+// whether or not the row is open, so a person who never expands the row
+// still has the affordance they had before. A row whose parser returned
+// nothing renders the empty placeholder so the expanded view still has
+// something to read. total is the Brewfile's own entry count, which can
+// exceed the items slice when the parser hit its own cap; passing it lets
+// the presenter show an honest "showing N of M" notice instead of
+// pretending the truncated tail is the whole file.
+func addContentsRows(expander *adw.ExpanderRow, items []homebrew.BundleItem, total int) {
+	presentation := bundleview.PresentContents(items, total)
+	if !presentation.HasRows() {
+		placeholder := adw.NewActionRow()
+		placeholder.SetTitle(presentation.EmptyTitle)
+		if presentation.EmptySubtitle != "" {
+			placeholder.SetSubtitle(presentation.EmptySubtitle)
+		}
+		expander.AddRow(&placeholder.Widget)
+		return
+	}
+	for _, item := range presentation.Rows {
+		entry := adw.NewActionRow()
+		// AdwActionRow parses title/subtitle as Pango markup by default;
+		// the Brewfile token may contain a free-form identifier or '&'/'<'
+		// that would otherwise render as a GTK warning (#437).
+		entry.SetUseMarkup(false)
+		entry.SetTitle(item.Name)
+		if item.KindLabel != "" {
+			entry.SetSubtitle(item.KindLabel)
+		}
+		SetAccessibleLabel(entry, item.AccessibleName)
+		expander.AddRow(&entry.Widget)
+	}
+	if presentation.OverflowNotice != "" {
+		overflow := adw.NewActionRow()
+		overflow.SetUseMarkup(false)
+		overflow.SetTitle(presentation.OverflowNotice)
+		overflow.SetTitleLines(1)
+		expander.AddRow(&overflow.Widget)
+	}
+}
+
+// homebrewInventoryChanged re-reads what a Homebrew install anywhere in
+// ChairLift can change on the Apps page: the installed lists and which
+// collections the system already holds. It must be called on the GTK main
+// thread and is safe when either Apps group is disabled, because both
+// readers guard their own widgets.
+func (uh *UserHome) homebrewInventoryChanged() {
+	go uh.loadHomebrewPackages()
+	uh.refreshBundleStatuses()
 }
 
 // loadHomebrewPackages loads installed Homebrew packages asynchronously
@@ -245,7 +255,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
-				uh.installedFormulae.SetDescription("Could not read the list")
+				uh.installedFormulae.SetDescription("Couldn't load this list.")
 			})
 		} else {
 			// Dependencies are managed by Homebrew, not individual choices here.
@@ -260,6 +270,13 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
+				// A running row action owns its row's controls; replacing
+				// them now would hide its progress and admit a second
+				// start. settleHomebrewRows reloads once it finishes.
+				if uh.formulaGates.Defer() {
+					return
+				}
+				uh.formulaGates.Rebuild()
 				uh.formulaeRows.Clear(func(row *adw.ActionRow) {
 					uh.installedFormulae.Remove(&row.Widget)
 				})
@@ -273,21 +290,23 @@ func (uh *UserHome) loadHomebrewPackages() {
 					row.SetSubtitle(presentation.Subtitle)
 
 					pinLabel := "Pin"
-					pinTooltip := "Keep this version and skip it during updates"
+					pinTooltip := "Keep this version during updates"
 					if pkg.Pinned {
 						pinLabel = "Unpin"
-						pinTooltip = "Let this be updated again"
+						pinTooltip = "Allow updates again"
 					}
-					pinBtn := gtk.NewButtonWithLabel(pinLabel)
+					pinBtn := gtk.NewButton()
+					setPackageButtonLabel(pinBtn, pinLabel, pkg.Name)
 					pinBtn.SetValign(gtk.AlignCenterValue)
 					pinBtn.SetTooltipText(pinTooltip)
 
-					uninstallBtn := gtk.NewButtonWithLabel("Uninstall")
+					uninstallBtn := gtk.NewButton()
+					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")
-					uninstallBtn.SetTooltipText("Remove this tool from your system")
+					uninstallBtn.SetTooltipText("Remove this tool")
 
-					gate := &actionstate.Gate{}
+					gate := uh.formulaGates.New()
 					controls := []*gtk.Button{pinBtn, uninstallBtn}
 					uh.formulaButtons.connect(pinBtn, func(gtk.Button) {
 						if !gate.TryStart() {
@@ -320,13 +339,17 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
-				uh.installedCasks.SetDescription("Could not read the list")
+				uh.installedCasks.SetDescription("Couldn't load this list.")
 			})
 		} else {
 			sgtk.RunOnMainThread(func() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
+				if uh.caskGates.Defer() {
+					return
+				}
+				uh.caskGates.Rebuild()
 				uh.caskRows.Clear(func(row *adw.ActionRow) {
 					uh.installedCasks.Remove(&row.Widget)
 				})
@@ -339,12 +362,22 @@ func (uh *UserHome) loadHomebrewPackages() {
 					row.SetTitle(presentation.Title)
 					row.SetSubtitle(presentation.Subtitle)
 
-					uninstallBtn := gtk.NewButtonWithLabel("Uninstall")
+					// The running application's own cask stays listed but
+					// offers no Uninstall: removing it here would delete the
+					// app from under the person using it (issue #493).
+					if pageview.IsSelfCask(pkg.Name) {
+						uh.installedCasks.Add(&row.Widget)
+						uh.caskRows.Add(row)
+						continue
+					}
+
+					uninstallBtn := gtk.NewButton()
+					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")
-					uninstallBtn.SetTooltipText("Remove this app from your system")
+					uninstallBtn.SetTooltipText("Remove this app")
 
-					gate := &actionstate.Gate{}
+					gate := uh.caskGates.New()
 					controls := []*gtk.Button{uninstallBtn}
 					uh.caskButtons.connect(uninstallBtn, func(gtk.Button) {
 						if !gate.TryStart() {
@@ -370,10 +403,10 @@ func (uh *UserHome) confirmHomebrewPin(
 	gate *actionstate.Gate,
 ) {
 	action := "Unpin"
-	description := "It will be updated again with everything else."
+	description := "It will get updates again."
 	if pin {
 		action = "Pin"
-		description = "It stays at the version you have now and is skipped during updates, until you unpin it."
+		description = "It stays at this version until you unpin it."
 	}
 
 	dialog := adw.NewAlertDialog(fmt.Sprintf("%s %s?", action, name), description)
@@ -384,10 +417,11 @@ func (uh *UserHome) confirmHomebrewPin(
 	uh.confirmations.connect(dialog, func(response string) {
 		if response != "confirm" {
 			gate.Reset()
+			uh.settleHomebrewRows(false)
 			return
 		}
 		setHomebrewControlsSensitive(controls, false)
-		primary.SetLabel(action + "ning…")
+		setPackageButtonLabel(primary, action+"ning…", name)
 		go uh.runHomebrewPin(name, pin, primary, controls, gate)
 	})
 	dialog.Present(&uh.applicationsPrefsPage.Widget)
@@ -411,13 +445,14 @@ func (uh *UserHome) runHomebrewPin(
 
 	idleLabel := "Unpin"
 	completeLabel := "Unpinned"
-	errorMessage := fmt.Sprintf("Could not unpin %s", name)
+	errorMessage := fmt.Sprintf("Couldn't unpin %s. Try again.", name)
 	if pin {
 		idleLabel = "Pin"
 		completeLabel = "Pinned"
-		errorMessage = fmt.Sprintf("Could not pin %s", name)
+		errorMessage = fmt.Sprintf("Couldn't pin %s. Try again.", name)
 	}
 	uh.finishHomebrewPackageMutation(
+		name,
 		decision,
 		err,
 		errorMessage,
@@ -439,7 +474,7 @@ func (uh *UserHome) confirmHomebrewUninstall(
 ) {
 	dialog := adw.NewAlertDialog(
 		fmt.Sprintf("Uninstall %s?", name),
-		fmt.Sprintf("Removes %s and the files Homebrew installed with it. Anything you created yourself is left alone.", name),
+		fmt.Sprintf("This removes %s from this computer. Your own files are kept.", name),
 	)
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("uninstall", "Uninstall")
@@ -448,10 +483,11 @@ func (uh *UserHome) confirmHomebrewUninstall(
 	uh.confirmations.connect(dialog, func(response string) {
 		if response != "uninstall" {
 			gate.Reset()
+			uh.settleHomebrewRows(false)
 			return
 		}
 		setHomebrewControlsSensitive(controls, false)
-		primary.SetLabel("Uninstalling…")
+		setPackageButtonLabel(primary, "Uninstalling…", name)
 		go uh.runHomebrewUninstall(name, kind, primary, controls, gate)
 	})
 	dialog.Present(&uh.applicationsPrefsPage.Widget)
@@ -467,10 +503,16 @@ func (uh *UserHome) runHomebrewUninstall(
 	err := homebrew.Uninstall(name, kind == homebrew.Cask)
 	dryRun := dryrun.Enabled()
 	decision := actionstate.PackageUninstall(err == nil, dryRun)
+	var dependents []string
+	var depErr *homebrew.DependentsError
+	if errors.As(err, &depErr) {
+		dependents = depErr.Dependents
+	}
 	uh.finishHomebrewPackageMutation(
+		name,
 		decision,
 		err,
-		fmt.Sprintf("Could not uninstall %s", name),
+		actionmsg.UninstallFailure(name, dependents),
 		actionmsg.Uninstall(dryRun, name),
 		"Uninstall",
 		"Uninstalled",
@@ -478,9 +520,15 @@ func (uh *UserHome) runHomebrewUninstall(
 		controls,
 		gate,
 	)
+	if err == nil && decision.Refresh {
+		// A collection holding the removed package is no longer fully
+		// installed; re-observe so its row offers Install again.
+		sgtk.RunOnMainThread(uh.refreshBundleStatuses)
+	}
 }
 
 func (uh *UserHome) finishHomebrewPackageMutation(
+	name string,
 	decision actionstate.Decision,
 	err error,
 	errorMessage string,
@@ -492,9 +540,10 @@ func (uh *UserHome) finishHomebrewPackageMutation(
 	gate *actionstate.Gate,
 ) {
 	sgtk.RunOnMainThread(func() {
+		refresh := false
 		if decision.RestoreControl {
 			gate.Reset()
-			primary.SetLabel(idleLabel)
+			setPackageButtonLabel(primary, idleLabel, name)
 			setHomebrewControlsSensitive(controls, true)
 		}
 		if err != nil {
@@ -502,373 +551,45 @@ func (uh *UserHome) finishHomebrewPackageMutation(
 			// failing recipe; that belongs in the log, not in a toast.
 			log.Printf("Homebrew package action failed: %v", err)
 			uh.toastAdder.ShowErrorToast(errorMessage)
-			return
+		} else {
+			if decision.CompleteControl {
+				gate.Complete()
+				setPackageButtonLabel(primary, completeLabel, name)
+				setHomebrewControlsSensitive(controls, false)
+			}
+			uh.toastAdder.ShowToast(toast)
+			refresh = decision.Refresh
 		}
-		if decision.CompleteControl {
-			gate.Complete()
-			primary.SetLabel(completeLabel)
-			setHomebrewControlsSensitive(controls, false)
-		}
-		uh.toastAdder.ShowToast(toast)
-		if decision.Refresh {
-			go uh.loadHomebrewPackages()
-		}
+		uh.settleHomebrewRows(refresh)
 	})
+}
+
+// setPackageButtonLabel sets a package row button's visible label and names
+// it after the package for assistive technology: every row shows the same
+// words, so the label alone announced "Uninstall" for every package.
+// GtkButton names itself from its label child through a LABELLED_BY
+// relation, which outranks the LABEL property, so the relation is dropped
+// after every label change.
+func setPackageButtonLabel(button *gtk.Button, label, name string) {
+	button.SetLabel(label)
+	button.ResetRelation(gtk.AccessibleRelationLabelledByValue)
+	SetAccessibleLabel(button, pageview.HomebrewPackageButtonName(label, name))
+}
+
+// settleHomebrewRows runs on the GTK main thread once a row action has
+// released its gate. It starts one inventory load when the action asked for
+// one or when a list rebuild was deferred while the action ran, so the
+// deferral never leaves the lists stale.
+func (uh *UserHome) settleHomebrewRows(refresh bool) {
+	formulaeOwed := uh.formulaGates.Settled()
+	casksOwed := uh.caskGates.Settled()
+	if refresh || formulaeOwed || casksOwed {
+		go uh.loadHomebrewPackages()
+	}
 }
 
 func setHomebrewControlsSensitive(controls []*gtk.Button, sensitive bool) {
 	for _, button := range controls {
 		button.SetSensitive(sensitive)
-	}
-}
-
-// flatpakAppEntry pairs an application with its scope for unified display.
-type flatpakAppEntry struct {
-	app  flatpak.Application
-	user bool
-}
-
-// loadFlatpakApplications loads installed Flatpak applications asynchronously
-func (uh *UserHome) loadFlatpakApplications() {
-	generation := uh.flatpakPackagesRefresh.Begin()
-	if !flatpak.IsInstalledCached() {
-		sgtk.RunOnMainThread(func() {
-			if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
-				return
-			}
-			if uh.flatpakApplications != nil {
-				uh.flatpakApplications.SetDescription("App management is not available on this system")
-			}
-		})
-		return
-	}
-
-	userEnabled := uh.groupEnabled("applications_page", "flatpak_user_group")
-	systemEnabled := uh.groupEnabled("applications_page", "flatpak_system_group")
-
-	var userApps, systemApps []flatpak.Application
-	var userErr, systemErr error
-
-	if userEnabled {
-		userApps, userErr = flatpak.ListUserApplications()
-		if userErr != nil {
-			log.Printf("Error listing applications installed for the current user: %v", userErr)
-		}
-	}
-	if systemEnabled {
-		systemApps, systemErr = flatpak.ListSystemApplications()
-		if systemErr != nil {
-			log.Printf("Error listing applications installed for everyone: %v", systemErr)
-		}
-	}
-
-	// If all enabled sources failed, report error
-	if (userEnabled && userErr != nil && (!systemEnabled || systemErr != nil)) ||
-		(systemEnabled && systemErr != nil && (!userEnabled || userErr != nil)) {
-		sgtk.RunOnMainThread(func() {
-			if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
-				return
-			}
-			if uh.flatpakApplications != nil {
-				uh.flatpakApplications.SetDescription("Could not read the list")
-			}
-		})
-		return
-	}
-
-	var entries []flatpakAppEntry
-	if userEnabled && userErr == nil {
-		for _, app := range userApps {
-			entries = append(entries, flatpakAppEntry{app: app, user: true})
-		}
-	}
-	if systemEnabled && systemErr == nil {
-		for _, app := range systemApps {
-			entries = append(entries, flatpakAppEntry{app: app, user: false})
-		}
-	}
-
-	// Deterministic ordering by app Name then ID then scope
-	sort.Slice(entries, func(i, j int) bool {
-		nameI := entries[i].app.Name
-		if nameI == "" {
-			nameI = entries[i].app.ApplicationID
-		}
-		nameJ := entries[j].app.Name
-		if nameJ == "" {
-			nameJ = entries[j].app.ApplicationID
-		}
-		if nameI != nameJ {
-			return nameI < nameJ
-		}
-		if entries[i].app.ApplicationID != entries[j].app.ApplicationID {
-			return entries[i].app.ApplicationID < entries[j].app.ApplicationID
-		}
-		if entries[i].user != entries[j].user {
-			return entries[i].user // user scope first
-		}
-		return false
-	})
-
-	sgtk.RunOnMainThread(func() {
-		if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
-			return
-		}
-		if uh.flatpakApplications == nil {
-			return
-		}
-
-		// Clear rows added by a previous load before repopulating
-		uh.flatpakRows.Clear(func(r *adw.ActionRow) { uh.flatpakApplications.Remove(&r.Widget) })
-		uh.flatpakButtons.clear()
-
-		uh.flatpakApplications.SetDescription(fmt.Sprintf("%d installed", len(entries)))
-		for _, entry := range entries {
-			app := entry.app
-			isUser := entry.user
-			presentation := pageview.FlatpakApplicationWithScope(app.Name, app.ApplicationID, app.Version, isUser)
-			row := adw.NewActionRow()
-			row.SetTitle(presentation.Title)
-			row.SetSubtitle(presentation.Subtitle)
-
-			uninstallBtn := gtk.NewButtonFromIconName("user-trash-symbolic")
-			uninstallBtn.SetValign(gtk.AlignCenterValue)
-			uninstallBtn.AddCssClass("destructive-action")
-			if isUser {
-				tooltip := "Remove this app from your account"
-				uninstallBtn.SetTooltipText(tooltip)
-				SetAccessibleLabel(uninstallBtn, tooltip)
-			} else {
-				tooltip := "Remove for everyone — asks for your admin password"
-				uninstallBtn.SetTooltipText(tooltip)
-				SetAccessibleLabel(uninstallBtn, tooltip)
-			}
-
-			appID := app.ApplicationID
-			name := presentation.Title
-			gate := &actionstate.Gate{}
-			button := uninstallBtn
-			uh.flatpakButtons.connect(uninstallBtn, func(gtk.Button) {
-				if !gate.TryStart() {
-					return
-				}
-				uh.confirmFlatpakUninstall(appID, name, isUser, button, gate)
-			})
-
-			row.AddSuffix(&uninstallBtn.Widget)
-			uh.flatpakApplications.Add(&row.Widget)
-			uh.flatpakRows.Add(row)
-		}
-	})
-}
-
-// confirmFlatpakUninstall asks before removing a Flatpak application, as
-// every Homebrew package removal does. Cancelling releases the row's gate and
-// runs nothing.
-func (uh *UserHome) confirmFlatpakUninstall(appID, name string, userScope bool, button *gtk.Button, gate *actionstate.Gate) {
-	title, body := pageview.FlatpakUninstallConfirmation(name, userScope)
-	dialog := adw.NewAlertDialog(title, body)
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("confirm", "Uninstall")
-	dialog.SetResponseAppearance("confirm", adw.ResponseDestructiveValue)
-
-	uh.confirmations.connect(dialog, func(response string) {
-		if response != "confirm" {
-			gate.Reset()
-			return
-		}
-		button.SetSensitive(false)
-		go uh.runFlatpakUninstall(appID, name, userScope, button, gate)
-	})
-	dialog.Present(&uh.applicationsPrefsPage.Widget)
-}
-
-// runFlatpakUninstall removes one Flatpak application off the main thread.
-// A failure or dry-run preview restores the button and keeps the known rows;
-// only a live success completes the control and refreshes the list.
-func (uh *UserHome) runFlatpakUninstall(appID, name string, userScope bool, button *gtk.Button, gate *actionstate.Gate) {
-	err := flatpak.Uninstall(appID, userScope)
-	dryRun := dryrun.Enabled()
-	decision := actionstate.PackageUninstall(err == nil, dryRun)
-	if err != nil {
-		if userScope {
-			log.Printf("Error uninstalling %s for the current user: %v", appID, err)
-		} else {
-			log.Printf("Error uninstalling %s for everyone: %v", appID, err)
-		}
-	}
-	sgtk.RunOnMainThread(func() {
-		if decision.RestoreControl {
-			gate.Reset()
-			button.SetSensitive(true)
-		}
-		if err != nil {
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not uninstall %s", name))
-			return
-		}
-		if decision.CompleteControl {
-			gate.Complete()
-			button.SetSensitive(false)
-		}
-		uh.toastAdder.ShowToast(actionmsg.Uninstall(dryRun, name))
-		if decision.Refresh {
-			go uh.loadFlatpakApplications()
-		}
-	})
-}
-
-// onHomebrewSearch handles the Homebrew search action
-func (uh *UserHome) onHomebrewSearch() {
-	query := strings.TrimSpace(uh.searchEntry.GetText())
-	if query == "" {
-		return
-	}
-
-	generation := uh.searchRefresh.Begin()
-	uh.searchResults.SetDescription("Searching…")
-
-	go func() {
-		results, err := homebrew.Search(query)
-		if err != nil {
-			log.Printf("Error searching Homebrew for %q: %v", query, err)
-			sgtk.RunOnMainThread(func() {
-				if !uh.searchRefresh.IsCurrent(generation) {
-					return
-				}
-				uh.searchResults.SetDescription("Search could not be completed")
-			})
-			return
-		}
-
-		sgtk.RunOnMainThread(func() {
-			if !uh.searchRefresh.IsCurrent(generation) {
-				return
-			}
-			// Clear previous search results
-			uh.searchResultRows.Clear(func(row *adw.ActionRow) {
-				uh.searchResults.Remove(&row.Widget)
-			})
-			uh.searchResultButtons.clear()
-
-			resultsSubtitle := fmt.Sprintf("%d results", len(results))
-			switch len(results) {
-			case 0:
-				resultsSubtitle = "No results"
-			case 1:
-				resultsSubtitle = "1 result"
-			}
-			uh.searchResults.SetDescription(resultsSubtitle)
-
-			// Add result rows
-			for _, result := range results {
-				presentation := pageview.SearchResult(result.Name, result.Kind.DisplayName())
-				row := adw.NewActionRow()
-				row.SetTitle(presentation.Title)
-				row.SetSubtitle(presentation.Subtitle)
-
-				installBtn := gtk.NewButtonWithLabel("Install")
-				installBtn.SetValign(gtk.AlignCenterValue)
-				progress := newInstallProgress("Installing from Homebrew…")
-
-				result := result
-				gate := &actionstate.Gate{}
-				button := installBtn
-				uh.searchResultButtons.connect(installBtn, func(gtk.Button) {
-					if !gate.TryStart() {
-						return
-					}
-					uh.confirmHomebrewInstall(result, button, gate, progress)
-				})
-
-				controls := gtk.NewBox(gtk.OrientationVerticalValue, 6)
-				controls.SetValign(gtk.AlignCenterValue)
-				controls.Append(&installBtn.Widget)
-				controls.Append(&progress.Widget)
-				row.AddSuffix(&controls.Widget)
-				uh.searchResults.Add(&row.Widget)
-				uh.searchResultRows.Add(row)
-			}
-		})
-	}()
-}
-
-func (uh *UserHome) confirmHomebrewInstall(result homebrew.SearchResult, button *gtk.Button, gate *actionstate.Gate, progress *gtk.ProgressBar) {
-	kind := strings.ToLower(result.Kind.DisplayName())
-	dialog := adw.NewAlertDialog(
-		fmt.Sprintf("Install %s?", result.Name),
-		fmt.Sprintf("Downloads and installs this %s from Homebrew. It comes from its publisher, not from this system, and installing it runs the steps its publisher defined.", kind),
-	)
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("install", "Install")
-	dialog.SetResponseAppearance("install", adw.ResponseSuggestedValue)
-
-	uh.confirmations.connect(dialog, func(response string) {
-		if response != "install" {
-			gate.Reset()
-			return
-		}
-		button.SetSensitive(false)
-		button.SetLabel("Installing…")
-		uh.appInstallProgress.start(progress)
-		uh.searchRefresh.Begin() // An older search must not remove the active install row.
-		uh.searchInstalls++
-		uh.searchEntry.SetSensitive(false)
-		go uh.installHomebrewSearchResult(result, button, gate, progress)
-	})
-	dialog.Present(&uh.applicationsPrefsPage.Widget)
-}
-
-func (uh *UserHome) installHomebrewSearchResult(result homebrew.SearchResult, button *gtk.Button, gate *actionstate.Gate, progress *gtk.ProgressBar) {
-	err := homebrew.Install(result.Name, result.Kind == homebrew.Cask)
-	dryRun := dryrun.Enabled()
-	decision := actionstate.PackageInstall(err == nil, dryRun)
-
-	sgtk.RunOnMainThread(func() {
-		uh.appInstallProgress.stop(progress)
-		uh.searchInstalls--
-		uh.searchEntry.SetSensitive(uh.searchInstalls == 0)
-		if decision.RestoreControl {
-			gate.Reset()
-			button.SetSensitive(true)
-			button.SetLabel("Install")
-		}
-		if err != nil {
-			log.Printf("Error installing %q from Homebrew: %v", result.Name, err)
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not install %s", result.Name))
-			return
-		}
-		if decision.CompleteControl {
-			gate.Complete()
-			button.SetLabel("Installed")
-			button.SetSensitive(false)
-		}
-		uh.toastAdder.ShowToast(actionmsg.Install(dryRun, result.Name))
-		if decision.Refresh {
-			go uh.loadHomebrewPackages()
-		}
-	})
-}
-
-// launchApp launches a desktop application by its application ID
-func (uh *UserHome) launchApp(appID string) {
-	log.Printf("Launching app: %s", appID)
-
-	// Use gtk-launch to launch the application by its desktop file ID
-	// gtk-launch handles looking up the desktop file and launching it correctly
-	cmd := exec.Command("gtk-launch", appID)
-	cmd.Env = os.Environ()
-
-	if err := launcher.Start(cmd, func(err error) {
-		log.Printf("Failed to launch app %s: %v", appID, err)
-		// gtk-launch exits nonzero when the desktop app ID is missing or
-		// the launch fails; surface that async failure instead of silently
-		// dropping it. Must run on the GTK main thread.
-		sgtk.RunOnMainThread(func() {
-			uh.toastAdder.ShowErrorToast("Could not open that application")
-		})
-	}); err != nil {
-		log.Printf("Failed to launch app %s: %v", appID, err)
-		uh.toastAdder.ShowErrorToast("Could not open that application")
-		return
 	}
 }

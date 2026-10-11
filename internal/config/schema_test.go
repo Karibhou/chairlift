@@ -65,6 +65,17 @@ func TestSchemaPagesMatchesPageNames(t *testing.T) {
 	}
 }
 
+func TestAppsSchemaContainsOnlyHomebrewGroups(t *testing.T) {
+	groups, err := SchemaGroups("applications_page")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"brew_bundles_group", "brew_group"}
+	if !reflect.DeepEqual(groups, want) {
+		t.Fatalf("Apps groups = %v, want %v", groups, want)
+	}
+}
+
 // TestSchemaGroupsMatchesDefaultConfigForEveryPage loops over every page
 // from SchemaPages(), calls SchemaGroups(page), and asserts the result is
 // exactly the key set of pagesOf(defaultConfig())[page]: equal lengths,

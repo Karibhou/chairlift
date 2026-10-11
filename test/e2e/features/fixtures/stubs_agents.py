@@ -26,7 +26,9 @@ from stubs import fake_executable, stub
 
 NODE_HOST = "127.0.0.1"
 NODE_PORT = 17434
-# 16 GiB: every family in aistack.OfflineCatalog has an eligible entry.
+# 16 GiB: the memory figure the node stub reports on /llmman/node. Nothing
+# in ChairLift reads it since the model picker was removed (#568); it only
+# keeps the stub's response shaped like a real llmman node.
 NODE_MEMORY = 17179869184
 
 # Where the dogfooded Homebrew lives in the Dakota container and on GitHub's
@@ -36,11 +38,20 @@ NODE_MEMORY = 17179869184
 # scenario put in its own bin directory.
 HOMEBREW_BIN_PARTS = ("/home/linuxbrew/", "/linuxbrew/.linuxbrew")
 
-# Nothing on this page may need the internet to render deterministically.
-# Model-family resolution tries huggingface.co before its offline catalog;
-# a refused proxy makes that fail at once. Go's ProxyFromEnvironment never
-# proxies loopback, so the node stub stays reachable.
+# Defensive guard: the Agents page makes no non-loopback requests since the
+# model picker was removed (#568), but pointing every HTTP(S)_PROXY at a
+# refused listener makes any future one fail fast instead of depending on
+# the network. Go's ProxyFromEnvironment never proxies loopback, so the
+# node stub stays reachable.
 BLACKHOLE_PROXY = "http://127.0.0.1:9"
+
+# What internal/troubleshoot.Detect resolves for the Goose row.
+GOOSE_PROGRAMS = ("linux-mcp-server", "goose-desktop", "llmman")
+
+
+def profile_root(context):
+    """ChairLift's own Goose profile (internal/troubleshoot.DefaultProfile)."""
+    return os.path.join(context.launch_env["XDG_DATA_HOME"], "chairlift", "troubleshooting")
 
 
 def calls_dir(context):
@@ -87,6 +98,14 @@ def host(context):
         env[key] = BLACKHOLE_PROXY
     for key in ("NO_PROXY", "no_proxy"):
         env.pop(key, None)
+    # Goose's pieces may also sit outside Homebrew on a developer's host;
+    # internal/troubleshoot.Detect must see only what a scenario installs.
+    kept = [
+        part for part in kept
+        if part == context.stub_bin
+        or not any(os.access(os.path.join(part, program), os.X_OK) for program in GOOSE_PROGRAMS)
+    ]
+    env["PATH"] = os.pathsep.join(kept)
     recorder(context, "brew")
     recorder(context, "systemctl")
     calls_dir(context)
@@ -138,24 +157,25 @@ def unit(context):
 
 @stub("agents.goose")
 def goose(context):
-    """Goose Desktop and linux-mcp-server are installed and verified."""
-    recorder(context, "goose-desktop")
+    """Goose Desktop and linux-mcp-server are installed.
+
+    Nothing is written under HOME: a session runs in a profile ChairLift
+    writes at launch, so there is no Goose configuration to seed.
+    """
+    goose_server(context)
+    goose_desktop(context)
+
+
+@stub("agents.goose-server")
+def goose_server(context):
+    """linux-mcp-server is installed; the Goose desktop app is not."""
     recorder(context, "linux-mcp-server")
-    config_dir = os.path.join(context.home, ".config", "goose")
-    os.makedirs(config_dir, exist_ok=True)
-    with open(os.path.join(config_dir, "config.yaml"), "w", encoding="utf-8") as handle:
-        handle.write(
-            "extensions:\n"
-            "  linux-mcp-server:\n"
-            "    args:\n"
-            "      - --toolset\n"
-            "      - FIXED\n"
-            "      - --no-search-for-ssh-key\n"
-            "      - --verify-host-keys\n"
-            "    cmd: linux-mcp-server\n"
-            "    enabled: true\n"
-            "    type: stdio\n"
-        )
+
+
+@stub("agents.goose-desktop")
+def goose_desktop(context):
+    """The Goose desktop app is installed; linux-mcp-server is not."""
+    recorder(context, "goose-desktop")
 
 
 DEVMENU_PATH = "/org/gnome/shell/extensions/custom-command-list/"
@@ -165,19 +185,21 @@ def _tuple(label, command, icon, visible):
     return f"('{label}', '{command}', '{icon}', {'true' if visible else 'false'})"
 
 
-@stub("agents.devmenu")
-def devmenu(context):
-    """The Custom Command Menu extension with Ask Bluefin entry."""
-    dump = "\n".join(
-        [
-            "[/]",
-            "command11=" + _tuple("Ask Bluefin", "xdg-open https://ask.projectbluefin.io", "", True),
-            "",
-        ]
-    )
-    defaults = {
-        "command11": _tuple("Ask Bluefin", "xdg-open https://ask.projectbluefin.io", "", True),
-    }
+WEB_LINK_COMMAND = "xdg-open https://ask.projectbluefin.io"
+# The entry as Bluefin's distro layer ships it (projectbluefin/common#1396).
+WRAPPER_COMMAND = "/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin"
+
+
+def _devmenu(context, command, slot="command11", order=None):
+    """The Custom Command Menu extension with an Ask Bluefin entry running command.
+
+    order, when given, is the distro layer's command-order; None leaves the key
+    unset so the schema default (every slot) applies."""
+    entry = _tuple("Ask Bluefin", command, "", True)
+    defaults = {slot: entry}
+    if order is not None:
+        defaults["command-order"] = order
+    dump = "\n".join(["[/]"] + [f"{key}={value}" for key, value in sorted(defaults.items())] + [""])
     dump_path = os.path.join(context.scenario_dir, "dconf-dump.txt")
     with open(dump_path, "w", encoding="utf-8") as handle:
         handle.write(dump)
@@ -206,6 +228,24 @@ exit 0
 """,
     )
 
+
+@stub("agents.devmenu")
+def devmenu(context):
+    """The Custom Command Menu extension with the web-link Ask Bluefin entry."""
+    _devmenu(context, WEB_LINK_COMMAND)
+
+
+@stub("agents.devmenu.wrapper")
+def devmenu_wrapper(context):
+    """The Ask Bluefin entry as the distro ships it, through chairlift-wrapper."""
+    _devmenu(context, WRAPPER_COMMAND)
+
+
+@stub("agents.devmenu.unlisted")
+def devmenu_unlisted(context):
+    """Dakota's layout: Ask Bluefin moved to command12, visible, while the
+    inherited command-order lists only 1..11, so the menu omits it."""
+    _devmenu(context, WEB_LINK_COMMAND, slot="command12", order="[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]")
 
 
 

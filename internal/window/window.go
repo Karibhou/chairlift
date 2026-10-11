@@ -15,6 +15,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/navigation"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/settings"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
@@ -61,6 +62,7 @@ type Window struct {
 	configError       *config.LoadError
 	views             *views.UserHome
 	updateShell       *views.UpdateShell
+	updateSettings    *settings.Store // The one updates-preference store: the shell reads it, Preferences binds to it
 	firstRunSteps     []string
 	firstRunIndex     int
 	firstRunActive    bool
@@ -179,6 +181,7 @@ func (w *Window) buildUI() {
 	}
 	coordinator := updateflow.New(providers, updateproviders.NewMaintenance(w.config))
 	store := settings.New()
+	w.updateSettings = store
 	// Each source's policy keeps the administrator's configuration and the
 	// capability floor apart, so the shell can tell "disabled by
 	// administrator" from "not available on this system". Their conjunction
@@ -203,6 +206,9 @@ func (w *Window) buildUI() {
 		w,
 	)
 	w.updateShell.SetOnUpdateFinished(w.views.OnUpdateFinished)
+	// Connected once, here: a source toggled in Preferences (or by
+	// gsettings) re-checks the shell instead of waiting for Refresh.
+	store.OnSourceChanged(w.updateShell.PreferencesChanged)
 	w.views.AttachUpdateShell(w.updateShell)
 	// Create the navigation split view
 	w.splitView = adw.NewNavigationSplitView()
@@ -412,6 +418,8 @@ func (w *Window) buildMenuButton() *gtk.MenuButton {
 	menuButton := gtk.NewMenuButton()
 	menuButton.SetIconName("open-menu-symbolic")
 	menuButton.SetMenuModel(&menu.MenuModel)
+	// The primary menu: F10 opens it, as in every GNOME app.
+	menuButton.SetPrimary(true)
 	menuButton.SetTooltipText("Main Menu")
 	views.SetAccessibleLabel(menuButton, "Main Menu")
 
@@ -480,12 +488,11 @@ func (w *Window) setupActions() {
 	aboutAction.ConnectActivate(&aboutActivateCb)
 	w.AddAction(aboutAction)
 
+	// The setup flow's own close-request handler is connected earlier
+	// (buildUI) and stops emission while setup is active, so this
+	// navigation is never refused by setup.
 	closeRequestCb := func(_ gtk.Window) bool {
-		if w.updateShell == nil || !w.updateShell.Busy() {
-			return false
-		}
-		w.updateShell.RevealBusyBanner()
-		return true
+		return w.RefuseCloseWhileUpdating()
 	}
 	w.ConnectCloseRequest(&closeRequestCb)
 
@@ -624,6 +631,10 @@ func (w *Window) onShowShortcuts() {
 	toolbarView.SetContent(&scrolled.Widget)
 
 	dialog.SetContent(&toolbarView.Widget)
+	// An AdwWindow, unlike AdwDialog, does not close on Escape by itself.
+	escape := gtk.NewShortcutController()
+	escape.AddShortcut(gtk.NewShortcut(gtk.ShortcutTriggerParseString("Escape"), &gtk.NewNamedAction("window.close").ShortcutAction))
+	dialog.AddController(&escape.EventController)
 	dialog.Present()
 }
 
@@ -676,11 +687,21 @@ const errorToastWidthChars = 48
 // until dismissed. It wraps the failing command's diagnosis instead of hiding
 // subsequent failures behind an indefinitely displayed earlier toast.
 //
+// A message carrying pkexec's dismissal text is not an error: the user
+// cancelled the authentication prompt. Every privileged view reports through
+// here, so this is the one place that turns it into a brief, self-expiring
+// toast; the caller has already restored its control.
+//
 // The toast is still constructed with the message as its plain title.
 // adw_toast_set_custom_title clears that title itself, so this costs nothing,
 // and it keeps the message visible rather than blank should the custom title
 // ever fail to apply.
 func (w *Window) ShowErrorToast(message string) {
+	if pkexec.MessageIsAuthDismissed(message) {
+		log.Printf("window: authentication dismissed: %s", message)
+		w.ShowToast(pkexec.CancelledMessage)
+		return
+	}
 	toast := adw.NewToast(message)
 	toast.SetUseMarkup(false)
 	toast.SetTimeout(0) // Persist until dismissed
@@ -852,7 +873,9 @@ func (w *Window) showFirstRunStep() {
 	} else if w.firstRunIndex == len(w.firstRunSteps) {
 		w.firstRunContent.SetVisibleChildName("conclusion")
 	} else {
-		w.navigateToPage(w.firstRunSteps[w.firstRunIndex])
+		step := w.firstRunSteps[w.firstRunIndex]
+		w.navigateToPage(step)
+		w.views.ScrollPageToTop(step)
 		w.firstRunContent.SetVisibleChildName("pages")
 	}
 	w.firstRunBack.SetSensitive(w.firstRunIndex >= 0)
@@ -920,7 +943,8 @@ func (w *Window) finishFirstRun(completed bool) {
 		store := firstrun.NewGSettingsStore()
 		_, _, err := firstrun.RecordSkip(ctx, store)
 		if err != nil {
-			sgtk.RunOnMainThread(func() { w.ShowErrorToast(err.Error()) })
+			log.Printf("window: recording setup disposition failed: %v", err)
+			sgtk.RunOnMainThread(func() { w.ShowErrorToast("Couldn't save your setup progress. Setup may open again next time.") })
 		}
 	}()
 }
@@ -1035,4 +1059,18 @@ func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author st
 	scrolled.SetChild(&clamp.Widget)
 	toolbar.SetContent(&scrolled.Widget)
 	return &toolbar.Widget
+}
+
+// RefuseCloseWhileUpdating reports whether an update run must keep the window
+// open, and if so shows why: the busy banner lives inside the Updates shell,
+// so a refusal from any other page used to look like a dead close button.
+// The close-request handler and app.quit share it, because
+// g_application_quit never emits close-request.
+func (w *Window) RefuseCloseWhileUpdating() bool {
+	if w.updateShell == nil || !w.updateShell.Busy() {
+		return false
+	}
+	w.navigateToPage("updates")
+	w.updateShell.RevealBusyBanner()
+	return true
 }

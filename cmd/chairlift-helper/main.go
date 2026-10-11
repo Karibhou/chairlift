@@ -17,21 +17,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/registrytags"
+	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"io"
 	"os"
 	"os/exec"
 	"os/user"
 	"strconv"
-	"time"
-
-	"github.com/projectbluefin/chairlift/internal/imageinfo"
-	"github.com/projectbluefin/chairlift/internal/registrytags"
-	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
-
-const defaultTimeout = 10 * time.Minute
 
 func main() {
 	invocation, err := ubluehelper.ParseInvocation(os.Args[1:])
@@ -49,7 +48,7 @@ func main() {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), ubluehelper.Timeout(invocation.Command))
 	defer cancel()
 
 	switch invocation.Command {
@@ -106,10 +105,30 @@ func runChannelSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 		return
 	}
 
-	if err := run(ctx, "bootc", args...); err != nil {
-		fatal(fmt.Sprintf("bootc switch failed: %v", err))
+	switchImage(ctx, args, "bootc switch failed")
+}
+
+// switchImage runs a derived `bootc switch` argv. Switching back to the image
+// the host just left is a switch to the rollback deployment, which a composefs
+// `bootc switch` refuses ("Target image has the same fs-verity digest as the
+// existing Some(Rollback) deployment"); making that deployment the next boot
+// with the fixed rollback argv is the switch the person asked for.
+func switchImage(ctx context.Context, args []string, failure string) {
+	target := args[len(args)-1]
+	var captured bytes.Buffer
+	if err := runCapture(ctx, &captured, "bootc", args...); err != nil {
+		if ubluehelper.IsSameRollbackRefusal(captured.String()) {
+			if status, statusErr := bootc.GetStatus(ctx); statusErr == nil && status.Status.Rollback.ImageRef() == target {
+				if rerr := run(ctx, "bootc", ubluehelper.RollbackArgs()...); rerr != nil {
+					fatal(fmt.Sprintf("%s: %v; rollback to %s failed: %v", failure, err, target, rerr))
+				}
+				fmt.Printf("switched to %s (the previous deployment) — restart to apply\n", target)
+				return
+			}
+		}
+		fatal(fmt.Sprintf("%s: %v", failure, err))
 	}
-	fmt.Printf("switched to %s — restart to apply\n", args[len(args)-1])
+	fmt.Printf("switched to %s — restart to apply\n", target)
 }
 
 // runDriverSwitch moves the host to a different graphics-driver image on the
@@ -132,14 +151,14 @@ func runDriverSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 		return
 	}
 
-	if err := run(ctx, "bootc", args...); err != nil {
-		fatal(fmt.Sprintf("driver switch failed: %v", err))
-	}
-	fmt.Printf("switched to %s — restart to apply\n", args[len(args)-1])
+	switchImage(ctx, args, "driver switch failed")
 }
 
 // runPin supplies only the system descriptor and single-tag registry resolver;
 // the gated helper package owns all target derivation and refusal decisions.
+// The switch goes through switchImage like every other image switch: unpin's
+// target is the stream the host left when it pinned, which is exactly the
+// rollback deployment a composefs `bootc switch` refuses to switch to.
 func runPin(ctx context.Context, invocation ubluehelper.Invocation) {
 	info, err := imageinfo.Detect()
 	if err != nil {
@@ -154,10 +173,7 @@ func runPin(ctx context.Context, invocation ubluehelper.Invocation) {
 		fmt.Printf("[DRY-RUN] would execute: bootc %v\n", args)
 		return
 	}
-	if err := run(ctx, "bootc", args...); err != nil {
-		fatal(fmt.Sprintf("bootc switch failed: %v", err))
-	}
-	fmt.Printf("switched to %s — restart to apply\n", args[len(args)-1])
+	switchImage(ctx, args, "bootc switch failed")
 }
 
 // runDevGroups adds or removes the invoking user across every developer
@@ -182,6 +198,13 @@ func runDevGroups(ctx context.Context, invocation ubluehelper.Invocation) {
 			fatal(fmt.Sprintf("unsupported group operation for command %q", invocation.Command))
 		}
 
+		if invocation.Command == ubluehelper.CommandDXEnable {
+			if err := ensureLocalGroup(group, invocation.DryRun); err != nil {
+				fmt.Fprintln(os.Stderr, ubluehelper.SkippedGroupLine(group, err))
+				continue
+			}
+		}
+
 		if invocation.DryRun {
 			fmt.Printf("[DRY-RUN] would execute: %s %v\n", name, args)
 			applied++
@@ -191,7 +214,7 @@ func runDevGroups(ctx context.Context, invocation ubluehelper.Invocation) {
 		if err := run(ctx, name, args...); err != nil {
 			// usermod/gpasswd fail on a group this image does not define;
 			// report it and carry on with the rest.
-			fmt.Fprintf(os.Stderr, "skipped group %s: %v\n", group, err)
+			fmt.Fprintln(os.Stderr, ubluehelper.SkippedGroupLine(group, err))
 			continue
 		}
 		applied++
@@ -255,8 +278,8 @@ func runFactoryReset(ctx context.Context, invocation ubluehelper.Invocation) {
 	fmt.Println("factory reset applied — restart to complete it")
 }
 
-// runAutoUpdates turns the unattended-update timer on or off. Each step must
-// succeed: a partial application would leave the timer in a state that does
+// runAutoUpdates turns the unattended-update timers on or off. Each step must
+// succeed: a partial application would leave the timers in a state that does
 // not match what the user was shown.
 func runAutoUpdates(ctx context.Context, invocation ubluehelper.Invocation) {
 	steps, ok := ubluehelper.AutoUpdateArgs(invocation.Command)
@@ -285,8 +308,12 @@ func runDeveloperAccess(ctx context.Context, invocation ubluehelper.Invocation) 
 		fatal(fmt.Sprintf("resolving uid %d: %v", uid, err))
 	}
 	name, args, ok := ubluehelper.AccessArgs(invocation.Command, account.Username)
-	if !ok {
+	group, groupOK := ubluehelper.AccessGroup(invocation.Command)
+	if !ok || !groupOK {
 		fatal("unsupported developer access command")
+	}
+	if err := ensureLocalGroup(group, invocation.DryRun); err != nil {
+		fatal(fmt.Sprintf("granting developer access: %v", err))
 	}
 	if invocation.DryRun {
 		fmt.Printf("[DRY-RUN] would execute: %s %v\n", name, args)
@@ -311,17 +338,44 @@ func runDocker(ctx context.Context, invocation ubluehelper.Invocation) {
 	}
 }
 
-// run executes one privileged command, forwarding its output so the calling
-// GUI can surface a real failure message instead of a bare exit code.
-func run(ctx context.Context, name string, args ...string) error {
+// ensureLocalGroup copies an image-only group into /etc/group so the usermod
+// that follows can add a member to it.
+func ensureLocalGroup(group string, dryRun bool) error {
+	copied, err := ubluehelper.EnsureLocalGroup(ubluehelper.EtcGroupPath, ubluehelper.LibGroupPath, group, dryRun)
+	if err != nil {
+		return fmt.Errorf("preparing group %s: %w", group, err)
+	}
+	if copied {
+		verb := "copied"
+		if dryRun {
+			verb = "[DRY-RUN] would copy"
+		}
+		fmt.Printf("%s group %s from %s to %s\n", verb, group, ubluehelper.LibGroupPath, ubluehelper.EtcGroupPath)
+	}
+	return nil
+}
+
+// runCapture executes one privileged command, forwarding stdout/stderr to the caller's console
+// while also teeing stderr into the provided buffer for inspection.
+func runCapture(ctx context.Context, stderrBuf io.Writer, name string, args ...string) error {
 	full := append([]string{name}, args...)
 	if line, err := json.Marshal(full); err == nil {
 		fmt.Printf("%s%s\n", ubluehelper.HelperExecPrefix, line)
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if stderrBuf != nil {
+		cmd.Stderr = io.MultiWriter(os.Stderr, stderrBuf)
+	} else {
+		cmd.Stderr = os.Stderr
+	}
 	return cmd.Run()
+}
+
+// run executes one privileged command, forwarding its output so the calling
+// GUI can surface a real failure message instead of a bare exit code.
+func run(ctx context.Context, name string, args ...string) error {
+	return runCapture(ctx, nil, name, args...)
 }
 
 func fatal(msg string) {

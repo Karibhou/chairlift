@@ -6,28 +6,19 @@ that would immediately become stale. The [public metrics catalog](metrics/)
 collects those read-only sources and their interpretation boundaries.
 
 [![Tests](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml?query=branch%3Amain)
-[![Codecov](https://codecov.io/gh/projectbluefin/chairlift/branch/main/graph/badge.svg)](https://app.codecov.io/gh/projectbluefin/chairlift)
 
 ## Live signals
 
 | Signal | What it reports | Source |
 |---|---|---|
-| Tests workflow | Latest lint, unit-test, race-detection, verification, and cross-architecture build results | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml) |
+| Tests workflow | Latest lint, filtered unit tests, race detection, E2E, sharded AT-SPI, verification, and cross-architecture build results | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml) |
 | Nightly compliance | Daily full CI, E2E, and known-vulnerability scan results for the default branch | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/nightly-compliance.yml) |
-| Issue lifecycle | Reviewed stage authority, catalog-bound descriptive intake and constrained Prow reports | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/issue-lifecycle.yml) |
+| Prow | `/command` handling, `needs-kind`, reviewer assignment, label sync, and merge-queue entry on `lgtm` + `approved` | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/prow.yml) |
 | Pull request checks | Gate results attached to each proposed change, including reruns and logs | Open a pull request and select its **Checks** tab |
 | Claude code review | Maintainer-triggered, read-only AI review comments for a selected pull request | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/claude-code-review.yml) |
 | PR acceptance | Accepted and closed pull request counts over a rolling 90-day cohort | [Metric definition and reproducible query](metrics.md) |
-| Coverage | Line coverage produced by tests under `internal/...` | [Codecov](https://app.codecov.io/gh/projectbluefin/chairlift) |
 | Build artifacts | Seven-day Linux binaries for the workflow's amd64 and arm64 matrix | Open a successful workflow run and view **Artifacts** |
 | Release history | Published versions and release assets | [GitHub Releases](https://github.com/projectbluefin/chairlift/releases) |
-
-`codecov.yml` compares project coverage with the pull request's base and fails
-its project status only when coverage drops by more than one percentage point.
-It deliberately has no fixed project target or patch target. The upload step
-remains non-blocking, so a missing Codecov report does not mean tests failed,
-and a green Tests workflow does not prove that coverage was uploaded. Use the
-workflow's **Unit Tests** log to distinguish those outcomes.
 
 ## Enforced checks
 
@@ -78,17 +69,16 @@ succeeded would report success for a run whose tests failed.
 properties and fails when a job is added to the workflow without being wired
 into the gate.
 
-`make ci` mirrors those credential-free checks locally in fail-fast order and
-also rebuilds the native binaries at the end. It is the pre-submission quality
-gate documented in `AGENTS.md`; Codecov's remote project status is additional
-and cannot be reproduced by that target.
+`make ci` mirrors the **host-independent** checks locally in fail-fast order
+and also rebuilds native binaries at the end. It does not run E2E or AT-SPI;
+use `make e2e` and `make e2e-atspi` separately on a host with podman and Go.
+The command definitions live in [`Makefile`](../Makefile).
 
 ```bash
 make ci
 ```
 
-To inspect the same coverage scope locally without relying on the external
-upload, run:
+To inspect the unit coverage scope locally, run:
 
 ```bash
 go test ./internal/... \
@@ -121,10 +111,9 @@ installed at explicit versions. A nightly failure is an investigation signal;
 it does not replace pull-request checks or authorize an automatic merge.
 
 Third-party actions use full 40-character commit SHAs with reviewed version
-comments. Shared `projectbluefin/actions` production uses managed `@v1`;
-candidate refs are limited to the secret-free, entirely read-only issue-policy
-preview interface during bootstrap. The workflow security scan enforces both
-the immutable third-party boundary and this constrained first-party authority.
+comments. Shared `projectbluefin/actions` production uses managed `@v1`. The
+workflow security scan enforces both the immutable third-party boundary and
+this constrained first-party authority.
 
 ## Release gating
 
@@ -142,9 +131,9 @@ The `goreleaser` publishing job depends on both gate jobs (`needs: [gate, e2e]`)
 and receives `contents: write` and `id-token: write` (for keyless cosign signing)
 only after both have succeeded. It explicitly disables Go setup caching
 (`cache: false`) so build or module caches populated during test and E2E gate
-jobs cannot reach the release build. A failure in either gate stops the pipeline before
-GoReleaser can publish, ensuring that broken behavior or install-boundary
-regressions never become an official release.
+jobs cannot reach the release build. A failure in either gate stops publication.
+Passing those checks is evidence for the tagged commit, not proof that every
+hardware combination or failure mode has been exercised.
 
 ## Reviewing agent changes
 
@@ -170,45 +159,26 @@ non-draft pull request, the workflow posts one deduplicated `@copilot` fix
 request linked to that review. A review without inline findings does not start
 a fix cycle.
 
-Issue implementation uses the shared lifecycle and native GitHub assignment.
 An `ai-fix-requested` label is an intent marker, not acceptance or dispatch.
-The maintainer first accepts the current scope through the Labels picker,
-resolves independent gates, and assigns or explicitly routes the work.
-The former label-only `@copilot` dispatcher is removed: it could start work
-without validating current acceptance, `human-only`, blockers or holds.
+A maintainer accepts the issue with `/triage accepted` and Hive assigns the
+work; `needs-human`, `blocked` and `hold` keep agents off it.
 The review-feedback workflow receives read-only contents and pull-requests
 write permission. It creates only a deduplicated request comment; it does not
 approve, merge, bypass checks, or grant issue implementation acceptance.
 Copilot's resulting changes still pass ordinary quality gates and human review;
 findings that should not be applied must be explained on the pull request.
 
-## Automated issue triage
+## Prow
 
-`.github/workflows/issue-lifecycle.yml` is the sole issue-stage and admission
-writer. It consumes the shared Prow/lifecycle conductor from
-`projectbluefin/actions`, using the default-branch catalog rather than another
-copy of the bot. See the [local lifecycle procedure](skills/issue-lifecycle/SKILL.md).
-
-The shared engine preserves deterministic descriptive intake: explicit bug,
-feature and documentation shapes seed a kind; quality and guide findings retain
-their lane labels; an ACMM criterion needs both its structured title and criterion
-field. Existing primary kinds are not overwritten. Classification never grants
-acceptance or automatically requests implementation. Unknown or conflicting
-classification stays gated for a maintainer instead of being guessed.
-The catalog protects `kind/tech-debt` and `source:agent` as unmanaged operational
-signals while live operator configuration remains unconfirmed. Their assignments
-and definitions are preserved, not used as classification. Ordinary debt uses
-non-colliding `kind/debt`, including quiet historical migration.
-
-Prow runs first for authorized issue comments; lifecycle reconciliation follows
-even after partial Prow failure. Prow changes descriptive kinds/areas and negative
-holds only, never stage acceptance, independent human gates, reviews or merges.
-Upstream `/kind` would remove every other `kind/*`, so Prow preflight refuses it
-when a protected operational kind is assigned. Use the native Labels picker to
-change only managed primary kinds, leaving operational signals/gates unchanged.
-Scheduled repair is labels-only. Manual previews expose proposed labels,
-comments and reporter requests before applying; migrations remain quiet and
-archive full historical assignments before retirement.
+Issues and pull requests are driven by Prow
+([`prow.yml`](../.github/workflows/prow.yml), cncf/prow-github-actions pinned
+to a commit). Approvers come from [`OWNERS`](../OWNERS), which is generated
+from `projectbluefin/.project`; labels and plugin settings come from the org
+config in `projectbluefin/.project/prow.yaml`. Prow merges by entering the
+merge queue once a pull request has `lgtm` and `approved` and no `hold`; the
+queue still waits for **Tests Passed**, and the ruleset's required approving
+review still applies. See
+[how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
 
 Reusable implementation and review prompts are available in the
 [agent prompt catalog](prompts/index.md). They are aids only; repository

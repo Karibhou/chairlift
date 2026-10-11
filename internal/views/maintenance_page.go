@@ -2,7 +2,6 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path"
@@ -36,7 +35,7 @@ import (
 //  2. Whatever maintenance the administrator configured, labelled as
 //     theirs. ChairLift knows nothing about these scripts, so they are never
 //     folded into the cleanup above.
-//  3. Recovery. Powerwash and Factory Reset are not maintenance, they are
+//  3. Powerwash. Powerwash and Factory Reset are not maintenance, they are
 //     what you reach for when something has already gone wrong, and they are
 //     separated visually and by an opt-in default (see reset.go).
 
@@ -55,13 +54,16 @@ func (uh *UserHome) buildMaintenancePage() {
 		uh.buildConfiguredTasksGroup(page)
 	}
 
-	// Recovery detail entry. The detail view houses rollback and reset.
+	// Powerwash detail entry. The detail view houses rollback and reset. Its
+	// subtitle names only what the detail built, so it is written by
+	// refreshRecoveryEntry once buildRecoveryPage has run, and again when the
+	// asynchronous rollback check settles.
 	if uh.recoveryProvidersAvailable() {
 		recoveryGroup := adw.NewPreferencesGroup()
-		recoveryGroup.SetTitle("Recovery")
+		recoveryGroup.SetTitle("Powerwash")
 		recoveryRow := adw.NewActionRow()
-		recoveryRow.SetTitle("Recovery")
-		recoveryRow.SetSubtitle(pageview.RecoveryEntrySubtitle())
+		recoveryRow.SetTitle("Powerwash")
+		uh.recoveryEntryRow = recoveryRow
 		recoveryRow.SetActivatable(true)
 		icon := gtk.NewImageFromIconName("pan-end-symbolic")
 		recoveryRow.AddSuffix(&icon.Widget)
@@ -121,6 +123,11 @@ func (uh *UserHome) buildFreeSpaceGroup(page *adw.PreferencesPage) {
 // difference is small enough to be ordinary system noise, the result says
 // the cleanup finished and names no number at all.
 func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow, spinner *gtk.Spinner) {
+	// One cleanup at a time: a second activation queued before the button
+	// went insensitive must not start an overlapping run.
+	if !uh.freeUpSpaceGate.TryStart() {
+		return
+	}
 	button.SetSensitive(false)
 	button.SetLabel(cleanupview.BusyLabel)
 	setActivitySpinner(spinner, true)
@@ -149,6 +156,7 @@ func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow,
 		})
 
 		sgtk.RunOnMainThread(func() {
+			uh.freeUpSpaceGate.Reset()
 			setActivitySpinner(spinner, false)
 			button.SetSensitive(true)
 			button.SetLabel(cleanupview.ButtonLabel)
@@ -231,7 +239,7 @@ func (uh *UserHome) onBrewBundleDumpClicked(button *gtk.Button, spinner *gtk.Spi
 			button.SetLabel("Export")
 			if err != nil {
 				log.Printf("Package list export failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not export your package list")
+				uh.toastAdder.ShowErrorToast("Couldn't save your app list. Try again.")
 				return
 			}
 			uh.toastAdder.ShowToast(actionmsg.BundleDump(dryrun.Enabled()))
@@ -281,7 +289,12 @@ func (uh *UserHome) runMaintenanceAction(title, script string, sudo bool, button
 			button.SetLabel(cleanupview.ScriptsButtonLabel)
 
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("%s failed: %v", title, err))
+				text, isError := actionmsg.MaintenanceScriptFailure(title, sudo, err)
+				if isError {
+					uh.toastAdder.ShowErrorToast(text)
+				} else {
+					uh.toastAdder.ShowToast(text)
+				}
 				return
 			}
 

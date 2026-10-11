@@ -69,7 +69,23 @@ state='{state}'
 printf '%s\\n' "$*" >> "$state/flatpak.calls"
 case "$1" in
 --version) echo "Flatpak 1.16.1"; exit 0 ;;
+# The update check queries each remote separately (issue #471): every
+# installation has flathub, which its installed refs come from, and with
+# flatpak-leftover-remote also test-center, which is unreachable and serves
+# nothing installed.
+remotes)
+    echo flathub
+    [ -f "$state/flatpak-leftover-remote" ] && echo test-center
+    exit 0 ;;
+list)
+    case "$*" in *--columns=origin*) echo flathub ;; esac
+    exit 0 ;;
 remote-ls)
+    for arg in "$@"; do remote=$arg; done
+    if [ "$remote" = test-center ]; then
+        echo "error: Unable to load summary from remote test-center: Could not resolve hostname" >&2
+        exit 1
+    fi
     scope=system
     for arg in "$@"; do [ "$arg" = "--user" ] && scope=user; done
     if [ -f "$state/flatpak-remote-ls-$scope.hold" ]; then
@@ -148,9 +164,36 @@ def flatpak_slow_check(context):
 
 @stub("updates-flatpak-check-fails")
 def flatpak_check_fails(context):
-    """Flatpak whose update queries both fail, as with an unreachable remote."""
+    """Flatpak whose update queries both fail because the remote's host cannot be resolved."""
     for scope in ("user", "system"):
-        write_state(context, f"flatpak-remote-ls-{scope}.fail", "error: Unable to load summary from remote flathub\n")
+        write_state(
+            context,
+            f"flatpak-remote-ls-{scope}.fail",
+            "error: Unable to load summary from remote flathub: While fetching "
+            "https://dl.flathub.org/repo/summary.idx: [6] Could not resolve hostname\n",
+        )
+    _install_flatpak(context)
+
+
+@stub("updates-flatpak-check-fails-locally")
+def flatpak_check_fails_locally(context):
+    """Flatpak whose update queries both fail for a reason that is not the network."""
+    for scope in ("user", "system"):
+        write_state(
+            context,
+            f"flatpak-remote-ls-{scope}.fail",
+            "error: Unable to load summary from remote flathub: "
+            "GPG verification enabled, but no summary signatures found\n",
+        )
+    _install_flatpak(context)
+
+
+@stub("updates-flatpak-leftover-remote")
+def flatpak_leftover_remote(context):
+    """Flatpak with Firefox pending on flathub beside a leftover, unreachable
+    test-center remote that no installed ref comes from (issue #471)."""
+    write_state(context, "flatpak-remote-ls-user", FIREFOX_UPDATE)
+    write_state(context, "flatpak-leftover-remote", "")
     _install_flatpak(context)
 
 

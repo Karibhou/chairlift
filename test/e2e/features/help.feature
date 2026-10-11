@@ -1,12 +1,11 @@
-@help @stub.help-brew
+@help
 Feature: Help destination
-  Help is the one page every configuration keeps. It leads with Enhanced
-  Troubleshooting, whose row reports what Goose's own configuration says
-  rather than what a setup script's exit code implies, then lists the
-  support links configuration names, in the order internal/views/pageview
-  fixes. Every external program the page reaches is stubbed: links and the
-  Goose launch are recorded instead of opened, and Homebrew records any call
-  that escapes the dry run.
+  Help is the one page every configuration keeps. It lists the support
+  links configuration names, in the order internal/views/pageview fixes,
+  and explains which features this host cannot back. The xdg-open the
+  links reach is stubbed and records instead of opening. Enhanced
+  Troubleshooting, which Help once led with, is on the Agents page
+  (agents.feature).
 
   Scenario: F1 opens Help from any page
     Given ChairLift is running
@@ -19,20 +18,20 @@ Feature: Help destination
     Given ChairLift is running
     When I press "F1"
     Then the Help resources are, in order
-      | title                 | url                                     |
-      | Visit project website | https://example.test/site               |
-      | Report a problem      | https://example.test/issues?labels=help |
-      | Browse documentation  | https://example.test/docs/#start        |
+      | title                | url                                     |
+      | Browse documentation | https://example.test/docs/#start        |
+      | Report a problem     | https://example.test/issues?labels=help |
+      | Ask for help         | https://example.test/ask/               |
 
   @config.help-links-markup
   Scenario: A support URL containing "&" is shown exactly as configured
     Given ChairLift is running
     When I press "F1"
     Then the Help resources are, in order
-      | title                 | url                                                |
-      | Visit project website | https://example.test/site                          |
-      | Report a problem      | https://example.test/issues?labels=help&state=open |
-      | Browse documentation  | https://example.test/docs/                         |
+      | title                | url                                                |
+      | Browse documentation | https://example.test/docs/                         |
+      | Report a problem     | https://example.test/issues?labels=help&state=open |
+      | Ask for help         | https://example.test/ask/                          |
 
   @config.help-links-markup @stub.help-xdg-open
   Scenario: A support URL containing "&" still opens verbatim
@@ -46,9 +45,9 @@ Feature: Help destination
     Given ChairLift is running
     When I press "F1"
     Then the Help resources are, in order
-      | title                 | url                        |
-      | Visit project website | https://example.test/site  |
-      | Browse documentation  | https://example.test/docs/ |
+      | title                | url                        |
+      | Browse documentation | https://example.test/docs/ |
+      | Ask for help         | https://example.test/ask/  |
 
   @config.help-links @stub.help-xdg-open
   Scenario Outline: Opening a support link hands its exact URL to xdg-open
@@ -57,15 +56,15 @@ Feature: Help destination
     And I open the "<title>" Help link
     Then xdg-open was asked to open "<url>"
     And the application log contains "Opening URL: <url>"
-    And I do not see "Failed to open URL"
+    And I do not see "Couldn't open"
     And the Help page is still responsive
     And the action journal is empty
 
     Examples:
-      | title                 | url                                     |
-      | Visit project website | https://example.test/site               |
-      | Report a problem      | https://example.test/issues?labels=help |
-      | Browse documentation  | https://example.test/docs/#start        |
+      | title                | url                                     |
+      | Browse documentation | https://example.test/docs/#start        |
+      | Report a problem     | https://example.test/issues?labels=help |
+      | Ask for help         | https://example.test/ask/               |
 
   @stub.help-xdg-open-fails
   Scenario: A link with no URL handler reports the failure and keeps the page
@@ -73,17 +72,17 @@ Feature: Help destination
     When I press "F1"
     And I open the "Report a problem" Help link
     Then xdg-open was asked to open "https://github.com/projectbluefin/dakota/issues"
-    And I see "Failed to open URL: https://github.com/projectbluefin/dakota/issues"
+    And I see "Couldn't open https://github.com/projectbluefin/dakota/issues."
     And the Help page is still responsive
 
   @config.help-links @stub.help-xdg-open-fails
   Scenario: A new failure is visible without dismissing the previous error
     Given ChairLift is running
     When I press "F1"
-    And I open the "Visit project website" Help link
-    Then a toast says "Failed to open URL: https://example.test/site"
-    When I open the "Browse documentation" Help link
-    Then a toast says "Failed to open URL: https://example.test/docs/#start"
+    And I open the "Browse documentation" Help link
+    Then a toast says "Couldn't open https://example.test/docs/#start."
+    When I open the "Ask for help" Help link
+    Then a toast says "Couldn't open https://example.test/ask/."
     And the Help page is still responsive
 
   @config.help-no-resources
@@ -91,164 +90,16 @@ Feature: Help destination
     Given ChairLift is running
     When I select "Help" in the sidebar
     Then the Help page has no resource links
-    And I see "Enhanced Troubleshooting"
+    And I do not see "Troubleshooting"
     And I see "System diagnostics"
     When I open the "Updates" page
     And I press "F1"
     Then the "Help" page is shown
 
-  @stub.help-goose-all @stub.help-goose-wired-gemini @stub.help-gtk-launch
-  Scenario: A wired Goose configuration offers a session and names its provider
-    Given ChairLift is running
-    When I press "F1"
-    Then connected Linux tools offer Goose without claiming a ready AI service
-    And the troubleshooting row names "Google Gemini"
-    And the "Set Up" button is not shown
-    When I click the "Open Goose" button in the "Enhanced Troubleshooting" row
-    Then Goose was launched as "Goose"
-    And the troubleshooting setup never ran "brew tap"
-    And the troubleshooting setup never ran "brew install"
-    And the action journal is empty
-
-  @stub.help-goose-all
-  Scenario Outline: The row names where questions go from GOOSE_PROVIDER
-    Given ChairLift is running
-    When I press "F1"
-    Then connected Linux tools offer Goose without claiming a ready AI service
-    And the troubleshooting row names "<note>"
-
-    @stub.help-goose-wired-ollama
-    Examples: Configured Ollama service
-      | note                           |
-      | Ollama |
-
-    @stub.help-goose-wired-anthropic
-    Examples: Other provider
-      | note                      |
-      | anthropic |
-
-    @stub.help-goose-wired-none
-    Examples: No provider
-      | note                         |
-      | no AI service configured yet |
-
-  @stub.help-goose-all
-  Scenario Outline: A configuration that does not wire linux-tools is not ready
-    Given ChairLift is running
-    When I press "F1"
-    Then the Enhanced Troubleshooting status is "Installed, but not connected to this system yet"
-    And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
-    And the "Open Goose" button is not shown
-
-    @stub.help-goose-unwired-other-extension
-    Examples: Only another extension
-      | shape           |
-      | other-extension |
-
-    @stub.help-goose-unwired-disabled
-    Examples: linux-tools disabled
-      | shape    |
-      | disabled |
-
-    @stub.help-goose-unwired-no-command
-    Examples: linux-tools without a command
-      | shape      |
-      | no-command |
-
-    @stub.help-goose-unwired-mention-only
-    Examples: linux-tools only in a comment
-      | shape        |
-      | mention-only |
-
-    @stub.help-goose-unwired-malformed
-    Examples: Malformed YAML
-      | shape     |
-      | malformed |
-
-  @stub.help-goose-cli @stub.help-goose-wired-gemini
-  Scenario: A wired host without the desktop app still offers Set Up
-    Given ChairLift is running
-    When I press "F1"
-    Then the troubleshooting row names "Google Gemini"
-    And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
-    And the "Open Goose" button is not shown
-
-  @stub.help-no-goose
-  Scenario: Set Up on a fresh host previews every step and changes nothing
-    Given ChairLift is running
-    When I press "F1"
-    Then the Enhanced Troubleshooting status is "Ask an AI assistant about your logs, services, and network"
-    When I click the "Set Up" button in the "Enhanced Troubleshooting" row
-    Then I see "[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made"
-    And the troubleshooting setup never ran "brew tap"
-    And the troubleshooting setup never ran "brew install"
-    And Goose's configuration file was not written
-    And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
-    And the action journal is empty
-
-  @stub.help-no-goose
-  Scenario Outline: A dry-run Set Up leaves the row describing the host as it was
-    Given ChairLift is running
-    When I press "F1"
-    Then the Enhanced Troubleshooting status is "<before>"
-    When I click the "Set Up" button in the "Enhanced Troubleshooting" row
-    Then I see "<feedback>"
-    And the Enhanced Troubleshooting status is "<before>"
-
-    Examples: Fresh host
-      | before                                                     | feedback |
-      | Ask an AI assistant about your logs, services, and network | [DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made |
-
-    @stub.help-goose-cli @stub.help-goose-unwired-other-extension
-    Examples: Installed but not connected
-      | before                                          | feedback |
-      | Installed, but not connected to this system yet | [DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made |
-
-  @stub.help-goose-cli @stub.help-goose-unwired-other-extension
-  Scenario: Set Up resumes a half-done install instead of repeating it
-    Given ChairLift is running
-    When I press "F1"
-    Then the Enhanced Troubleshooting status is "Installed, but not connected to this system yet"
-    When I click the "Set Up" button in the "Enhanced Troubleshooting" row
-    Then I see "[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made"
-    And the troubleshooting setup never ran "brew tap"
-    And the troubleshooting setup never ran "brew install"
-    And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
-    And Goose's existing configuration was kept unchanged
-
-  @stub.help-goose-all @stub.help-goose-unwired-malformed
-  Scenario: Conflicting Goose configuration reports an error without replacing user data
-    Given ChairLift is running
-    When I press "F1"
-    And I click the "Set Up" button in the "Enhanced Troubleshooting" row
-    Then I see "Goose configuration was kept unchanged"
-    And Goose's existing configuration was kept unchanged
-    And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
-    And the Help page is still responsive
-    And the action journal is empty
-
-  @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,podman,bootc-stage
-  Scenario: Without Homebrew the troubleshooting group is explained, not shown
-    Given ChairLift is running
-    When I press "F1"
-    Then the Enhanced Troubleshooting group is not shown
-    When I ask the Help page why something is missing
-    Then the Help page explains "Enhanced Troubleshooting" with "Needs Homebrew"
-
-  @config.help-no-troubleshooting
-  @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,podman,bootc-stage
-  Scenario: Troubleshooting disabled by configuration is not called missing
-    Given ChairLift is running
-    When I press "F1"
-    Then the Enhanced Troubleshooting group is not shown
-    When I ask the Help page why something is missing
-    Then the Help page explains "Agent Mode" with "Needs Homebrew"
-    And the Help page does not call "Enhanced Troubleshooting" missing
-
   Scenario: Copying diagnostics confirms and re-enables the button
     Given ChairLift is running
     When I press "F1"
     And I click the "Copy" button in the "System diagnostics" row
-    Then I see "System diagnostics copied to clipboard"
+    Then I see "Copied to the clipboard."
     And the "Copy" button in the "System diagnostics" row is sensitive
     And the action journal is empty

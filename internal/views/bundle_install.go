@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
@@ -17,10 +18,12 @@ import (
 )
 
 // bundleInstall is the state one collection's install shares across every
-// surface that offers it: the gate that admits one run at a time and the
-// buttons that must all show the same phase.
+// surface that offers it: the gate that admits one run at a time, the
+// buttons that must all show the same phase, and the collection's display
+// title that names those buttons for assistive technology.
 type bundleInstall struct {
 	gate     bundleview.InstallGate
+	title    string
 	buttons  []bundleInstallButton
 	progress *installProgress
 }
@@ -37,7 +40,7 @@ type bundleInstallButton struct {
 func (b *bundleInstall) show(label string, sensitive bool) {
 	for _, control := range b.buttons {
 		control.label.SetLabel(label)
-		SetAccessibleLabel(control.button, label)
+		SetAccessibleLabel(control.button, bundleview.InstallButtonName(label, b.title))
 		control.button.SetSensitive(sensitive)
 		busy := label == bundleview.InstallLabelRunning
 		control.spinner.SetVisible(busy)
@@ -63,7 +66,10 @@ func (uh *UserHome) ConnectBundleInstall(bundle homebrew.Bundle, button *gtk.But
 	}
 	shared := uh.bundleInstalls[bundle.Path]
 	if shared == nil {
-		shared = &bundleInstall{progress: &uh.appInstallProgress}
+		shared = &bundleInstall{
+			title:    bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount).Title,
+			progress: &uh.appInstallProgress,
+		}
 		uh.bundleInstalls[bundle.Path] = shared
 	}
 	content := gtk.NewBox(gtk.OrientationHorizontalValue, 6)
@@ -83,6 +89,51 @@ func (uh *UserHome) ConnectBundleInstall(bundle homebrew.Bundle, button *gtk.But
 	uh.bundleButtons.connect(button, func(gtk.Button) {
 		uh.runBundleInstall(bundle, shared)
 	})
+}
+
+// refreshBundleStatuses observes, off the GTK thread, whether each connected
+// collection is already installed, so a row reads "Installed" because the
+// system holds the collection, not only because this session installed it.
+// It must be called on the GTK main thread. Only the newest refresh may
+// publish: each result is dropped once a later refresh has begun, and a
+// worker stops checking as soon as it is superseded. A collection whose
+// check cannot decide keeps the row it had.
+func (uh *UserHome) refreshBundleStatuses() {
+	if uh == nil || len(uh.bundleInstalls) == 0 {
+		return
+	}
+	paths := make([]string, 0, len(uh.bundleInstalls))
+	for path := range uh.bundleInstalls {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	generation := uh.bundleStatusRefresh.Begin()
+
+	go func() {
+		for _, path := range paths {
+			if !uh.bundleStatusRefresh.IsCurrent(generation) {
+				return
+			}
+			status, err := homebrew.BundleCheck(path)
+			if err != nil {
+				log.Printf("Could not check whether app collection %q is installed: %v", path, err)
+			}
+			installed, known := bundleview.ObservedInstalled(status)
+			if !known {
+				continue
+			}
+			sgtk.RunOnMainThread(func() {
+				if !uh.bundleStatusRefresh.IsCurrent(generation) {
+					return
+				}
+				shared := uh.bundleInstalls[path]
+				if shared == nil || !shared.gate.Observe(installed) {
+					return
+				}
+				shared.show(shared.gate.InstallPhase())
+			})
+		}
+	}()
 }
 
 // runBundleInstall installs one collection behind its shared gate and
@@ -105,15 +156,16 @@ func (uh *UserHome) runBundleInstall(bundle homebrew.Bundle, shared *bundleInsta
 			sgtk.RunOnMainThread(func() {
 				shared.gate.Reset()
 				shared.show(bundleview.InstallLabelReady, true)
+				// Part of it, or of a collection sharing its items, may
+				// have been installed before it stopped: `brew bundle`
+				// carries on past a failed entry.
+				uh.homebrewInventoryChanged()
 				var trustErr *homebrew.UntrustedTapError
 				if errors.As(err, &trustErr) {
-					uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage(collection.Title, trustErr.Tap))
+					uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage(collection.Title))
 					return
 				}
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf(
-					"Could not install %s. Part of it may have been installed before it stopped.",
-					collection.Title,
-				))
+				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't install all of %s. Try again.", collection.Title))
 			})
 			return
 		}
@@ -125,9 +177,11 @@ func (uh *UserHome) runBundleInstall(bundle homebrew.Bundle, shared *bundleInsta
 				shared.show(bundleview.InstallLabelCompleted, false)
 				// A live install can add packages the current inventory
 				// snapshot predates, so refresh the installed list to
-				// match. Under dry-run decision.Complete is false —
-				// nothing was changed — so the inventory stays put.
-				go uh.loadHomebrewPackages()
+				// match, and re-observe every collection: they can share
+				// items, and a check begun before this install must not
+				// publish over it. Under dry-run decision.Complete is
+				// false — nothing was changed — so both stay put.
+				uh.homebrewInventoryChanged()
 			} else {
 				shared.gate.Reset()
 				shared.show(bundleview.InstallLabelReady, true)

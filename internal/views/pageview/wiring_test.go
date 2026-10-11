@@ -47,18 +47,24 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{
 				"bundleview.Describe(",
 				"pageview.HomebrewPackage(",
-				"pageview.FlatpakApplication",
-				"pageview.SearchResult(",
+				"pageview.PackageListExportSubtitle",
+				"pageview.HomebrewPackageButtonName(",
+				"button.ResetRelation(gtk.AccessibleRelationLabelledByValue)",
 			},
 			retired: []string{
 				`fmt.Sprintf("%s — %s", bundle.Description, bundle.Path)`,
-				`fmt.Sprintf("%s (%s)", app.ApplicationID, app.Version)`,
-				`row.SetSubtitle(result.Kind.DisplayName())`,
 				"pageview.BrewBundle(",
-				`"Brew Bundle Dump"`,
 				"~/Brewfile",
 				`fmt.Sprintf("Error: %v", err)`,
 				"homebrew.BundleInstall(",
+				// The export overwrites any Brewfile, not only an earlier
+				// export (W2-APPS-4).
+				"exported last time",
+				// A bare label names every row's button alike (W2-APPS-5);
+				// row buttons go through setPackageButtonLabel.
+				`gtk.NewButtonWithLabel("Uninstall")`,
+				"gtk.NewButtonWithLabel(pinLabel)",
+				"primary.SetLabel(",
 			},
 		},
 		{
@@ -72,14 +78,25 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.ChannelRow(",
 				"pageview.GraphicsDriverRow(",
 				// The system-version readout came with them. Digest
-				// formatting now lives entirely inside
-				// SystemVersionDetails, which calls ShortDigest itself —
-				// stricter than the deleted system_page.go entry, which
-				// only required the view to call ShortDigest. The banned
-				// hand-slice below is carried across from that entry.
+				// formatting lives entirely inside SystemVersionDetails,
+				// which now gives the whole digest (W3-07); the banned
+				// hand-slice below is carried across from the deleted
+				// system_page.go entry.
 				"pageview.SystemVersionRow(",
 				"pageview.SystemVersionDetails(",
 				"pageview.StagingLogSubtitle(",
+				// W3-01: the action stages an update, so its label and
+				// running and failure copy come from pageview, where the
+				// test holds them to describing a download.
+				"pageview.BootcStageButtonLabel",
+				"pageview.BootcStageRunningSubtitle",
+				"pageview.BootcStageFailureSubtitle(hadOutput)",
+				// W3-07: the support identifiers are selectable.
+				"row.SetSubtitleSelectable(true)",
+				// W3-08: the Details expander is hidden until a line
+				// arrives, so an empty one is never offered.
+				"logExpander.SetVisible(false)",
+				"s.logExpander.SetVisible(true)",
 			},
 			retired: []string{
 				"strings.LastIndex(",
@@ -88,6 +105,10 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"digest[:19]",
 				"row.SetSubtitle(pkg.Version)",
 				`"Roll Back"`,
+				`"Check for updates"`,
+				`"Checking for updates…"`,
+				`"The update could not be downloaded. Open Details to see what happened."`,
+				"ShortDigest(",
 			},
 		},
 		{
@@ -128,6 +149,28 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
+			file: "developer_tools.go",
+			required: []string{
+				"pageview.DeveloperTool(",
+				"pageview.DeveloperToolChecking(",
+				"pageview.DeveloperToolInstalling(",
+				"pageview.DeveloperToolUnverified(",
+				"pageview.WSLEngineDocumentationURL(",
+				"pageview.WSLEngineDocumentationTooltip(",
+				"SetAccessibleLabel(item.button, view.AccessibleLabel)",
+				// W3-10: a tool removed on Apps or in a terminal read
+				// "Installed" until restart. The re-read is connected once
+				// at build and generation-guarded against gated actions.
+				"ConnectMap(&uh.developerToolsMapped)",
+				"uh.developerToolRefresh.IsCurrent(generation)",
+			},
+			retired: []string{
+				`"Optional Homebrew tool; installed only when you choose it."`,
+				`"Installed through Homebrew."`,
+				`"Checking installed state…"`,
+			},
+		},
+		{
 			file: "printers_page.go",
 			required: []string{
 				"pageview.PrintersGroupTitle(",
@@ -156,7 +199,6 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.AgentModeGroupDescription(",
 				"actionmsg.AgentMode(",
 				"pageview.AgentModeActiveModelTitle()",
-				"pageview.AgentModePresetsTitle()",
 			},
 			// A bare switch re-enters ::state-set on a programmatic revert,
 			// which would restart the service after a failed stop; the error
@@ -169,22 +211,56 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
+			file: "troubleshoot.go",
+			required: []string{
+				"pageview.TroubleshootGroupTitle()",
+				"pageview.TroubleshootGroupDescription()",
+				"pageview.GooseRow(",
+				"pageview.GooseSetupToast(",
+				// A live launch says what it observed, including a hand-off
+				// to a session that may have no window (#544).
+				"pageview.GooseLaunchToast(",
+				// Readiness and the launch both belong to agentmode, which
+				// writes ChairLift's own Goose profile before launching.
+				"agentmode.ObserveLive(",
+				"agentmode.Launch(",
+				"troubleshoot.Setup(",
+			},
+			// The Goose row is the one surface: no gtk-launch of the cask's
+			// desktop file (which would bypass the profile), and no repair of
+			// the user's own Goose configuration.
+			retired: []string{
+				"launchApp(",
+				"EnsureDiagnosticsConfigured",
+			},
+		},
+		{
+			file: "contribute.go",
+			// Preflight re-runs whenever the group is shown, so a requirement
+			// the user fixed elsewhere (Hive registration, Podman) does not
+			// leave the button insensitive until restart; reads are
+			// generation-guarded against a running session.
+			required: []string{
+				"ConnectMap(&uh.contributeMapped)",
+				"uh.contributeRefresh.IsCurrent(generation)",
+				"uh.contributeGate.Running()",
+			},
+		},
+		{
 			file: "recovery.go",
 			required: []string{
 				"pageview.BootcRollbackRow(",
 				"pageview.BootcRollbackResultSubtitle(",
-				"pageview.UnpinRow(",
-				"pageview.UnpinConfirmation(",
 			},
+			// The published-versions calendar (pin / return to stream)
+			// is withdrawn (#522): Powerwash offers Roll Back only.
+			retired: []string{"buildRecoveryVersionsGroup(", "buildReturnToStreamRow(", "ublue.Pin(", "ublue.Unpin("},
 		},
 		{
-			file: "versions.go",
-			required: []string{
-				"pageview.PublishedVersionsRow(",
-				"pageview.PublishedVersionsSummary(",
-				"pageview.PublishedVersions(",
-				"pageview.PinConfirmation(",
-			},
+			// Collection buttons are named after the collection (W2-APPS-5).
+			file:     "bundle_install.go",
+			required: []string{"bundleview.InstallButtonName(label, b.title)"},
+			retired:  []string{"SetAccessibleLabel(control.button, label)"},
 		},
 	}
 
@@ -241,32 +317,49 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		file, function string
 		required       []string
 	}{
-		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "if statusErr != nil {", "Could not verify staged update", "uh.updateShell.StartCheck()"}},
-		{"views.go", "OnUpdateFinished", []string{"if final.Preview {", "range final.CompletedSources", "case updateflow.OperatingSystem:", "bootc.GetStatus(", "if err != nil {", "uh.refreshChangelogAvailability(status)"}},
+		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "uh.renderSystemVersion(versionGeneration, status)", "if statusErr != nil {", "Couldn't confirm the update is ready", "uh.updateShell.StartCheck()"}},
+		{"views.go", "OnUpdateFinished", []string{"if final.Preview {", "range final.CompletedSources", "case updateflow.OperatingSystem:", "bootc.GetStatus(", "if err != nil {", "uh.refreshChangelogAvailability(status)", "uh.renderSystemVersion(versionGeneration, status)"}},
+		// W3-06: the System version readout re-renders from each observed
+		// status, ordered so an older read cannot replace a newer one.
+		{"updates_page.go", "renderSystemVersion", []string{"uh.systemVersionRefresh.IsCurrent(generation)", "uh.systemVersionRows.Clear(", "uh.systemVersionRow == nil"}},
 		{"update_shell.go", "Render", []string{"s.toasts.SetUpdateBadge(snapshot.TotalUpdates)"}},
-		{"update_shell.go", "StartUpdate", []string{"s.onUpdateFinished(final)"}},
+		// W4: a dry-run Update all says it was a preview.
+		{"update_shell.go", "StartUpdate", []string{"s.onUpdateFinished(final)", "if final.Preview {", "s.toasts.ShowToast(actionmsg.UpdateAllPreview)"}},
+		// W3-15: a preference changed while a check ran is re-checked once
+		// that check returns, and after a mutation that refused the check.
+		{"update_shell.go", "StartCheck", []string{"sgtk.RunOnMainThread(s.checkFinished)"}},
+		{"update_shell.go", "checkFinished", []string{"updatepresent.RecheckAfterCheck(s.snapshot, s.currentPreferences())", "s.StartCheck()"}},
+		{"update_shell.go", "PreferencesChanged", []string{"updatepresent.RecheckForPreferences(s.snapshot, s.currentPreferences())", "s.StartCheck()"}},
+		{"update_shell.go", "finishMutation", []string{"s.PreferencesChanged()"}},
+		// W4: every action that stages or replaces the operating system is
+		// admitted by the update shell, so none races an update run's own
+		// staging; a refusal says why, and the admission ends before the
+		// follow-up check the shell would otherwise refuse.
+		{"updates_page.go", "onBootcStageClicked", []string{"if !uh.updateShell.beginMutation() {", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"updates_page.go", "onDriverSwitchClicked", []string{"if !uh.updateShell.beginMutation() {", "uh.driverGate.Reset()", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"updates_page.go", "onChannelToggled", []string{"if !uh.updateShell.beginMutation() {", "toggle.set(!toTesting)", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		// W4: a dismissed password prompt is a brief cancellation, not a
+		// persistent error, on every Updates-page privileged action.
+		{"updates_page.go", "onBootcStageClicked", []string{"pageview.PrivilegedFailureToast(stageErr,"}},
+		{"updates_page.go", "onDriverSwitchClicked", []string{"uh.showPrivilegedFailure(err,"}},
+		{"updates_page.go", "onChannelToggled", []string{"uh.showPrivilegedFailure(err,"}},
+		{"updates_page.go", "showPrivilegedFailure", []string{"pageview.PrivilegedFailureToast(err, failure)"}},
 	} {
 		body := functionBody(check.file, check.function)
 		for _, assertion := range check.required {
 			if !strings.Contains(body, assertion) {
-				t.Errorf("%s.%s no longer preserves staged Compare/badge refresh: %s", check.file, check.function, assertion)
+				t.Errorf("%s.%s no longer carries required update wiring: %s", check.file, check.function, assertion)
 			}
 		}
 	}
-}
-
-func TestUpdateAllRefreshesProviderInventories(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	source, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "views.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, call := range []string{"if final.Preview {", "range final.CompletedSources", "uh.loadFlatpakApplications()", "uh.loadHomebrewPackages()"} {
-		if !strings.Contains(string(source), call) {
-			t.Errorf("live Update All leaves installed inventory stale without %s", call)
+	// refreshAfterOSSwitch starts a check, which the shell refuses while the
+	// switch still holds its admission.
+	for _, function := range []string{"onDriverSwitchClicked", "onChannelToggled"} {
+		body := functionBody("updates_page.go", function)
+		finish := strings.Index(body, "uh.updateShell.finishMutation()")
+		refresh := strings.Index(body, "uh.refreshAfterOSSwitch()")
+		if finish < 0 || refresh < 0 || finish > refresh {
+			t.Errorf("updates_page.go.%s must end its update-shell admission before refreshAfterOSSwitch", function)
 		}
 	}
 }
@@ -307,6 +400,16 @@ func TestChangelogRefreshDiscardsOldImagePair(t *testing.T) {
 	if len(compare) != 2 || !strings.Contains(compare[1], "booted != uh.changelogBooted || staged != uh.changelogStaged") {
 		t.Error("in-flight comparison can render a diff for an image no longer staged")
 	}
+	// The in-flight guard compares the button's label with the label the
+	// comparison set; one constant keeps the two spellings from drifting
+	// (a three-dot "Comparing..." never matched the "Comparing…" it set).
+	text := string(data)
+	if got := strings.Count(text, "pageview.ChangelogComparingLabel"); got < 2 {
+		t.Errorf("changelog.go uses pageview.ChangelogComparingLabel %d times, want both the label and its guard", got)
+	}
+	if strings.Contains(text, `"Comparing`) {
+		t.Error("changelog.go spells the Comparing label inline instead of using pageview.ChangelogComparingLabel")
+	}
 }
 
 // The OS source row owns the restart action now (#439): the source row
@@ -339,35 +442,99 @@ func TestOperatingSystemRowOwnsRestartButton(t *testing.T) {
 	}
 }
 
-// The page-level status panel clears when a deployment is staged (#439);
-// the row carries the message instead of the status page. updatepresent's
-// restart case must leave the panel's title, description, and banner empty
-// so the wordmark leads into the source groups, keeping only the
-// announcement a screen reader needs.
-func TestPhaseRestartRequiredClearsStatusPanel(t *testing.T) {
+// The Roll Back heading belongs to the rollback row alone (#490). It used to
+// share a group with Return to stream and Published versions, so a host with
+// no previous deployment hid the row and left the heading standing over
+// unrelated rows. The group now holds only the rollback row and is what the
+// status loader shows and hides.
+func TestRollBackHeadingHidesWithItsRow(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller could not locate wiring_test.go")
 	}
-	source, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "updatepresent", "updatepresent.go"))
+	path := filepath.Join(filepath.Dir(filename), "..", "recovery.go")
+	source, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(source)
-	if !strings.Contains(text, "case updateflow.PhaseRestartRequired:") {
-		t.Fatal("PhaseRestartRequired case missing from updatepresent")
+	set := token.NewFileSet()
+	parsed, err := parser.ParseFile(set, path, source, 0)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// The restart case must not advertise a title, description, or banner
-	// above the wordmark; if any of these strings return the OS row carries
-	// the message and the panel stays blank.
-	for _, banned := range []string{
-		`Title: gotext.Get("Restart required")`,
-		`Description: gotext.Get("Restart to finish installing updates.")`,
-		`Banner:      gotext.Get("Restart required")`,
-		`ActionStyle = "destructive-action"`,
-	} {
-		if strings.Contains(text, banned) {
-			t.Errorf("PhaseRestartRequired still renders %q in the status panel", banned)
+	bodies := map[string]string{}
+	for _, declaration := range parsed.Decls {
+		if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Body != nil {
+			bodies[fn.Name.Name] = string(source[set.Position(fn.Body.Pos()).Offset:set.Position(fn.Body.End()).Offset])
 		}
+	}
+
+	build := bodies["buildRecoveryRollbackGroup"]
+	for _, required := range []string{`group.SetTitle("Roll Back")`, "group.SetVisible(false)", "uh.bootcRollbackGroup = group"} {
+		if !strings.Contains(build, required) {
+			t.Errorf("buildRecoveryRollbackGroup no longer builds a hidden, owned Roll Back group: missing %q", required)
+		}
+	}
+	for _, banned := range []string{"buildReturnToStreamRow(", "buildPublishedVersionsRow(", "buildRecoveryVersionsGroup("} {
+		if strings.Contains(build, banned) {
+			t.Errorf("buildRecoveryRollbackGroup puts %s under the Roll Back heading", banned)
+		}
+	}
+
+	load := bodies["loadBootcRollbackStatus"]
+	if !strings.Contains(load, "uh.bootcRollbackGroup.SetVisible(offered)") {
+		t.Error("loadBootcRollbackStatus must show and hide the whole Roll Back group from one offered decision")
+	}
+	if strings.Contains(load, "uh.bootcRollbackRow.SetVisible(") {
+		t.Error("loadBootcRollbackStatus hides only the row, leaving the Roll Back heading orphaned")
+	}
+}
+
+// W3-11: the Maintenance entry's subtitle is derived from what the Powerwash
+// detail built, not a fixed promise of a reset. It is written once the detail
+// is built and again whenever the rollback check reveals or hides Roll Back.
+func TestRecoveryEntrySubtitleFollowsTheDetail(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	bodies := map[string]string{}
+	for _, name := range []string{"recovery.go", "maintenance_page.go"} {
+		path := filepath.Join(filepath.Dir(filename), "..", name)
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		set := token.NewFileSet()
+		parsed, err := parser.ParseFile(set, path, source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, declaration := range parsed.Decls {
+			if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Body != nil {
+				bodies[fn.Name.Name] = string(source[set.Position(fn.Body.Pos()).Offset:set.Position(fn.Body.End()).Offset])
+			}
+		}
+	}
+
+	if strings.Contains(bodies["buildMaintenancePage"], "RecoveryEntrySubtitle(") {
+		t.Error("buildMaintenancePage writes the Powerwash entry subtitle before the detail is built")
+	}
+	for _, fn := range []string{"buildRecoveryPage", "loadBootcRollbackStatus"} {
+		if !strings.Contains(bodies[fn], "uh.refreshRecoveryEntry()") {
+			t.Errorf("%s does not refresh the Powerwash entry subtitle", fn)
+		}
+	}
+	refresh := bodies["refreshRecoveryEntry"]
+	for _, required := range []string{"uh.bootcRollbackOffered", `"reset_group"`} {
+		if !strings.Contains(refresh, required) {
+			t.Errorf("refreshRecoveryEntry ignores %s", required)
+		}
+	}
+	if !strings.Contains(bodies["buildRecoveryPage"], "page.SetDescription(pageview.RecoveryPageDescription(") {
+		t.Error("buildRecoveryPage does not explain a missing reset")
+	}
+	if strings.Contains(bodies["buildRecoveryPage"], "buildRecoveryVersionsGroup(") {
+		t.Error("buildRecoveryPage builds the published-versions calendar withdrawn by #522")
 	}
 }

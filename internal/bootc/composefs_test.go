@@ -78,11 +78,11 @@ func TestComposefsStatusReadsDeploymentsWithoutRoot(t *testing.T) {
 	if got := status.Status.Rollback.Digest(); got != rollbackDigest {
 		t.Errorf("rollback digest = %q, want %q", got, rollbackDigest)
 	}
-	// The rollback image's own version is only readable as root; the day it
-	// was deployed is not, and it is what tells a person which one it is.
-	// Without it the Recovery row would say no previous version is kept.
-	if got := status.Status.Rollback.Timestamp(); got != rollbackDeployed.Format(time.RFC3339) {
-		t.Errorf("rollback timestamp = %q, want the deployment time %q", got, rollbackDeployed.Format(time.RFC3339))
+	// The origin's mtime is when the deployment was written, not when its
+	// image was released; the Roll Back row labels the timestamp "released",
+	// so it must stay empty rather than claim the deploy day (#521).
+	if got := status.Status.Rollback.Timestamp(); got != "" {
+		t.Errorf("rollback timestamp = %q, want empty (not the origin mtime %q)", got, rollbackDeployed.Format(time.RFC3339))
 	}
 	if got := status.Status.Booted.Timestamp(); got != "" {
 		t.Errorf("booted timestamp = %q, want empty: a deployment time is not a release date", got)
@@ -223,5 +223,16 @@ func TestRegistryCheckUsesThisPlatformsManifestFromAnIndex(t *testing.T) {
 	}
 	if got.Available {
 		t.Fatalf("got %+v: an index whose %s child is the booted image is not an update", got, runtime.GOARCH)
+	}
+}
+
+func TestComposefsBootedReadsTheKernelCommandLine(t *testing.T) {
+	withHostRoot(t, dakotaHost())
+	if !ComposefsBooted() {
+		t.Error("ComposefsBooted() = false on a composefs host")
+	}
+	withHostRoot(t, fstest.MapFS{"proc/cmdline": {Data: []byte("root=UUID=1 ostree=/ostree/boot.1/x\n")}})
+	if ComposefsBooted() {
+		t.Error("ComposefsBooted() = true on an ostree host")
 	}
 }

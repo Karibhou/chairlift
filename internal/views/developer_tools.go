@@ -3,9 +3,9 @@ package views
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
@@ -16,8 +16,10 @@ import (
 	"github.com/projectbluefin/chairlift/internal/devtools"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
 type developerOptionRow struct {
@@ -30,6 +32,9 @@ type developerOptionRow struct {
 	allowed   bool
 	canEnable bool
 	active    bool
+	// toolView is a tool row's last observed presentation; a dry run
+	// restores it after showing the transient installing state.
+	toolView pageview.DeveloperToolView
 }
 
 func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ublue.Status) {
@@ -40,13 +45,13 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 		uh.wslBackend = devtools.BackendNSL
 	}
 
-	for _, choice := range []struct{ kind, title, subtitle string }{
-		{"wsl", "WSL Mode", "Persistent Linux machines with nsl inside lightweight systemd-vmspawn virtual machines. Runs as your user without host daemons."},
-		{"docker", "Enable Docker", "Docker CLI, Compose, LazyDocker and Dive, with the base image's daemon. Requires administrator authentication; Docker access grants root-equivalent control."},
+	for _, choice := range []struct{ kind, title string }{
+		{"wsl", "WSL Mode"},
+		{"docker", "Enable Docker"},
 	} {
 		item := &developerOptionRow{kind: choice.kind, row: adw.NewActionRow(), spinner: newActivitySpinner()}
 		item.row.SetTitle(choice.title)
-		item.row.SetSubtitle(choice.subtitle + " Checking availability…")
+		item.row.SetSubtitle("Checking…")
 		item.row.AddSuffix(&item.spinner.Widget)
 		item.toggle = newGuardedSwitch(false, func(enabled bool) { uh.onDeveloperOption(item, enabled) })
 		item.toggle.widget.SetSensitive(false)
@@ -57,9 +62,9 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 
 		if choice.kind == "wsl" {
 			combo := adw.NewComboRow()
-			combo.SetTitle("WSL Backend")
-			combo.SetSubtitle("Choose nsl (default) or Lima for virtual machines. An existing Lima machine selects Lima.")
-			combo.SetModel(gtk.NewStringList([]string{"nsl (default)", "Lima"}))
+			combo.SetTitle("Virtual machine engine")
+			combo.SetSubtitle(devtools.EngineSubtitle(""))
+			combo.SetModel(gtk.NewStringList([]string{"Built-in (recommended)", "Lima"}))
 			uh.wslSuppress = true
 			if uh.wslBackend == devtools.BackendLima {
 				combo.SetSelected(1)
@@ -68,6 +73,16 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 			}
 			uh.wslSuppress = false
 			uh.wslCombo = combo
+
+			docBtn := newIconButton("adw-external-link-symbolic", pageview.WSLEngineDocumentationTooltip(uh.wslBackend))
+			docBtn.SetValign(gtk.AlignCenterValue)
+			docClicked := func(_ gtk.Button) {
+				uh.openURL(pageview.WSLEngineDocumentationURL(uh.wslBackend))
+			}
+			docBtn.ConnectClicked(&docClicked)
+			combo.AddSuffix(&docBtn.Widget)
+			uh.wslDocBtn = docBtn
+
 			uh.wslBackendNotify = func(_ gobject.Object, _ uintptr) {
 				if uh.wslSuppress {
 					return
@@ -81,6 +96,11 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 					return
 				}
 				uh.wslBackend = target
+				if uh.wslDocBtn != nil {
+					tip := pageview.WSLEngineDocumentationTooltip(target)
+					uh.wslDocBtn.SetTooltipText(tip)
+					SetAccessibleLabel(uh.wslDocBtn, tip)
+				}
 				uh.refreshDeveloperOptions(status)
 			}
 			combo.ConnectNotify(&uh.wslBackendNotify)
@@ -89,11 +109,12 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 	}
 	editors := adw.NewExpanderRow()
 	editors.SetTitle("IDEs and terminal editors")
-	editors.SetSubtitle("Choose only the tools you want; no hidden bundle is installed.")
+	editors.SetSubtitle("Install only the tools you want.")
 	for _, tool := range devtools.Tools() {
 		item := &developerOptionRow{kind: "tool", tool: tool, row: adw.NewActionRow(), spinner: newActivitySpinner(), button: gtk.NewButtonWithLabel("Install")}
 		item.row.SetTitle(tool.Name)
-		item.row.SetSubtitle("Checking installed state…")
+		item.toolView = pageview.DeveloperToolChecking(tool.Name, tool.Description)
+		uh.showDeveloperTool(item, item.toolView)
 		item.button.SetValign(gtk.AlignCenterValue)
 		item.button.SetSensitive(false)
 		item.row.AddSuffix(&item.spinner.Widget)
@@ -103,16 +124,55 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 		uh.developerOptions = append(uh.developerOptions, item)
 	}
 	group.Add(&editors.Widget)
+	// Homebrew changes outside this page — an uninstall on Apps, a brew
+	// command in a terminal — would otherwise leave a row reading
+	// "Installed" until restart. Re-read whenever the group is shown; the
+	// handler is connected once, here, for the page's lifetime.
+	uh.developerToolsMapped = func(gtk.Widget) { uh.refreshDeveloperTools() }
+	group.ConnectMap(&uh.developerToolsMapped)
 	// Initial reads share the action gate too; an older load cannot overwrite
 	// a user's mutation or enable overlapping developer actions.
 	uh.developerSwitch.SetSensitive(false)
 	uh.refreshDeveloperOptions(status)
 }
 
+// refreshDeveloperTools re-reads only the optional tools' installed state. It
+// is passive: it stands aside while any developer action holds the gate, and
+// every gated action that publishes tool state begins a new generation, so a
+// read that started before that action can never overwrite its result.
+func (uh *UserHome) refreshDeveloperTools() {
+	if uh.developerGate.Running() || !slices.ContainsFunc(uh.developerOptions, func(item *developerOptionRow) bool { return item.kind == "tool" }) {
+		return
+	}
+	generation := uh.developerToolRefresh.Begin()
+	go func() {
+		formulae, formulaErr := homebrew.ListInstalledFormulae()
+		casks, caskErr := homebrew.ListInstalledCasks()
+		sgtk.RunOnMainThread(func() {
+			if !uh.developerToolRefresh.IsCurrent(generation) || uh.developerGate.Running() {
+				return
+			}
+			brew := uh.capabilities[capability.Homebrew]
+			for _, item := range uh.developerOptions {
+				if item.kind != "tool" {
+					continue
+				}
+				packages, err := formulae, formulaErr
+				if item.tool.Cask {
+					packages, err = casks, caskErr
+				}
+				uh.applyDeveloperTool(item, packages, err, brew)
+				item.button.SetSensitive(item.allowed)
+			}
+		})
+	}()
+}
+
 func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 	if !uh.developerGate.TryStart() {
 		return
 	}
+	uh.developerToolRefresh.Begin()
 	uh.setDeveloperSensitive(false)
 	backend := uh.wslBackend
 	resolve := !uh.wslBackendResolved
@@ -154,7 +214,17 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 						uh.wslCombo.SetSelected(1)
 						uh.wslSuppress = false
 					}
+					if uh.wslDocBtn != nil {
+						tip := pageview.WSLEngineDocumentationTooltip(backend)
+						uh.wslDocBtn.SetTooltipText(tip)
+						SetAccessibleLabel(uh.wslDocBtn, tip)
+					}
 				}
+			}
+			if backend == devtools.BackendNSL && wslErr == nil && uh.wslCombo != nil {
+				// An older ChairLift created a Debian machine; say so
+				// rather than promise Ubuntu for the machine WSL Mode starts.
+				uh.wslCombo.SetSubtitle(devtools.EngineSubtitle(wsl.Machine))
 			}
 			brew := uh.capabilities[capability.Homebrew]
 			for _, item := range uh.developerOptions {
@@ -167,13 +237,13 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 						item.toggle.set(item.active)
 						item.row.SetSubtitle(wslSubtitle(backend, wsl, wslErr))
 						if !wsl.Running && !devtools.HostSupported() {
-							item.row.SetSubtitle("WSL Mode requires a Linux x86_64 or ARM64 host.")
+							item.row.SetSubtitle("WSL Mode doesn't work on this kind of computer.")
 						} else if !wsl.Running && !brew {
-							item.row.SetSubtitle("Needs Homebrew to install Lima.")
+							item.row.SetSubtitle("Lima can't be installed on this computer.")
 						} else if !wsl.Running && !kvmExists {
-							item.row.SetSubtitle("Needs hardware virtualization: /dev/kvm is missing. Enable virtualization in firmware.")
+							item.row.SetSubtitle(devtools.NeedsVirtualization)
 						} else if !wsl.Running && !kvmAccess {
-							item.row.SetSubtitle("Needs hardware virtualization access. Enabling requests administrator authentication, then a new login before setup can continue.")
+							item.row.SetSubtitle(devtools.NeedsKVMAccess)
 						}
 					} else {
 						// nsl backend
@@ -191,18 +261,19 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 							item.canEnable = false
 							item.allowed = false
 							item.toggle.set(item.active)
-							item.row.SetSubtitle("WSL Mode with nsl requires a Linux x86_64 host.")
+							item.row.SetSubtitle("The built-in engine doesn't work on this kind of computer. Try Lima.")
 						} else if !brew && !nslInstalled {
 							item.canEnable = false
 							item.allowed = false
 							item.toggle.set(item.active)
-							item.row.SetSubtitle("Needs Homebrew to install nsl.")
+							item.row.SetSubtitle("The built-in engine can't be installed on this computer.")
 						} else if !kvmExists {
 							item.canEnable = false
 							item.allowed = false
 							item.toggle.set(item.active)
-							item.row.SetSubtitle("Needs hardware virtualization: /dev/kvm is missing. Enable virtualization in firmware.")
+							item.row.SetSubtitle(devtools.NeedsVirtualization)
 						} else if nslInstalled && doctorErr != nil && !isKVM && actionable != "" {
+							log.Printf("views: nsl doctor reported missing prerequisites: %s", strings.TrimSpace(doctorOutput))
 							item.canEnable = false
 							item.allowed = false
 							item.toggle.set(item.active)
@@ -211,7 +282,7 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 							item.canEnable = status.Supports(ubluehelper.CommandKVMEnable)
 							item.allowed = item.canEnable
 							item.toggle.set(item.active)
-							item.row.SetSubtitle("Needs hardware virtualization access. Enabling requests administrator authentication, then a new login before setup can continue.")
+							item.row.SetSubtitle(devtools.NeedsKVMAccess)
 						} else {
 							item.canEnable = true
 							item.allowed = wslErr == nil && (wsl.Running || item.canEnable)
@@ -226,7 +297,7 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 					item.toggle.set(item.active)
 					item.row.SetSubtitle(dockerSubtitle(docker, dockerErr))
 					if !status.Supports(ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable) {
-						item.row.SetSubtitle("Needs the installed Docker actions in the system helper. CLI tools alone do not provide a daemon.")
+						item.row.SetSubtitle("Docker isn't available on this computer.")
 					}
 				case "tool":
 					packages, err := formulae, formulaErr
@@ -251,22 +322,26 @@ func packagePresent(packages []homebrew.Package, name string) bool {
 }
 
 func (uh *UserHome) applyDeveloperTool(item *developerOptionRow, packages []homebrew.Package, err error, brew bool) {
-	installed := packagePresent(packages, item.tool.Package)
-	item.allowed = brew && item.tool.Supported() && err == nil && !installed
-	switch {
-	case !item.tool.Supported():
-		item.row.SetSubtitle("Not available for this architecture.")
-	case !brew:
-		item.row.SetSubtitle("Needs Homebrew.")
-	case err != nil:
-		item.row.SetSubtitle("Could not check installed state; no installation is started.")
-	case installed:
-		item.button.SetLabel("Installed")
-		item.row.SetSubtitle("Installed through Homebrew.")
-	default:
-		item.button.SetLabel("Install")
-		item.row.SetSubtitle("Optional Homebrew tool; installed only when you choose it.")
-	}
+	item.toolView = pageview.DeveloperTool(item.tool.Name, item.tool.Description, pageview.DeveloperToolObservation{
+		Supported:  item.tool.Supported(),
+		Homebrew:   brew,
+		ReadFailed: err != nil,
+		Installed:  err == nil && packagePresent(packages, item.tool.Package),
+	})
+	item.allowed = item.toolView.Allowed
+	uh.showDeveloperTool(item, item.toolView)
+}
+
+// showDeveloperTool renders a tool row's subtitle and button. The visible
+// label is the same word on every row, so the accessible name carries the
+// tool's name. GtkButton names itself from its label child through a
+// LABELLED_BY relation, which outranks the LABEL property, so the relation
+// is dropped after every label change or every row would announce "Install".
+func (uh *UserHome) showDeveloperTool(item *developerOptionRow, view pageview.DeveloperToolView) {
+	item.row.SetSubtitle(view.Subtitle)
+	item.button.SetLabel(view.ButtonLabel)
+	item.button.ResetRelation(gtk.AccessibleRelationLabelledByValue)
+	SetAccessibleLabel(item.button, view.AccessibleLabel)
 }
 
 func (uh *UserHome) setDeveloperSensitive(sensitive bool) {
@@ -290,43 +365,43 @@ func wslSubtitle(backend string, state devtools.WSLState, err error) string {
 	if backend == devtools.BackendLima {
 		switch {
 		case err != nil:
-			return "Could not read the Ubuntu virtual machine's state."
+			return "Couldn't check the Ubuntu virtual machine."
 		case state.Ready:
-			return "Ubuntu is ready. Connect Remote SSH to lima-ubuntu; your home is shared writable. Install the Remote - SSH extension in your editor."
+			return "Ubuntu is ready. In your editor, connect with Remote SSH to lima-ubuntu."
 		case state.Running:
-			return "Ubuntu is running, but its shell is not ready. Turn off to stop it without deleting data."
+			return "Ubuntu is running but not ready yet."
 		case state.Exists:
-			return "Ubuntu is stopped. Its disk and your files are kept; enabling starts it and autostart again."
+			return "Ubuntu is stopped. Your files are kept."
 		default:
-			return "Create Ubuntu LTS with Lima, share your home writable and start it at login. First download: about 600 MB."
+			return "Run Ubuntu in a virtual machine that shares your home folder. Downloads about 600 MB."
 		}
 	}
 	switch {
 	case err != nil:
-		return "Could not read nsl machine state."
+		return "Couldn't check your Linux virtual machine."
 	case state.Ready:
-		return "nsl is ready. Persistent Linux machines run as systemd-nspawn containers inside a lightweight VM."
+		return "Your Linux virtual machine is ready."
 	case state.Running:
-		return "nsl is running, but its shell is not ready. Turn off to stop it without deleting data."
+		return "Your Linux virtual machine is running but not ready yet."
 	case state.Exists:
-		return "nsl is stopped. Machines and disks are kept; enabling starts the default machine again."
+		return "Your Linux virtual machine is stopped. Your files are kept."
 	default:
-		return "Persistent Linux machines with nsl via systemd-vmspawn and QEMU/KVM. Runs as your user without host daemons."
+		return "Run Linux in a virtual machine that keeps your files."
 	}
 }
 
 func dockerSubtitle(state devtools.DockerState, err error) string {
 	switch {
 	case err != nil:
-		return "Could not read the system Docker daemon's state."
+		return "Couldn't check whether Docker is running."
 	case state.Ready:
-		return "Docker's local daemon is ready for this account. Docker access grants root-equivalent control."
+		return "Docker is ready. Anyone using Docker can control this whole computer."
 	case state.Active:
-		return "Docker is running, but its socket is not accessible to this session. Log out and back in after granting access."
+		return "Docker is running. Log out and back in to use it."
 	case !state.Available:
-		return "This base image has no Docker daemon. Installing CLI tools alone cannot run containers."
+		return "Docker isn't available on this system, so containers can't run here."
 	default:
-		return "Install Docker CLI, Compose, LazyDocker and Dive; start the system daemon. Needs your administrator password and a new login for daemon access."
+		return "Asks for your administrator password. Anyone using Docker can control this whole computer."
 	}
 }
 
@@ -334,16 +409,29 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 	if !item.allowed || !uh.developerGate.TryStart() {
 		return
 	}
+	if item.kind == "tool" {
+		uh.developerToolRefresh.Begin()
+	}
 	before := item.row.GetSubtitle()
 	uh.setDeveloperSensitive(false)
 	setActivitySpinner(item.spinner, true)
-	item.row.SetSubtitle("Preparing…")
-	if item.button != nil {
-		item.button.SetLabel("Installing…")
+	if item.kind == "tool" {
+		uh.showDeveloperTool(item, pageview.DeveloperToolInstalling(item.tool.Name))
+	} else {
+		item.row.SetSubtitle("Preparing…")
 	}
 	title := item.row.GetTitle()
 	backend := uh.wslBackend
 	go func() {
+		// The worker carries no overall deadline on purpose: an nsl or Lima
+		// first start downloads for longer than any read budget, and a
+		// privileged helper call must not be cut mid-flight. Every step
+		// instead carries its own bound — devtools and Homebrew commands
+		// their read/mutation class timeout, and each status probe below
+		// devtools' statusTimeout — so the completion below, which resets
+		// developerGate and restores the controls, is reached without user
+		// action except for an authentication prompt, which the user answers
+		// or dismisses (#487).
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		progress := func(stage string) { sgtk.RunOnMainThread(func() { item.row.SetSubtitle(stage) }) }
@@ -360,7 +448,7 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 			err = devtools.SetDocker(ctx, enabled, progress)
 			docker, stateErr = devtools.DockerStatus(ctx)
 		case "tool":
-			progress("Installing " + item.tool.Name + " through Homebrew…")
+
 			err = devtools.Install(item.tool)
 			if item.tool.Cask {
 				packages, stateErr = homebrew.ListInstalledCasks()
@@ -378,12 +466,13 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 			defer uh.developerGate.Reset()
 			setActivitySpinner(item.spinner, false)
 			if dryrun.Enabled() {
-				item.row.SetSubtitle(before)
+				if item.kind == "tool" {
+					uh.showDeveloperTool(item, item.toolView)
+				} else {
+					item.row.SetSubtitle(before)
+				}
 				if item.toggle != nil {
 					item.toggle.set(item.active)
-				}
-				if item.button != nil {
-					item.button.SetLabel("Install")
 				}
 				if err == nil {
 					uh.toastAdder.ShowToast("[DRY-RUN] Preview: " + item.row.GetTitle() + " — no changes made")
@@ -408,27 +497,52 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 					if stateErr == nil {
 						uh.applyDeveloperTool(item, packages, nil, uh.capabilities[capability.Homebrew])
 					} else {
-						item.button.SetLabel("Install")
-						item.row.SetSubtitle("Could not verify installed state; the previous observation is kept.")
+						view := pageview.DeveloperToolUnverified(item.tool.Name, item.tool.Description)
+						item.allowed = view.Allowed
+						uh.showDeveloperTool(item, view)
 					}
 				}
 				if errors.Is(err, devtools.ErrNewLogin) {
-					item.row.SetSubtitle(err.Error())
-				} else if err != nil {
-					item.row.SetSubtitle(item.row.GetSubtitle() + " Last action failed: " + strings.TrimSpace(err.Error()))
+					item.row.SetSubtitle(pageview.KVMAccessNeedsNewLogin)
+				} else if err != nil && !pkexec.IsAuthDismissed(err) {
+					item.row.SetSubtitle(developerOptionFailure(item, enabled, err))
 				} else if item.kind == "tool" && stateErr == nil && !packagePresent(packages, item.tool.Package) {
-					item.row.SetSubtitle("Installation finished, but Homebrew has not reported this tool installed.")
+					item.row.SetSubtitle(item.tool.Description + " Installation finished, but Homebrew has not reported this tool installed.")
 				}
 			}
 			if errors.Is(err, devtools.ErrNewLogin) {
-				uh.toastAdder.ShowToast(err.Error())
+				uh.toastAdder.ShowToast(pageview.KVMAccessNeedsNewLogin)
+			} else if err != nil && item.kind == "tool" {
+				uh.toastAdder.ShowErrorToast(developerOptionFailure(item, enabled, err))
 			} else if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("%s: %v", item.row.GetTitle(), err))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, developerOptionFailure(item, enabled, err)))
 			}
 			if !dryrun.Enabled() && err == nil {
-				go uh.loadHomebrewPackages()
+				uh.homebrewInventoryChanged()
 			}
 			uh.setDeveloperSensitive(true)
 		})
 	}()
+}
+
+// developerOptionFailure is the plain sentence for a developer option that
+// could not do what was asked. The raw error names commands and is logged by
+// onDeveloperOption instead; a missing prerequisite shows its own sentence,
+// since trying again would not help.
+func developerOptionFailure(item *developerOptionRow, enabled bool, err error) string {
+	var prerequisite *devtools.PrerequisiteError
+	if errors.As(err, &prerequisite) {
+		return prerequisite.Message
+	}
+	name := "WSL Mode"
+	switch item.kind {
+	case "tool":
+		return "Couldn't install " + item.tool.Name + ". Try again."
+	case "docker":
+		name = "Docker"
+	}
+	if enabled {
+		return "Couldn't turn on " + name + ". Try again."
+	}
+	return "Couldn't turn off " + name + ". Try again."
 }

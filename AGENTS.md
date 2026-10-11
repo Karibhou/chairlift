@@ -32,9 +32,7 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   The build step reproduces CI's `linux/amd64` + `linux/arm64` matrix into
   `build/ci-linux-<arch>/`, then rebuilds natively, so a cross-arch-only
   compile failure cannot pass locally and break CI. Run it before pushing;
-  the mill's deep gate calls this exact target. Codecov's remote project status
-  additionally rejects coverage regressions greater than one percentage point;
-  it has no fixed coverage target and cannot be mirrored locally.
+  the mill's deep gate calls this exact target.
 - `make e2e` — builds both executables and runs `./test/e2e` (except the
   behave suite, below) **inside `ghcr.io/projectbluefin/dakota:testing`**
   through `test/e2e/dakota.sh`: the application's real `--help` surface, the
@@ -102,8 +100,8 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   With `E2E_COVERDIR` set, the GUI's counters reach it only because
   `cmd/chairlift` handles `SIGTERM`/`SIGINT` by quitting the application on
   the main thread, so `Run` returns and `main` exits normally; a process that
-  dies by signal never flushes `GOCOVERDIR`, which left the `e2e` Codecov
-  flag at 0% for every GTK package (issue #306). The dry-run smoke test
+  dies by signal never flushes `GOCOVERDIR`, which left E2E coverage
+  at 0% for every GTK package (issue #306). The dry-run smoke test
   asserts the `main: application exited` marker after its `SIGTERM`, so a
   regression fails `make e2e`. Keep the harnesses sending `SIGTERM` first and
   `SIGKILL` only on timeout.
@@ -224,8 +222,16 @@ An agent must not break these:
   reject unsupported argv because PolicyKit does not validate arguments after
   action selection. ChairLift ships no passwordless PolicyKit rules; normal
   administrator authentication applies. Homebrew tap trust (`brew trust`) is
-  deliberately per-user and does **not** use pkexec, and neither does gaming
-  mode, whose components are all user-scope Flatpaks. Do not add arbitrary
+  deliberately per-user and does **not** use pkexec. Neither do gaming mode
+  or the Developer Mode Pulp reader: both are **system-scope** Flatpaks
+  (`flatpak install/uninstall -y --system`, #503), because Bluefin's policy is
+  system-wide Flatpaks and its images configure Flathub only as a system
+  remote, where a `--user` install cannot resolve a ref (#501). The `flatpak`
+  CLI authorizes those operations itself through Flatpak's own PolicyKit
+  actions (`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
+  `-uninstall` counterparts); ChairLift must not wrap them in `pkexec`, add a
+  helper subcommand or PolicyKit action for them, or add a user Flathub
+  remote. Do not add arbitrary
   privileged command execution, broaden what pkexec runs, or route new
   mutations around the fixed helper/policy pair.
 - **Neither an image reference nor a username crosses the ublue pkexec
@@ -247,7 +253,20 @@ An agent must not break these:
   Agents page, never on view construction, state restore, failed
   authentication, or dry-run. Distro defaults are preserved via reset when
   matching, while `visible=false` is enforced as an override when the distro
-  default is visible.
+  default is visible. The Ask Bluefin entry is the distro's: `IsAskBluefin`
+  recognizes it by its label plus one of three commands — the
+  `xdg-open https://ask.projectbluefin.io` web link, `chairlift --ask-bluefin`,
+  and `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin`, which
+  Bluefin's distro layer ships (projectbluefin/common#1396) because an
+  extension's command runs without Homebrew on `$PATH`. ChairLift changes only
+  that entry's visibility and never rewrites its command; a slot whose command
+  the user changed is not claimed. The extension renders only slots listed in
+  its `command-order` key, so Ask Bluefin reads as shown only when its tuple is
+  visible **and** its slot is listed (Dakota moves the entry to `command12`
+  while inheriting an order of 1..11). Showing it appends a missing slot to
+  `command-order`, preserving the rest of the order, under the same
+  reset-when-matching-the-distro-default rule; hiding it changes only the
+  tuple's visible flag.
 - **The release-channel table is keyed on the image, never on the tag alone.**
   `internal/imageinfo`'s `imageChannelMap` records, per registry path, which
   tags are stable streams, which are testing streams, and how each maps to
@@ -277,8 +296,11 @@ An agent must not break these:
   executed scope are no longer listed post-apply, so newly appeared updates
   published between check and apply do not mark the run unchanged.
   `internal/views/updatepresent` is the equally pure presentation layer: it
-  maps one immutable snapshot to a title, description, banner, and action
-  label, so the shell's copy is testable on a headless host.
+  maps one immutable snapshot to one status line (plus a detail line only
+  for the two failure phases) and an action label, so the shell's copy is
+  testable on a headless host. The header reads wordmark → primary action
+  (or the progress bar in its place) → status line; do not reintroduce a
+  title and description between the wordmark and the action.
   `internal/views/update_shell.go` is widget wiring only — it holds no update
   state of its own and decides nothing the coordinator or the presenter
   already decided. Keep those three layers separate; do not move a phase
@@ -290,13 +312,14 @@ An agent must not break these:
   `internal/window`'s `sourcePolicy`, which keeps `Configured`
   (`Config.IsGroupEnabled`) and `Supported` (the capability floor) apart:
   their conjunction is `effectiveEnabled`, but a source the host cannot back
-  must read "Not available on this system", never "Disabled by
+  must read "Not available on this computer", never "Disabled by
   administrator". Do not collapse them back into one boolean map. The rest
-  of the Updates page — automatic updates, system version, per-source groups,
-  unverified sources, and the Advanced channel/driver controls — is
-  `buildUpdatesPage`'s preferences page, which `buildContentArea` mounts
-  beneath the shell's source rows through `UpdateShell.SetSecondaryContent`;
-  without that call none of those controls is reachable.
+  of the Updates page — automatic updates, system version, dedicated staging
+  and Compare, unverified sources, and Advanced channel/driver controls — is
+  `buildUpdatesPage`'s preferences page, mounted by `buildContentArea` beneath
+  the shell's source rows through `UpdateShell.SetSecondaryContent`. Per-source
+  rows belong to the shell; without the mount none of the secondary controls
+  is reachable.
   A provider that learns only during `Check` that the host cannot back it
   (the operating-system source finding bootc not booted) wraps
   `updateflow.ErrUnavailable`; the coordinator then shows the source as not
@@ -309,17 +332,19 @@ An agent must not break these:
   relies on when it installs the helpers. The run's only privileged surface of its own is
   `restart`, offered only from the Operating system row once the snapshot
   reaches `PhaseRestartRequired` (whose page-level action is
-  `updateflow.ActionNone`). The empty status panel is hidden through
-  `updatepresent.Presentation.ShowStatus`, not merely cleared, so its padding
-  does not separate the wordmark from "System updates". Phase announcements
-  come from the shell's visible toast overlay, never the hidden status page.
+  `updateflow.ActionNone`), where the header's one status line reads
+  "Restart to finish updating". A header with nothing to show is hidden
+  through `updatepresent.Presentation.ShowStatus`, not merely cleared, so it
+  adds no spacing. Phase announcements (each phase's status line) come from
+  the shell's visible toast overlay.
   The Operating system row carries a "Deployment staged" subtitle and a
   "Restart now" suffix that calls `UpdateShell.StartRestart` and in turn
   `ublue.Restart`. That
   phase is reached only when a source genuinely reports a restart is
-  required — the stage script is idempotent and exits 0 on an already-current
-  system, so a successful OS source is not by itself evidence anything
-  changed.
+  required — staging an already-current system completes without staging
+  anything (on composefs `bootc.StageUpdate` asks the registry first and does
+  not run the script, whose `bootc upgrade` fails there instead of exiting 0),
+  so a successful OS source is not by itself evidence anything changed.
 - **New privileged operations extend the ublue helper; they do not add a
   binary.** `chairlift-helper` carries fourteen subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
@@ -333,7 +358,8 @@ An agent must not break these:
   extreme case and the shape to copy: it is the most destructive privileged
   action ChairLift offers, so both the program (`bootc`) and its entire argv
   (`ubluehelper.FactoryResetArgs`, the fixed
-  `install reset --experimental --apply`) are spelled in the helper, and the
+  `install reset --experimental`, never `--apply`, which bootc documents as
+  always rebooting at once) are spelled in the helper, and the
   GUI sends nothing but the command word — a factory reset has exactly one
   target, the image already booted, so there is nothing for a caller to name.
   `rollback` is the same shape with an even shorter argv.
@@ -344,8 +370,16 @@ An agent must not break these:
   404; any other error refuses. Unpin requires a dated booted tag and verifies
   the recovered stream. Both enforce container signature policy. Dry runs
   derive without registry access; both commands require a valid channel table.
-  `internal/ubluehelper`'s tests assert
-  this per command, and the e2e boundary test asserts the installed binary
+  The GUI no longer calls `pin` or `unpin` (#522 withdrew the Powerwash
+  calendar); the commands and their PolicyKit actions stay for a later
+  surface.
+  Channel switch, driver switch, pin, and unpin all run through the helper's
+  `switchImage`, which falls back to the fixed `bootc rollback` when a
+  composefs `bootc switch` refuses a target that is the rollback deployment
+  (unpin's usual case); `internal/installcheck`'s
+  `TestHelperImageSwitchesGoThroughSwitchImage` holds that wiring.
+  `internal/ubluehelper`'s tests assert the argv validation
+  per command, and the e2e boundary test asserts the installed binary
   rejects each shape. `cmd/chairlift-helper`'s dispatch carries a
   `default` arm that exits non-zero: a command the parser accepts and the
   switch does not handle would otherwise exit 0 having done nothing, which
@@ -418,6 +452,18 @@ An agent must not break these:
   always pass `pkexec.Command`. `internal/installcheck`'s
   `TestPkexecCommandHasOneOwner` parses every non-test file under `internal/`
   and `cmd/` and fails on any other occurrence; it takes no exemptions.
+  The same package owns what a dismissed authentication looks like
+  (`IsAuthDismissed`, `MessageIsAuthDismissed`: exit 126 or pkexec's
+  "Request dismissed"; 127 is a real failure) and the brief
+  `pkexec.CancelledMessage` ("Authentication cancelled") shown in its place.
+  `Window.ShowErrorToast` turns a message carrying that text into the brief
+  toast instead of a persistent raw-stderr error. A view whose failure toast
+  is fixed text without the helper's output — Download, early updates, and
+  the graphics-driver switch on Updates — never carries the text, so it
+  classifies the error itself through `pageview.PrivilegedFailureToast`; a
+  configured `sudo` maintenance script's runner captures no stderr, so
+  `actionmsg.MaintenanceScriptFailure` does the same. The view still restores
+  its control on that path.
 - **Privileged integration ships in the release archive.** The Homebrew cask
   installs the GUI in user scope and cannot place root-owned files, so the
   release archive also carries the fixed-path updex and ublue helpers, the
@@ -468,7 +514,7 @@ An agent must not break these:
   `internal/navigation` package. It also decides route visibility from static
   group configuration: omit a functional page when all of its builder-backed
   groups are disabled, always retain Help, and compact Alt+number over visible
-  pages. Mouse activation, window navigation actions, and the Recovery
+  pages. Mouse activation, window navigation actions, and the Powerwash
   detail's entry row and Back button must all call `Window.navigateToPage`,
   which applies the complete `navigation.Resolve` transition against
   `Window.navRoutes` (`navigation.VisibleRoutes`: the visible primaries plus
@@ -492,14 +538,14 @@ An agent must not break these:
   the caller cannot enter — disabled by configuration, floored out by
   capability, or never built — has no ancestor and resolves straight to Help
   with `ok=true`; `Resolve` rejects only a name the inventory does not declare
-  (#343). Recovery is the
+  (#343). Powerwash is the
   live detail: a content-stack child of Maintenance, registered in the
   window's built pages so `Resolve` can enter it, whose row stays selected
   while it is shown, with `Back` resolving the recorded primary through
   `navigateToPage` rather than naming Maintenance itself. **A route's configuration
   identity is never inferred from its display name.** Each route carries
   page-qualified `Refs`, not a group list under a route-owned page field,
-  because one destination can consume several namespaces at once: Recovery's
+  because one destination can consume several namespaces at once: Powerwash's
   rollback controls are gated by `bootc_updates_group` on `updates_page` while
   its reset controls are gated by `reset_group` on `maintenance_page`. Keep
   those refs page-qualified and keep them held to `config.SchemaPages()` /
@@ -536,6 +582,8 @@ An agent must not break these:
   conclusion screens. The window hides its sidebar during the flow and builds
   Back/Next/final-action/Dismiss controls once. Selection steps navigate through
   `Window.navigateToPage` and use existing widgets, gates, and operations;
+  each selection step then calls `UserHome.ScrollPageToTop`, because a page
+  keeps its scroll position and a step entered mid-page hid its own heading;
   bookends use the setup stack, not sidebar routes. Next and Back mutate no
   configuration. Repeated requests preserve progress; an empty inventory opens
   no flow. **Launch Bazaar App Store** records completion and version, launches
@@ -560,32 +608,36 @@ An agent must not break these:
   resolves through `homebrew.ResolveExecutable`, so the floor, `IsInstalled`,
   and the exec paths share one answer. Do not reintroduce a second resolution: no
   bare `"brew"` at an exec site, and no private copy of the fallback path.
+  Resolving brew is not enough for its children: a cask preflight runs tools
+  beside brew by bare name (`rpm2cpio | cpio` for `goose-linux`), and a
+  direct launch gives them no Homebrew on `$PATH`. `runBrewCommandAt` and
+  the Goose launch's `llmman launch` therefore run with
+  `homebrew.WithBrewPath`, which puts brew's directory first on `PATH`.
 - **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
   changing rows or counts. A live package success removes its row, decrements
   the count/badge, and refreshes; a failed refresh preserves that last known
   row/count state instead of replacing it with an invented zero.
-- **Homebrew application actions are typed and refresh-safe.** Search queries
-  both formula and cask namespaces and carries the result kind into
-  `brew install [--cask]`. Search and installed-package refreshes use separate
-  `actionstate.RefreshGate` generations; stale workers must not replace newer
-  rows. Confirmed installs use an `actionstate.Gate`, restore controls on
-  failure/dry-run, and refresh installed rows only after a live success.
+- **Apps is Homebrew-only and refresh-safe.** Its only runtime configuration
+  groups are `brew_bundles_group` and `brew_group`: app collections come first,
+  installed casks and explicitly requested formulae next, then the Brewfile
+  exporter (also gated by `brew_group`). No Flatpak inventory, external catalog
+  launcher, or package search belongs here. Installed-package refreshes use
+  `actionstate.RefreshGate` generations; stale workers must not replace newer rows.
   Installed formula/cask rows likewise confirm uninstall, formula rows confirm
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
+  Row gates come from the list's `actionstate.RowGates`, so a rebuild waits
+  while any row action (or its confirmation) is running instead of replacing
+  its busy controls with idle ones, and reloads once the last one settles.
+  ChairLift's own cask (`pageview.IsSelfCask`) stays listed without an
+  Uninstall button, so the page cannot delete the running application.
   Package-list export likewise holds an `actionstate.Gate`, shows a spinner
   and `Exporting…`, and restores the Export action after every outcome.
-  Flatpak uninstall on the same page keeps the same contract: it confirms
-  with an `AdwAlertDialog` worded by `pageview.FlatpakUninstallConfirmation`
-  (a system-scope removal says it affects every account), holds a per-row
-  `actionstate.Gate`, restores on failure or dry-run, and refreshes only after
-  a live success. `runFlatpakUninstall` is in `internal/installcheck`'s
-  `TestDestructiveActionsRequireConfirmation` inventory beside `runPowerwash`
-  and `runFactoryReset`; a destructive `run*` entry point added to
-  `internal/views` belongs in that inventory too.
+  A destructive `run*` entry point added to `internal/views` belongs in
+  `internal/installcheck`'s `TestDestructiveActionsRequireConfirmation` inventory.
 - **A visible retryable control must reset its action gate.**
   `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
   controls that become permanently unavailable after live success. Driver
@@ -596,26 +648,38 @@ An agent must not break these:
   snapshot.) Roll Back is
   different: `bootc rollback` toggles the selected deployment, so a successful
   live click completes its gate and leaves its button insensitive; only a
-  failure or preview resets it. `internal/views/actionstate`'s wiring tests
-  guard both lifetimes.
-  Both the dedicated bootc stage action and a live unified update run whose
-  operating-system source completed (`UserHome.OnUpdateFinished`) refresh
-  the badge and changelog's Compare references from the new status rather
-  than leaving Compare disabled until restart.
+  failure or preview resets it. A live success then swaps in a **Restart now**
+  button (when the helper supports `restart`), because a queued rollback is
+  not a staged deployment and the Updates page offers no restart for it
+  (#520). `internal/views/actionstate`'s wiring tests guard both lifetimes.
+  Dedicated staging, a live unified run whose operating-system source
+  completed, and a live channel or driver switch refresh the changelog's
+  Compare references from observed status (a switch also re-checks, so the
+  Operating system row offers Restart now).
+  `UserHome.OnUpdateFinished` refreshes the installed Homebrew inventory when
+  its source completed and Compare when the OS source completed — after a
+  unified run and after a live single-row update alike; the coordinator
+  snapshot remains the only badge owner.
   A changed pinned image pair clears old diff rows; an in-flight comparison
   for the old pair must not render after the refresh.
 - **Update inventory and badge have one state owner.** The pure
   `internal/updateflow.Coordinator` owns all source inventory and the badge;
-  the shell renders snapshots and manual update actions share its admission.
+  the shell renders snapshots and manual update actions — and the channel and
+  driver switches, which replace the OS — share its admission.
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
 - **Developer options remain discoverable without privileged support.** WSL
-  Mode defaults to nsl (persistent Linux machines inside systemd-vmspawn and
+  Mode defaults to nsl (an Ubuntu machine inside systemd-vmspawn and
   QEMU/KVM) with Lima (Ubuntu LTS VM) as an alternative backend, both with an
   explicit `/dev/kvm` permission floor; the fixed `kvm-enable` action grants
-  access to the invoking account, effective after a new login. The backend
+  access to the invoking account, effective after a new login. nsl's managed
+  machine is `ubuntu`, or the `debian` machine an older ChairLift created
+  (`devtools.ParseNSLList`); WSL Mode reports, starts, and probes that one,
+  creates `ubuntu` only when neither exists (never a second machine), and turns
+  off with `nsl stop <machine>` on that machine only, which keeps data
+  (`nsl shutdown` would stop the user's own machines too). The backend
   choice is not stored: `wsl_backend` sets the default, and the first read
-  follows an existing Lima machine when no nsl machine exists
+  follows an existing Lima machine when no managed nsl machine exists
   (`devtools.ResolveBackend`). A running machine stays stoppable even when
   the start prerequisites are unmet. Docker uses the
   fixed enable/disable actions for its system daemon and requires actual socket
@@ -623,8 +687,20 @@ An agent must not break these:
   helper actions leave the affected switches insensitive with an explanation
   rather than hiding the options. IDE and terminal-editor installs are
   individually selected, including one JetBrains Toolbox entry. Gaming selects
-  typed application/runtime refs, preserves system-scope installations, and
-  keeps partial failures visible.
+  typed application/runtime refs, installs missing ones system-wide, and
+  keeps partial failures visible. Its inventory reads both scopes, so a copy
+  an earlier release installed per-user counts as present and is not
+  reinstalled. Remove Selected uninstalls each *selected* component from
+  exactly the scopes it is observed in — the user copy with `--user`, the
+  system copy with `--system` — and nothing unselected; its confirmation says
+  system-wide copies go for every account. A system copy the OS image
+  declares it ships (`/usr/share/flatpak/preinstall.d`,
+  `/etc/flatpak/preinstall.d`, or
+  `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile` — Flatseal on
+  Bluefin and Dakota) is left in place and reported as such, so undoing
+  gaming mode never removes a distro default for every account; an
+  unreadable declaration fails the removal closed. A component with a
+  removable copy left is a failure, not a removal.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget
@@ -640,14 +716,26 @@ An agent must not break these:
   current page inventory: validate its four historical groups before moving
   `bootc_status_group` and `channel_group` into Updates. Current non-null
   fields win; retired information/health groups have no runtime effect.
+  The retired `maintenance_page` groups (`maintenance_brew_group`,
+  `maintenance_flatpak_group`, `maintenance_optimization_group`),
+  `updates_page` groups (`update_all_group`, `sysupdate_updates_group`), and
+  `features_page` groups (`ai_group` with its retired `ai_images`/`ai_model`
+  fields, `troubleshooting_group`) carried by pre-26.09 Bluefin releases
+  (v0.12.x) and removed by the 26.09-alpha Control Center reorganisation, and
+  the `applications_page` groups retired by Homebrew-only Apps
+  (`applications_installed_group`, `flatpak_user_group`,
+  `flatpak_system_group`, `brew_search_group`, still in projectbluefin/common's
+  shipped `config.yml`), are accepted by the same per-page rule, validated for shape/typo/sudo, and
+  stripped prior to runtime decoding so they never re-enable removed behavior.
+  `troubleshooting_group` first supplies omitted/null `help_page` fields,
+  then moves on to `agents_page` with the old Help address.
   This must not add a navigable page or relax unknown-name or sudo validation.
 - **CI action authority.** Third-party `.github/workflows/` actions use full
   40-character commit SHAs with reviewed version comments. Local `./` actions
   are exempt. Shared `projectbluefin/actions` production interfaces use managed
-  `@v1`; candidate branches are allowed only for the secret-free, entirely
-  read-only issue-policy preview interface. Native review, actual main CI and
-  released-source guards still precede writes. The installcheck scan enforces
-  these boundaries across every workflow.
+  `@v1`. Native review, actual main CI and released-source guards still
+  precede writes. The installcheck scan enforces these boundaries across every
+  workflow.
 - **The merge queue gates on one context, and that context waits for every
   other job.** `main` merges through a merge queue, which validates a
   candidate on a `gh-readonly-queue/main/pr-<n>-<sha>` ref — a `merge_group`
@@ -662,13 +750,14 @@ An agent must not break these:
   `internal/installcheck`'s `TestMergeQueueGateWaitsForEveryTestJob` fails
   otherwise — and renaming the job means editing the ruleset in the same
   change.
-- **Every privileged dispatch point journals, unconditionally.** `internal/ublue.runHelper`
-  and `internal/updex.runHelper` call `journal.Record` on every invocation, dry-run
-  or live, before doing anything else, and record the execution outcome
-  (`succeeded`, `refused`, `failed`, `timed-out`, or `cancelled`) and any
-  concrete privileged command derived inside the helper (`executed`) after the
-  command returns. Dry-run remains recorded as suppressed with no outcome
-  record. This is not a `chairlift_e2e` stub: with
+- **Every privileged dispatch point journals, unconditionally.**
+  `internal/ublue.runHelper` and `internal/updex.runHelper` delegate to
+  `internal/helperexec.Run`, which records every invocation before execution
+  and then records its live outcome (`succeeded`, `refused`, `failed`,
+  `timed-out`, or `cancelled`). The `executed` argv is helper-reported evidence
+  parsed from the fixed helper's output, not independent execution proof.
+  Dry-run records a suppressed invocation with no outcome record.
+  This is not a `chairlift_e2e` stub: with
   `$CHAIRLIFT_ACTION_JOURNAL` unset — every ordinary run — it costs one atomic
   load and does nothing else, so it ships in every released binary. Do not gate
   a new privileged call behind a helper that bypasses `runHelper`; the journal's
@@ -687,9 +776,11 @@ An agent must not break these:
   `openDeveloperOnboarding` uses, behind
   `actionmsg.DeveloperFeedSetupPlan(dryRun, enabled, succeeded, …)`: a
   `--dry-run` preview, a disable, a page restore, and a failed helper call all
-  produce an empty plan and start no worker. Everything is user-scope — a
-  Flatpak in the invoking account and one file under `~/.local/share/chairlift`
-  — so no `pkexec` route is involved, Pulp's sandboxed store is never written
+  produce an empty plan and start no worker. Pulp is a system-scope Flatpak
+  from the system Flathub remote (already present in either scope means no
+  install), authorized by Flatpak's own PolicyKit as above, and the catalog is
+  one file under `~/.local/share/chairlift` — so no `pkexec` route is
+  involved, Pulp's sandboxed store is never written
   to, and the feedback never claims a subscription was imported. The two
   optional outcomes are reported separately from the permission change, which
   has already succeeded: a failed install is a failed install, it rolls nothing
@@ -698,23 +789,63 @@ An agent must not break these:
   user imported. The worker reads its plan from config on the main thread
   before it starts, is admitted one at a time by `developerFeedGate`, and
   reaches the toast only through `sgtk.RunOnMainThread` behind a nil guard.
-- **Enhanced Troubleshooting reads state, it does not infer it.**
-  `internal/troubleshoot` installs `linux-mcp-server` and the Goose desktop
-  cask through Homebrew, then seeds Common's premade
-  `/usr/share/ublue-os/goose/config.yaml` only when the user's config is absent.
-  Setup repairs only recognized diagnostic nodes, including a missing entry,
-  empty fixed-tool policy or stale executable. Explicit unsafe policies and
-  shared anchor mappings are refused. Other extensions, model, provider and
-  unknown settings are preserved; usable existing configuration is unchanged.
-  Secure atomic writes never replace the whole file with a preset or choose a
-  provider for the user. Preview inspects the same policy and writes nothing.
-  Both `linux-mcp-server` and legacy `linux-tools` entries are recognized;
-  readiness requires enabled stdio, explicit FIXED tools, SSH-key search off,
-  and a command that exists. Keep the stable prefix/bin path, not a versioned
-  Cellar target. No pkexec route is involved, and dry-run writes nothing.
-  Keep `brew tap` in Homebrew's `stateChangingCommands` so previews never tap
-  for real. Provider subtitles contain user-controlled text: keep the row's
-  `use-markup` false rather than interpreting provider names as Pango markup.
+- **Troubleshooting runs Goose in ChairLift's own profile, never the user's.**
+  The Agents page's **Troubleshooting** group (`agents_page`
+  `troubleshooting_group`, floored on Homebrew; `internal/views/troubleshoot.go`)
+  holds the Goose row and the "Show Ask Bluefin in menu" switch; the Ask
+  Bluefin menu entry and `--ask-bluefin` are paths into it, not its name. It is the
+  one Goose surface: Help no longer has an Troubleshooting group,
+  and `help_page.troubleshooting_group` is still accepted and migrated to
+  `agents_page` (`internal/config/legacy.go` `legacyGroups`). `internal/troubleshoot`
+  is the engine. A session runs in a dedicated profile under
+  `$XDG_DATA_HOME/chairlift/troubleshooting` (`troubleshoot.Profile`):
+  `GOOSE_PATH_ROOT` points Goose's config, data, and state at `goose/`, and
+  `XDG_CONFIG_HOME` points the desktop app's Electron profile and
+  single-instance lock at `desktop/`, where the user's `mimeapps.list` and
+  `dconf` are symlinked so links and settings still behave. `~/.config/goose`
+  is never read or written, and nothing reads
+  `/usr/share/ublue-os/goose/config.yaml`. `agentmode.Launch` rewrites the
+  profile atomically immediately before every launch (`Profile.Write`,
+  dry-run gated): `RenderConfig` enables exactly `linux-tools` — the
+  absolute `linux-mcp-server` with `--toolset FIXED --host-mode LOCAL_ONLY
+  --no-search-for-ssh-key` — and `bluefin-knowledge`, the streamable-HTTP
+  `https://mcp.projectbluefin.io/mcp` limited to `search_knowledge`; every
+  other extension already in the profile file is carried over disabled, and
+  Goose 1.53's platform extensions are written disabled; `hints.md` becomes
+  the profile's `.goosehints`. It then runs `llmman launch goose-desktop
+  --model bluefin-active` (`troubleshoot.Command`) with those two variables
+  and `homebrew.WithBrewPath`; llmman hands Goose its provider through the
+  environment, so no provider, model, or key is written by anyone. Readiness
+  (`internal/agentmode`) is therefore the packages, not a file:
+  `linux-mcp-server` and `goose-desktop` resolve to absolute paths, the host
+  is x86_64 (the only architecture Goose Desktop is published for), and
+  Agent Mode's daemon answers with a selected model. Packages are judged
+  first, because a missing package is the one state the row resolves
+  itself: its button becomes **Set Up**, which runs `troubleshoot.Setup`
+  (tap `ublue-os/tap` only when something is missing, `linux-mcp-server`,
+  then `cpio` before the `goose-linux` cask, whose preflight pipes the RPM
+  through a `cpio` Bluefin does not ship; `ErrUnsupported` off x86_64).
+  Each `ublue-os/tap` package is trusted by its qualified name right before
+  its install (`homebrew.TrustFormula`/`TrustCask`, only when brew reports
+  the tap untrusted) — never the tap wholesale.
+  When Goose is already running in the profile (its `SingletonLock` names a
+  live process on this host and was written during this boot, so a reused
+  pid after a reboot does not count), `agentmode.Launch` opens Goose the ordinary
+  way instead — `troubleshoot.ReopenCommand` starts `goose-desktop` in the
+  same profile and Goose's lock hands it to the running session, so no
+  second Goose starts; llmman would refuse a launch while that lock is held.
+  GNOME's focus-stealing prevention may answer with a "Goose is ready"
+  notification rather than raising the window (observed in the lab on a
+  minimized window); nothing passes an activation token. A fresh launch
+  holds the row busy until Goose holds that lock, exits, or 15 seconds pass,
+  and the toast says whether it started or handed off
+  (`agentmode.LaunchResult`, `pageview.GooseLaunchToast`), never that a
+  window opened: a Goose that cannot draw (#544) still holds the profile.
+  Both launches send Goose's output to ChairLift's stderr. Copy never
+  claims a session's questions stay on this computer: knowledge searches go
+  online. No pkexec route is involved, every install is user-scope Homebrew,
+  and dry-run writes and installs nothing. Keep `brew tap` in Homebrew's
+  `stateChangingCommands` so previews never tap for real.
 - **The staged-update changelog never fetches on its own.** `internal/sbom`
   is pure — parse, diff, version ordering — with the registry round-trip
   behind the `FetchFunc` seam, so no gated test makes an outbound request
@@ -728,37 +859,30 @@ An agent must not break these:
   parse renders a blank changelog with nothing in the chain reporting a
   failure, which is a bug finupdate shipped. The diff runs only when the user
   presses Compare, because each side is tens of megabytes.
-- **The dated-build catalog reads the registry, and reads it read-only.**
-  `internal/registrytags` is the leaf package behind the rollback calendar
-  (ADR-0013): `Client.Tags` lists a repository through the registry's
-  `Link: rel="next"` pagination, `ParseBuild` reads the day out of the tag
-  name, and `Client.Tag` resolves one tag to its digest and its
-  `org.opencontainers.image.created` timestamp. Every request goes through the
-  `Client.HTTP` transport, the same seam `internal/sbom` uses, so no gate in
-  `make ci` makes an outbound request — its tests drive a loopback `httptest`
-  registry that models GHCR's pagination, its 404 `MANIFEST_UNKNOWN`, and the
-  fact that the response's `Content-Type` header, not the body's `mediaType`
-  field, is the media-type authority (GHCR omits `mediaType` on some dated-tag
-  manifests — verified 2026-09-22). Two rules keep it safe to grow: no
-  registry-supplied string may become a privileged switch target. Pin and
-  unpin call only `Client.Tag` to verify targets already derived from the
-  descriptor, channel table, and validated day (ADR-0017), discarding the
-  response data. The catalog is never baked, cached to disk, or served stale,
-  because a catalog that is not the registry's is the failure this design
-  exists to avoid. A failed read is returned to the caller, never cached and
-  never replaced by a previous answer. `Catalog` caches in process only,
-  bounded by `MaxEntries` and expiring at `TTL`, and its callers run off the
-  GTK main thread, so it must stay safe for concurrent readers. `Catalog`'s
-  one caller is the Recovery page's **Published versions** row
-  (`internal/views/versions.go`), which reads the registry when the user presses
-  Check, lists one row per day of the running stream
-  (`pageview.PublishedVersions` drops other streams' aliases), removes the
-  last list when a read fails rather than leaving it standing as current,
-  and offers a confirmed Pin action for each build that stages a switch to
-  that dated tag (`chairlift-helper pin <YYYYMMDD>`). When booted on a dated
-  tag, Recovery offers **Return to stream** (`chairlift-helper unpin`).
-  `internal/bootc.CheckUpdate` also calls `Client.Tag` directly on composefs
-  hosts (below); it only compares digests.
+- **The registry tag reader is read-only, and the GUI offers no calendar.**
+  `internal/registrytags` (ADR-0013) lists a repository through the
+  registry's `Link: rel="next"` pagination (`Client.Tags`), reads the day out
+  of a tag name (`ParseBuild`), and resolves one tag to its digest and its
+  `org.opencontainers.image.created` timestamp (`Client.Tag`). Every request
+  goes through the `Client.HTTP` transport, the same seam `internal/sbom`
+  uses, so no gate in `make ci` makes an outbound request — its tests drive a
+  loopback `httptest` registry that models GHCR's pagination, its 404
+  `MANIFEST_UNKNOWN`, and the fact that the response's `Content-Type` header,
+  not the body's `mediaType` field, is the media-type authority (GHCR omits
+  `mediaType` on some dated-tag manifests — verified 2026-09-22). No
+  registry-supplied string may become a privileged switch target: the
+  helper's pin and unpin call only `Client.Tag` to verify targets already
+  derived from the descriptor, channel table, and validated day (ADR-0017),
+  discarding the response data. A failed read is returned to the caller,
+  never cached and never replaced by a previous answer. The Powerwash
+  page's published-versions calendar (Published versions with per-day Pin,
+  and Return to stream) is withdrawn (#522): the dated tags it listed exist
+  only for the deprecated `latest` stream, so Powerwash offers Roll Back
+  only, and the in-process `Catalog` cache and the `ublue.Pin`/`ublue.Unpin`
+  client wrappers went with it. The helper's `pin`/`unpin` commands and their
+  PolicyKit actions remain. The GUI's one remaining registry reader is
+  `internal/bootc.CheckUpdate`, which calls `Client.Tag` on composefs hosts
+  (below) and only compares digests.
 - **Reading OS state never needs a password.** bootc 1.16 refuses
   `bootc status` and `bootc upgrade --check` without root, which left the
   operating-system source "not available" on every Dakota host (#381).
@@ -770,27 +894,39 @@ An agent must not break these:
   route for reads: a prompt on every launch is the failure this removes, and
   staging keeps its existing fixed `bootc-update-stage` path.
 - **Agent Mode is local, unprivileged, and reports observed readiness.**
-  `agents_page` has one Agent Mode switch, visible model and preset controls,
-  the local API address, a Goose Desktop row with a Launch action, and a
-  "Show Ask Bluefin in menu" preference. Unready model and launch controls stay
-  visible and insensitive instead of disappearing. Peer/offload controls and
-  their backend are removed; this surface manages this computer only.
+  `agents_page` has one Agent Mode switch, a visible Active Model row that
+  reads the `bluefin-active` alias back from llmman, and a "Manage Models"
+  row that opens llmman's own models page (`aistack.WebUIURL`) while Agent
+  Mode is ready, plus the local API address; the Troubleshooting group below
+  it is the invariant above. Unready model and launch controls stay visible
+  and insensitive instead of disappearing. Model selection itself happens in
+  llmman's own UI (#568).
+  Peer/offload controls and their backend are removed; this surface manages
+  this computer only.
   `internal/aistack` owns three artifacts: the generated installation Brewfile,
   `~/.config/systemd/user/chairlift-llmman.service`, and
   `~/.config/environment.d/10-chairlift-llmman.conf`. The fragment contains
   only `OLLAMA_HOST=127.0.0.1:17434`; no OpenAI key or endpoint is exported.
-  llmman owns models and engine selection; Homebrew owns its binary.
+  llmman owns models and engine selection; Homebrew owns its binary. When
+  llmman is missing, installing it taps `llmmanorg/tap` and trusts exactly
+  `brew trust --formula llmmanorg/tap/llmman` before the bundle loads it,
+  when `brew tap-info --json` reports the tap untrusted (Homebrew before 6
+  has no tap trust and no `brew trust`, so nothing runs there):
+  Homebrew refuses a formula from an untrusted tap, and turning Agent Mode
+  on is consent to that one formula, not the tap.
   The unit uses the absolute resolved executable, binds loopback, and sets
   `LLMMAN_SHELL=off`, `LLMMAN_NOHISTORY=1`, and empty `LLMMAN_PEERS=` to
   override any legacy aggregation settings. Wildcard CORS is forbidden.
   Enable fetches the engine before writing the unit and readiness requires a
   bounded successful JSON-object response from `/llmman/node`, never unit
-  presence or `systemctl is-active` alone. Toggle and preset mutations share
+  presence or `systemctl is-active` alone. Toggle and readiness reads share
   one action gate; generation checks reject stale readiness and alias reads.
-  Selecting a model saves its canonical `hf.co/...` alias target, restarts the
-  owned user unit because llmman reads aliases only at startup, and waits for
-  readiness before confirming selection. A missing alias means no selected
-  model, not an error or an invented default.
+  Model selection happens in llmman's own UI, which ChairLift only links to
+  via the Manage Models row at `http://127.0.0.1:17434/#/models` (#568).
+  ChairLift reads the `bluefin-active` alias back via `llmman config get`,
+  never writes it, so the Agents page is a viewer of the user's llmman
+  configuration rather than a second writer to it. A missing alias means no
+  selected model, not an error or an invented default.
   Startup reconciles only an existing owned unit against `RenderUnit` plus the
   exact live systemd `InvocationID`, committed as a unit comment only after
   successful reload/restart. An already-written file is not proof the daemon
@@ -807,54 +943,43 @@ An agent must not break these:
   cannot prove the service inactive preserves both files and the management
   handle. There is no pkexec route, Homebrew service, or container stack.
   Goose Desktop (`ublue-os/tap/goose-linux`) is the Agent Mode desktop GUI,
-  launched via `llmman launch goose-desktop --model <active-model>` without
-  persisting provider or model into Goose's configuration. It requires the
-  hardened `linux-mcp-server` extension verified on disk: stdio transport,
-  enabled, real executable, literal `--toolset FIXED`, and no SSH defaults.
+  launched by `agentmode.Launch` as described under Troubleshooting above.
   `chairlift --ask-bluefin` dispatches to Goose Desktop when all prerequisites
-  are met, or presents Control Center on the Agents page naming the missing
-  prerequisite, with identical behavior for cold and running instances.
-  "Show Ask Bluefin in menu" modifies only the distro-owned Ask Bluefin entry
-  in GNOME Custom Command Menu via user-layer override/reset.
+  are met — the launch, which writes the profile, runs off the GTK main
+  thread — or presents Control Center on the Agents page naming the missing
+  prerequisite, with identical behavior for
+  cold and running instances.
 - **Contribute to Bluefin launches the contributor appliance in a terminal through `ujust`.**
-  `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`) checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (linking `https://github.com/projectbluefin/contribute#configuration` for missing registration) and leaves the button insensitive. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Start`, reporting failures asynchronously. Previews under `--dry-run` log only and launch nothing.
-- **Printer applications are rootless quadlets, locked until their
-  administration is authenticated, and never a false enabled indicator.**
+  `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`), at build and again each time the group is shown (one `ConnectMap` handler, generation-guarded and passive while a session holds the gate), checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (for missing registration, a **Registration Guide** button opens `https://github.com/projectbluefin/contribute#configuration`; the URL is never spelled out as unclickable subtitle text) and leaves the button insensitive; a requirement fixed outside ChairLift is picked up the next time Agents is shown. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Run`, reporting failures asynchronously; when the session ends or fails to start, the button returns through a fresh preflight rather than a blind re-enable. Previews under `--dry-run` log only and launch nothing.
+- **Printer applications are rootless, loopback-only quadlets on a moving
+  `:stable` tag, and never a false enabled indicator.**
   `internal/printerapp` writes one `.container` quadlet per driver family
   under `~/.config/containers/systemd` and drives it with `systemctl --user`
   in the invoking account; nothing here is privileged, and no `pkexec` route,
-  helper subcommand, or PolicyKit action may be added for it. Each family is
-  a digest-pinned multi-architecture index from the projectbluefin
-  `*-printer-app` repositories, on host networking so IPP and DNS-SD reach
-  the LAN; a pin bump needs the cosign/attestation verification #393 asks for
-  first. ADR-0016 is the enable condition: an application may be enabled only
-  when its web administration is authenticated or absent, and
-  `printerapp.CanEnable` is that condition as a predicate — `Enable` calls
-  it before its dry-run branch, and the Features page's **Printers** group
-  (`printers_group`, floored on the `Podman` capability, i.e. `podman` on
-  `$PATH`; `internal/views/printers_page.go`) renders a refused family as an
-  actionable, non-enabled state: the row is shown, the switch is off *and*
-  insensitive, and the subtitle says the administration page cannot be
-  secured until the image accepts an administrator credential. No published
-  image accepts one yet (ghostscript-printer-app#65, hplip-printer-app#51,
-  gutenprint-printer-app#57), so today every family is locked. The contract
-  those issues specify — the entrypoint reading `PRINTER_APP_AUTH_SERVICE`,
-  `PRINTER_APP_ADMIN_GROUP`, and `PRINTER_APP_SERVER_OPTIONS` — may be named
-  in comments and docs as what will be wired, but no ChairLift code reads or
-  writes those names until an image ships them; and do not turn the lock
-  into a hidden group or a switch that fails on every flip. Readiness and
-  failure classification on the row come from
+  helper subcommand, or PolicyKit action may be added for it. Each family runs
+  `ghcr.io/projectbluefin/<id>-printer-app:stable` with `AutoUpdate=registry`,
+  and `Enable` runs `systemctl --user enable --now podman-auto-update.timer`
+  after a successful start, rolling a fresh install back if either fails.
+  ADR-0020 is the network boundary: PAPPL's web administration is
+  unauthenticated, so the unit publishes only `127.0.0.1:<port>:<port>` and
+  must never use `Network=host` or a non-loopback `PublishPort`. IPP and the
+  web page are reachable only from this computer; LAN printing and DNS-SD do
+  not work, and the copy must say so rather than claim network sharing. The
+  Features page's **Printers** group (`printers_group`, floored on the
+  `Podman` capability, i.e. `podman` on `$PATH`;
+  `internal/views/printers_page.go`) shows one switch per family. Readiness
+  and failure classification on the row come from
   `printerapp.Observe`/`ProbeActive`/`ProbeDiagnostics`/`Diagnose` —
   `systemctl --user is-active`'s state *word*, systemd Result/SubState
   properties, journal logs, and container image presence probes, off the main
-  thread — never from the unit file's presence alone, and a present unit is
-  never locked, so turning a family off always stays possible. Failure modes
-  — missing Podman, rootless device access failure, unavailable image, plugin
-  verification failure, and service crash — are classified as actionable
-  non-enabled or failed states, never a false enabled indicator. A failed
-  disable keeps the unit because the service could not be proven stopped.
-  Hardware behaviour — printing through a device, USB passthrough, mDNS
-  coexistence — is unverified and unwired; say so rather than claim it.
+  thread — never from the unit file's presence alone, so turning a family off
+  always stays possible. Failure modes — missing Podman, rootless device
+  access failure, unavailable image, plugin verification failure, and service
+  crash — are classified as actionable non-enabled or failed states, never a
+  false enabled indicator. A failed disable keeps the unit because the service
+  could not be proven stopped. Hardware behaviour — printing through a
+  device, USB passthrough — is unverified and unwired; say so rather than
+  claim it.
 - **Livery remains one primary with independent task groups.** Profile
   Picture, App Launcher Icon, supported Top Bar Icon, and Files Icon keep their
   existing `livery_page` config keys and one built control set. Never add a
@@ -1021,7 +1146,13 @@ An agent must not break these:
   the dock's fetch is retried in-process (`rotateRetryDelays`) while the
   failure still looks like a network that is not up yet: a user manager cannot
   order against `network-online.target`, so a login that beats connectivity
-  would otherwise rotate nothing and say so only in the journal. Only the two foundation sections rotate; the app-grid mark
+  would otherwise rotate nothing and say so only in the journal. The unit's
+  `ExecStart` must survive upgrades: `os.Executable` resolves a cask install
+  to `<prefix>/Caskroom/chairlift/<version>/chairlift`, which the next
+  `brew upgrade` deletes, so `livery.unitExecutable` names the prefix's
+  `bin/` link instead when it resolves to the same file, deriving the prefix
+  from the executable's path rather than `$PATH` (#491).
+  Only the two foundation sections rotate; the app-grid mark
   is the user's own brand and is set once. ChairLift ships GSettings schemas:
   `io.projectbluefin.chairlift.livery` (appearance preferences),
   `io.projectbluefin.chairlift.updates` (user source toggles for updates), and
@@ -1044,7 +1175,11 @@ An agent must not break these:
   `liveryState` — seeded with the *resolved* combo ids, since an empty stored
   value resolves to index 0 and maps back to `cncf` — before touching a
   widget, holds `liverySuppress` across the restore, and arms `liveryLoaded`
-  only at the end, including on the failure path. `internal/livery.Fetch` is
+  only at the end, including on the failure path. Its one load-time write is
+  `livery.ReconcileRotationUnit`, which rewrites an existing rotation unit
+  only when its `ExecStart` names a versioned Caskroom binary; it never
+  creates a unit, touches a setting, or repoints any other path, and it is
+  dry-run gated like every install. `internal/livery.Fetch` is
   the page's single network round trip, following `internal/sbom`'s shape so
   the package's tests point it at a loopback `httptest` server and no gated
   test makes an outbound request; slugs are validated against a closed
@@ -1072,17 +1207,19 @@ An agent must not break these:
 - **Powerwash and Factory Reset are opt-in and always confirmed.**
   `reset_group` (maintenance_page) ships `enabled: false` in config.yml, the
   same default as `maintenance_cleanup_group`, because both actions are
-  irreversible. Its group is titled "Recovery" rather than anything
+  irreversible. Its group is titled "Powerwash" rather than anything
   resembling cleanup, so a person hunting for disk space does not press it.
   Neither may run without the `AdwAlertDialog` confirmation in
   `internal/views/reset.go` first — that dialog's title and body come from
   `pageview.PowerwashConfirmation`/`FactoryResetConfirmation`, which is where
   the `--experimental` disclosure for Factory Reset's `bootc install reset`
   argv lives; do not move that text inline where it stops being tested.
-  Powerwash needs no privilege (both steps run in the invoking account, like
-  gaming mode); Factory Reset is the new `factory-reset` action on
+  Powerwash needs no privilege (both steps run in the invoking account);
+  Factory Reset is the new `factory-reset` action on
   `chairlift-helper` and takes no argument, since it has exactly one
-  target — the image already booted.
+  target — the image already booted. It is not offered on a composefs host
+  (`bootc.ComposefsBooted`): `bootc install reset` needs OSTree storage and
+  fails there after authentication.
 - **The product name and the code name are different strings, and only one of
   them has an owner.** The application ships in Bluefin as **Control Center**;
   ChairLift remains the code name for the repository, the Go module, the
@@ -1120,23 +1257,26 @@ An agent must not break these:
 
 ## Documentation
 
-All documentation lives in the `docs/` tree, in frostyard/core's
-four-category shape (core ADR-0025; the former `yeti/` AI-docs directory is
-folded in). `docs/README.md` carries the category table, the index of every
-doc, and the conventions — new docs start from their category's
-`TEMPLATE.md`, and adding a doc means indexing it there:
+Documentation lives in `docs/`, with the local four-category layout from
+frostyard/core ADR-0025. `docs/README.md` is the contributor index. Follow
+Project Bluefin Common's task routing, canonical-source links, and progressive
+disclosure; keep ChairLift's product and safety contracts local. New docs start
+from their category's `TEMPLATE.md` and are indexed in `docs/README.md`:
 
 - `docs/adr/` — why: repo-local decisions, immutable once accepted. Org-wide
   decisions go to frostyard/core instead, per
   [docs/org-adrs.md](docs/org-adrs.md).
-- `docs/design/` — how it fits together: living architecture docs. The entry
-  point is `docs/design/overview.md` (formerly `yeti/OVERVIEW.md`); read it
-  and `docs/design/package-managers.md` (formerly `yeti/package-managers.md`)
-  for architecture, patterns, and decision rationale before working. Write
-  them to be maximally useful to an AI agent understanding the codebase —
-  detailed architecture and rationale rather than user-facing guides.
-- `docs/specs/` — exact contracts, changed only alongside implementing code.
-- `docs/plans/` — phased plans with "Done when" outcomes.
+- `docs/design/` — how it fits together: living architecture docs. Read
+  `docs/design/overview.md` and `docs/design/package-managers.md` before
+  architecture or provider changes. Keep current ownership, invariants, and
+  failure modes here; link decision rationale rather than repeating it.
+- `docs/specs/` — exact implemented contracts; reconcile stale descriptions
+  against the code, and change behavior only alongside its implementation.
+- `docs/plans/` — active implementation plans with an owning issue, explicit
+  status, and executable "Done when" outcomes. Remove completed or superseded
+  plans after their contracts and lessons are in the living docs and skills.
+  Git history preserves retired plans; speculative ideas belong in issues,
+  not a second backlog in the documentation tree.
 
 After any change to source code, update relevant documentation in `AGENTS.md`
 and `docs/`. Only humans edit `README.md`; AI agents must never modify or rewrite
@@ -1145,6 +1285,14 @@ documentation. For behavior, configuration, dependency, or install-layout
 changes, also follow `docs/documentation-consistency.md`; current-state claims
 must be checked against source/config/go.mod rather than copied from historical
 plans.
+
+Documentation cleanup must inspect every inbound link before removing an
+artifact. Preserve accepted ADR decisions; repair a retired-plan reference
+with a revision-pinned history link, not a rewritten decision. Verify local
+links and cited source paths after reconciliation. ChairLift's issues and pull
+requests are driven by Prow ([`.github/workflows/prow.yml`](.github/workflows/prow.yml),
+approvers in [`OWNERS`](OWNERS)). Link Common's workflow page; do not copy it or
+bypass native review/merge controls.
 
 **.knowledge/ directory** is the repository's cross-session knowledge index.
 Read `.knowledge/README.md` before working so prior corrections, handoffs,
@@ -1167,9 +1315,8 @@ Before planning, implementing, or reviewing a change, read:
 2. [`docs/SKILL.md`](docs/SKILL.md), then the matching package in
    [`docs/skills/`](docs/skills/) selected by
    [`docs/skills/index.md`](docs/skills/index.md).
-3. Common's linked factory-onboarding and agentic-model documentation when work
-   crosses repositories, uses Hive, affects labels, or needs a human decision
-   gate.
+3. Common's linked agentic-model documentation when work crosses
+   repositories, uses Hive, affects labels, or needs a human decision gate.
 
 The former `docs/agents/skills/*.md` paths are compatibility aliases only; the
 canonical agent knowledge base is `docs/skills/`.
@@ -1181,19 +1328,17 @@ the linked sidecar authority for cross-repository factory process; do not copy
 its policy into this file. For local navigation, start at
 [`docs/factory/README.md`](docs/factory/README.md).
 
-For ChairLift intake, classification, maintainer acceptance, assignment, Prow
-commands, label migration, release delivery or reporter verification, read
-[`docs/skills/issue-lifecycle/SKILL.md`](docs/skills/issue-lifecycle/SKILL.md)
-and the canonical [`.github/issue-policy.json`](.github/issue-policy.json).
-Product reports stay open through actual delivery and reporter verification;
-link unresolved reports with `Refs`, not automatic merge-closing keywords.
+Issues and pull requests are driven by Prow: `/kind`, `/triage accepted`,
+`/lgtm`, `/approve` and the other commands, with approvers from
+[`OWNERS`](OWNERS) and labels from the org config in `projectbluefin/.project`.
+Read [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md)
+before changing labels or state. `OWNERS` is generated; do not edit it here.
 
 | Topic | Common source |
 | --- | --- |
-| Factory onboarding | [`docs/skills/factory-onboarding.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md) |
 | Agentic operating model | [`docs/factory/agentic-model.md`](https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md) |
 | Human decision gates | [`docs/skills/human-gates.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md) |
-| Issue lifecycle and labels | [`docs/skills/label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md) |
+| Issues, PRs, labels and Prow commands | [`docs/skills/label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md) |
 | Skill improvement | [`docs/skills/skill-improvement.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/skill-improvement.md) |
 | Commit attribution | [`docs/contributing/style-guide.md`](https://github.com/projectbluefin/common/blob/main/docs/contributing/style-guide.md) and Common's `AGENTS.md` PR rules |
 | Merge queue mechanics (local) | [`docs/skills/factory-onboarding/SKILL.md`](docs/skills/factory-onboarding/SKILL.md) |

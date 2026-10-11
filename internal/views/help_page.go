@@ -1,14 +1,17 @@
 package views
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"os/user"
 	"strings"
+	"time"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
+	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/deskenv"
 	"github.com/projectbluefin/chairlift/internal/gpu"
@@ -27,15 +30,6 @@ func (uh *UserHome) buildHelpPage() {
 	page := uh.helpPrefsPage
 	if page == nil {
 		return
-	}
-
-	// Enhanced Troubleshooting leads Help (issue #249): the one task-oriented
-	// destination for help and support, with the AI assistant first. It keeps
-	// the Features-page behavior — same Homebrew/config gate and shared
-	// runner — but now answers "where do I get help?" directly. It is built
-	// before resources so the assistant is the first thing a user sees.
-	if uh.groupEnabled("help_page", "troubleshooting_group") {
-		uh.buildTroubleshootGroup(page)
 	}
 
 	// Help Resources group
@@ -84,7 +78,7 @@ func (uh *UserHome) buildHelpPage() {
 		group.SetTitle("Feature availability")
 		expander := adw.NewExpanderRow()
 		expander.SetTitle("Why is something missing?")
-		expander.SetSubtitle("Features this computer cannot run right now")
+		expander.SetSubtitle("Features this computer can't use right now.")
 		for _, r := range rows {
 			row := adw.NewActionRow()
 			row.SetTitle(r.Title)
@@ -99,7 +93,7 @@ func (uh *UserHome) buildHelpPage() {
 func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Diagnostics")
-	group.SetDescription("System information to include when asking for help")
+	group.SetDescription("Share these details when you ask for help.")
 
 	row := adw.NewActionRow()
 	diagRow := pageview.SystemDiagnosticsRow()
@@ -124,6 +118,7 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 				diag.OSVersion = info.EffectiveTag()
 				diag.ImageRef = info.CleanRef()
 			}
+			diag.SystemVersion, diag.Digest = bootedBuild()
 			if data, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
 				diag.Kernel = strings.TrimSpace(string(data))
 			}
@@ -168,6 +163,29 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 	page.Add(group)
 }
 
+// diagnosticsStatusTimeout bounds the status read behind Copy, which holds
+// the button insensitive until it returns.
+const diagnosticsStatusTimeout = 10 * time.Second
+
+// bootedBuild returns the booted deployment's version and full image digest
+// through the same unprivileged bootc.GetStatus read the Updates page's
+// Details row uses, or empty strings on a host with no readable deployment.
+// It never prompts: no pkexec route is involved. Call it off the main thread.
+func bootedBuild() (version, digest string) {
+	if !bootc.IsBootcBootedCached() {
+		return "", ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), diagnosticsStatusTimeout)
+	defer cancel()
+	status, err := bootc.GetStatus(ctx)
+	if err != nil {
+		log.Printf("views: reading the booted build for diagnostics failed: %v", err)
+		return "", ""
+	}
+	booted := status.Status.Booted
+	return booted.Version(), booted.Digest()
+}
+
 // openURL opens a URL in the default browser using xdg-open
 func (uh *UserHome) openURL(url string) {
 	log.Printf("Opening URL: %s", url)
@@ -181,11 +199,11 @@ func (uh *UserHome) openURL(url string) {
 		// URL is malformed; surface that async failure instead of silently
 		// dropping it. Must run on the GTK main thread.
 		sgtk.RunOnMainThread(func() {
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't open %s.", url))
 		})
 	}); err != nil {
 		log.Printf("Failed to open URL %s: %v", url, err)
-		uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))
+		uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't open %s.", url))
 		return
 	}
 }

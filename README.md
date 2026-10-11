@@ -376,6 +376,10 @@ and cause. Fix the file and restart Control Center. If every candidate is absent
 the built-in defaults apply. Legacy `system_page` settings are validated and
 migrated in memory to Updates where applicable; see
 [legacy configuration compatibility](CONFIG.md#legacy-system-page-compatibility).
+Retired v0.12.x `maintenance_page`, `updates_page`, and `features_page` groups
+are also validated, then ignored (`features_page.troubleshooting_group` is
+migrated to Help); see
+[legacy group compatibility](CONFIG.md#legacy-maintenance-updates-and-features-group-compatibility).
 
 ---
 
@@ -430,8 +434,7 @@ runtime dependencies and runs the same target. The unit gate also scans every
 workflow and rejects external GitHub Actions references that are not pinned to
 full commit SHAs.
 
-Codecov rejects project coverage regressions greater than one percentage point.
-Coverage expectations otherwise remain risk-based, not a repository-wide
+Coverage expectations remain risk-based, not a repository-wide
 percentage target: command wrappers must cover argument construction, dry-run,
 parsing, and failure propagation; configuration and privileged paths must keep
 exhaustive consistency tests; and GTK-independent view state belongs in

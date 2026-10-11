@@ -1,8 +1,13 @@
 package updatepresent
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,18 +25,14 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			state: updateflow.Snapshot{
 				Phase: updateflow.PhaseIdle,
 			},
-			want: Presentation{Title: "Checking for updates",
-				Description: "Preparing to check for updates…"},
+			want: Presentation{Status: "Checking for updates…"},
 		},
 		{
 			name: "checking",
 			state: updateflow.Snapshot{
-				Phase:    updateflow.PhaseChecking,
-				Current:  updateflow.Applications,
-				Progress: "Loading application updates…",
+				Phase: updateflow.PhaseChecking,
 			},
-			want: Presentation{Title: "Checking for updates",
-				Description: "Applications: Loading application updates…"},
+			want: Presentation{Status: "Checking for updates…"},
 		},
 		{
 			name: "up to date",
@@ -39,8 +40,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Phase:  updateflow.PhaseReady,
 				Action: updateflow.ActionCheck,
 			},
-			want: Presentation{Title: "System is up to date",
-				Description: "No updates are available.",
+			want: Presentation{Status: "Up to date",
 				ActionLabel: "Check again",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
@@ -51,8 +51,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Phase:  updateflow.PhaseReady,
 				Action: updateflow.ActionNone,
 			},
-			want: Presentation{Title: "System is up to date",
-				Description: "No update sources are available."},
+			want: Presentation{Status: "Nothing to update on this computer"},
 		},
 		{
 			name: "updates available",
@@ -73,8 +72,22 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 				TotalUpdates: 2,
 			},
-			want: Presentation{Title: "Updates available",
-				Description: "2 updates are available.",
+			want: Presentation{Status: "2 updates available",
+				ActionLabel: "Update all",
+				ShowAction:  true,
+				ActionStyle: "suggested-action"},
+		},
+		{
+			name: "updates available with a staged deployment",
+			state: updateflow.Snapshot{
+				Phase:  updateflow.PhaseReady,
+				Action: updateflow.ActionUpdateAll,
+				Sources: []updateflow.SourceState{
+					{ID: updateflow.OperatingSystem, RestartRequired: true},
+				},
+				TotalUpdates: 1,
+			},
+			want: Presentation{Status: "1 update available · restart needed",
 				ActionLabel: "Update all",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
@@ -87,26 +100,52 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Sources: []updateflow.SourceState{
 					{
 						ID:       updateflow.DeveloperTools,
-						CheckErr: errors.New("network unavailable"),
+						CheckErr: errors.New("curl: (6) Could not resolve host: formulae.brew.sh"),
 					},
 				},
 			},
-			want: Presentation{Title: "Unable to check for updates",
-				Description: "Developer tools: network unavailable",
+			want: Presentation{Status: "Couldn't check for updates",
+				Detail:      "Not checked: Developer tools. Check your internet connection.",
 				ActionLabel: "Try again",
 				ShowAction:  true,
-				ActionStyle: "suggested-action",
-				Banner:      "Unable to check for updates"},
+				ActionStyle: "suggested-action"},
 		},
 		{
-			name: "updating",
+			name: "updating with provider progress",
 			state: updateflow.Snapshot{
 				Phase:    updateflow.PhaseUpdating,
 				Current:  updateflow.DeveloperTools,
 				Progress: "Installing packages…",
 			},
-			want: Presentation{Title: "Installing updates",
-				Description: "Developer tools: Installing packages…"},
+			want: Presentation{Status: "Developer tools: Installing packages…"},
+		},
+		{
+			name: "updating without provider progress",
+			state: updateflow.Snapshot{
+				Phase:   updateflow.PhaseUpdating,
+				Current: updateflow.Applications,
+			},
+			want: Presentation{Status: "Applications: installing updates…"},
+		},
+		{
+			// Post-update maintenance: no source is updating, but the run
+			// is still cleaning up, so the panel keeps reporting it.
+			name: "maintenance before its first step",
+			state: updateflow.Snapshot{
+				Phase:       updateflow.PhaseUpdating,
+				Maintaining: true,
+			},
+			want: Presentation{Status: "Cleaning up after updates…"},
+		},
+		{
+			name: "maintenance step",
+			state: updateflow.Snapshot{
+				Phase:       updateflow.PhaseUpdating,
+				Maintaining: true,
+				Current:     updateflow.DeveloperTools,
+				Progress:    "Removing old downloads",
+			},
+			want: Presentation{Status: "Developer tools: Removing old downloads"},
 		},
 		{
 			name: "partial failure",
@@ -126,12 +165,11 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					{ID: updateflow.OperatingSystem, ApplyErr: errors.New("staging failed")},
 				},
 			},
-			want: Presentation{Title: "Some updates could not be installed",
-				Description: "1 source completed; 2 sources failed.",
+			want: Presentation{Status: "Couldn't install some updates",
+				Detail:      "Not updated: Developer tools, Operating system",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
-				ActionStyle: "suggested-action",
-				Banner:      "Some updates could not be installed"},
+				ActionStyle: "suggested-action"},
 		},
 		{
 			name: "maintenance failure",
@@ -143,12 +181,11 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 				MaintenanceErr: errors.New("cleanup failed"),
 			},
-			want: Presentation{Title: "Some updates could not be installed",
-				Description: "Updates completed, but maintenance failed: cleanup failed",
+			want: Presentation{Status: "Updates installed, but couldn't clean up",
+				Detail:      "Old files are still on this computer. Details are in the log.",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
-				ActionStyle: "suggested-action",
-				Banner:      "Maintenance failed"},
+				ActionStyle: "suggested-action"},
 		},
 		{
 			name: "restart required",
@@ -161,12 +198,10 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					},
 				},
 			},
-			// The restart state lives on the Operating system row, not on
-			// the page-level status panel; the panel clears so the wordmark
-			// leads straight into the "System updates" group. Only the
-			// announcement survives, so a screen reader still reports the
-			// pending reboot.
-			want: Presentation{Announcement: "Deployment staged"},
+			// The restart action stays on the Operating system row (#439):
+			// the header offers no primary action, only the line saying
+			// what is left to do.
+			want: Presentation{Status: "Restart to finish updating"},
 		},
 	}
 
@@ -214,7 +249,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Available:  false,
 			},
 			title: "System components",
-			sub:   "Not available on this system",
+			sub:   "Not available on this computer",
 		},
 		{
 			name: "preferences disabled",
@@ -264,16 +299,28 @@ func TestSourceMapsSourceState(t *testing.T) {
 			sub:   "Deployment staged",
 		},
 		{
-			name: "check error",
+			name: "check error from the network",
 			state: updateflow.SourceState{
 				ID:         updateflow.DeveloperTools,
 				Configured: true,
 				Available:  true,
 				Enabled:    true,
-				CheckErr:   errors.New("offline"),
+				CheckErr:   &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("network is unreachable")},
 			},
 			title: "Developer tools",
-			sub:   "Check failed: offline",
+			sub:   "Couldn't check for updates. Check your internet connection.",
+		},
+		{
+			name: "check error that is not the network",
+			state: updateflow.SourceState{
+				ID:         updateflow.DeveloperTools,
+				Configured: true,
+				Available:  true,
+				Enabled:    true,
+				CheckErr:   errors.New("permission denied @ rb_sysopen - /home/linuxbrew/.linuxbrew/var"),
+			},
+			title: "Developer tools",
+			sub:   "Couldn't check for updates. Details are in the log.",
 		},
 		{
 			name: "apply error",
@@ -285,7 +332,19 @@ func TestSourceMapsSourceState(t *testing.T) {
 				ApplyErr:   errors.New("staging failed"),
 			},
 			title: "Operating system",
-			sub:   "Update failed: staging failed",
+			sub:   "Couldn't update. Details are in the log.",
+		},
+		{
+			name: "apply error that timed out",
+			state: updateflow.SourceState{
+				ID:         updateflow.Applications,
+				Configured: true,
+				Available:  true,
+				Enabled:    true,
+				ApplyErr:   fmt.Errorf("flatpak update timed out: %w", context.DeadlineExceeded),
+			},
+			title: "Applications",
+			sub:   "Couldn't update. It took too long. Try again later.",
 		},
 	}
 
@@ -299,14 +358,56 @@ func TestSourceMapsSourceState(t *testing.T) {
 	}
 }
 
+// The Operating system source's one pending item is the deployment itself:
+// its versions go on the source row and no child row repeats the source's
+// name. VM finding: "Operating system — 1 update available" followed by an
+// "Operating System" child row with "20261006 → 20261007". The fold is keyed
+// on the source ID, never the item's name: a lone app or formula that happens
+// to share its source's title keeps its row, which carries its only Update
+// button (Hive review on #539).
+func TestSourceFoldsSoleOperatingSystemItem(t *testing.T) {
+	osItem := updateflow.Item{Name: "Operating system", CurrentVersion: "20261006", AvailableVersion: "20261007", Scope: "bootc"}
+	apps := []updateflow.Item{{Name: "Firefox"}, {Name: "GIMP"}}
+	tests := []struct {
+		name     string
+		id       updateflow.SourceID
+		items    []updateflow.Item
+		sub      string
+		itemRows []updateflow.Item
+	}{
+		{"os version transition", updateflow.OperatingSystem, []updateflow.Item{osItem}, "Update available: 20261006 → 20261007", nil},
+		{"os legacy capitalization", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating System", CurrentVersion: "1", AvailableVersion: "2"}}, "Update available: 1 → 2", nil},
+		{"os available version only", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating system", AvailableVersion: "20261007"}}, "Update available: 20261007", nil},
+		{"os without versions", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating system"}}, "1 update available", nil},
+		{"single differently named app", updateflow.Applications, []updateflow.Item{{Name: "Firefox", CurrentVersion: "1", AvailableVersion: "2"}}, "1 update available", []updateflow.Item{{Name: "Firefox", CurrentVersion: "1", AvailableVersion: "2"}}},
+		{"single app named like its source", updateflow.Applications, []updateflow.Item{{Name: "Applications", CurrentVersion: "1", AvailableVersion: "2"}}, "1 update available", []updateflow.Item{{Name: "Applications", CurrentVersion: "1", AvailableVersion: "2"}}},
+		{"single tool named like its source", updateflow.DeveloperTools, []updateflow.Item{{Name: "Developer tools"}}, "1 update available", []updateflow.Item{{Name: "Developer tools"}}},
+		{"single component named like its source", updateflow.SystemComponents, []updateflow.Item{{Name: "System components"}}, "1 update available", []updateflow.Item{{Name: "System components"}}},
+		{"multiple apps", updateflow.Applications, apps, "2 updates available", apps},
+		{"multiple developer tools", updateflow.DeveloperTools, apps, "2 updates available", apps},
+		{"two operating system items", updateflow.OperatingSystem, []updateflow.Item{osItem, osItem}, "2 updates available", []updateflow.Item{osItem, osItem}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := updateflow.SourceState{ID: tt.id, Configured: true, Available: true, Enabled: true, Items: tt.items}
+			if _, sub := Source(state); sub != tt.sub {
+				t.Fatalf("Source() subtitle = %q, want %q", sub, tt.sub)
+			}
+			if got := ItemRows(state); !slices.Equal(got, tt.itemRows) {
+				t.Fatalf("ItemRows() = %#v, want %#v", got, tt.itemRows)
+			}
+		})
+	}
+}
+
 func TestSnapshotUsesSingularUpdateText(t *testing.T) {
 	got := Snapshot(updateflow.Snapshot{
 		Phase:        updateflow.PhaseReady,
 		Action:       updateflow.ActionUpdateAll,
 		TotalUpdates: 1,
 	})
-	if got.Description != "1 update is available." {
-		t.Fatalf("Snapshot() description = %q, want %q", got.Description, "1 update is available.")
+	if got.Status != "1 update available" {
+		t.Fatalf("Snapshot() status = %q, want %q", got.Status, "1 update available")
 	}
 }
 
@@ -316,8 +417,8 @@ func TestSnapshotShowsLastCheckedTimeWhenCurrent(t *testing.T) {
 		Action:      updateflow.ActionCheck,
 		LastChecked: time.Date(2026, 9, 7, 14, 5, 0, 0, time.UTC),
 	})
-	if got.Description != "No updates are available. Last checked at 14:05." {
-		t.Fatalf("Snapshot() description = %q, want %q", got.Description, "No updates are available. Last checked at 14:05.")
+	if !strings.HasPrefix(got.Status, "Up to date") || !strings.Contains(got.Status, "14:05") {
+		t.Fatalf("Snapshot() status = %q, want it to say up to date and name 14:05", got.Status)
 	}
 }
 
@@ -455,46 +556,186 @@ func TestSourceItemTitleUsesIdentityOnlyWhenNameIsMissing(t *testing.T) {
 	}
 }
 
-// A phase change announces to screen readers, so no phase may map to empty
-// announcement text. PhaseRestartRequired clears the status panel's title,
-// which would otherwise announce "" and leave a pending reboot silent.
-func TestEveryPhaseAnnouncesSomething(t *testing.T) {
-	for _, phase := range []updateflow.Phase{
-		updateflow.PhaseIdle,
-		updateflow.PhaseChecking,
-		updateflow.PhaseReady,
-		updateflow.PhaseCheckFailed,
-		updateflow.PhaseUpdating,
-		updateflow.PhasePartialFailure,
-		updateflow.PhaseRestartRequired,
-	} {
-		if got := Snapshot(updateflow.Snapshot{Phase: phase}).Announce(); got == "" {
-			t.Errorf("Snapshot(%v).Announce() is empty; a phase change would announce nothing", phase)
+var everyPhase = []updateflow.Phase{
+	updateflow.PhaseIdle,
+	updateflow.PhaseChecking,
+	updateflow.PhaseReady,
+	updateflow.PhaseCheckFailed,
+	updateflow.PhaseUpdating,
+	updateflow.PhasePartialFailure,
+	updateflow.PhaseRestartRequired,
+}
+
+// The header is wordmark → action → one line. Every phase announces its
+// status line to screen readers on a change, so no phase may leave it
+// empty, and it must stay one line: a newline would turn the compact
+// header back into a title and a description.
+func TestEveryPhaseHasOneStatusLine(t *testing.T) {
+	for _, phase := range everyPhase {
+		got := Snapshot(updateflow.Snapshot{Phase: phase})
+		if got.Status == "" {
+			t.Errorf("Snapshot(%v).Status is empty; the phase change would announce nothing", phase)
+		}
+		if strings.Contains(got.Status, "\n") {
+			t.Errorf("Snapshot(%v).Status = %q spans more than one line", phase, got.Status)
 		}
 	}
 }
 
-func TestAnnouncePrefersTitleWhenThePanelHasOne(t *testing.T) {
-	if got := (Presentation{Title: "Updates available"}).Announce(); got != "Updates available" {
-		t.Fatalf("Announce() = %q, want the title", got)
-	}
-	if got := (Presentation{Title: "Updates available", Announcement: "Deployment staged"}).Announce(); got != "Deployment staged" {
-		t.Fatalf("Announce() = %q, want the explicit announcement", got)
+// Only failures may add a second line; the normal states are one line.
+func TestOnlyFailuresAddADetailLine(t *testing.T) {
+	failure := errors.New("boom")
+	sources := []updateflow.SourceState{{ID: updateflow.Applications, CheckErr: failure, ApplyErr: failure}}
+	for _, phase := range everyPhase {
+		got := Snapshot(updateflow.Snapshot{
+			Phase:         phase,
+			Sources:       sources,
+			FailedSources: []updateflow.SourceID{updateflow.Applications},
+		})
+		isFailure := phase == updateflow.PhaseCheckFailed || phase == updateflow.PhasePartialFailure
+		if isFailure && got.Detail == "" {
+			t.Errorf("Snapshot(%v) names no failure in its detail line", phase)
+		}
+		if !isFailure && got.Detail != "" {
+			t.Errorf("Snapshot(%v).Detail = %q, want a single status line", phase, got.Detail)
+		}
 	}
 }
 
-func TestStatusPanelKeepsVisibleContent(t *testing.T) {
+// A failure is told in plain words: the raw error text a tool produced never
+// reaches the header or a source row (it is logged by the coordinator).
+func TestRawErrorTextNeverReachesTheScreen(t *testing.T) {
+	const raw = "error: Unable to load summary from remote flathub: exit status 1"
+	failure := errors.New(raw)
+	for _, phase := range everyPhase {
+		got := Snapshot(updateflow.Snapshot{
+			Phase:          phase,
+			Sources:        []updateflow.SourceState{{ID: updateflow.Applications, CheckErr: failure, ApplyErr: failure}},
+			FailedSources:  []updateflow.SourceID{updateflow.Applications},
+			MaintenanceErr: failure,
+		})
+		if strings.Contains(got.Status, raw) || strings.Contains(got.Detail, raw) {
+			t.Errorf("Snapshot(%v) shows the raw error: %#v", phase, got)
+		}
+	}
+	// Maintenance failing alone takes its own branch.
+	got := Snapshot(updateflow.Snapshot{Phase: updateflow.PhasePartialFailure, MaintenanceErr: failure})
+	if strings.Contains(got.Status, raw) || strings.Contains(got.Detail, raw) {
+		t.Errorf("cleanup failure shows the raw error: %#v", got)
+	}
+	for _, state := range []updateflow.SourceState{
+		{ID: updateflow.Applications, Configured: true, Available: true, Enabled: true, CheckErr: failure},
+		{ID: updateflow.Applications, Configured: true, Available: true, Enabled: true, ApplyErr: failure},
+	} {
+		if _, subtitle := Source(state); strings.Contains(subtitle, raw) || subtitle == "" {
+			t.Errorf("Source() subtitle = %q, want plain words without the raw error", subtitle)
+		}
+	}
+}
+
+// A failure is told to check the internet connection only when its error
+// shows the network was the cause; a local tool failure is not given a
+// remedy it may not need (it is pointed at the log, where the raw error is).
+func TestFailureHintNamesTheNetworkOnlyWhenTheErrorDoes(t *testing.T) {
+	const (
+		network = "Check your internet connection."
+		timeout = "It took too long. Try again later."
+		logged  = "Details are in the log."
+	)
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"Go dial error", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connect: network is unreachable")}, network},
+		{"wrapped Go DNS error", fmt.Errorf("resolving 43: %w", &net.DNSError{Err: "no such host", Name: "ghcr.io"}), network},
+		{"Flatpak cannot resolve the remote", errors.New("Flatpak command failed: error: Unable to load summary from remote flathub: While fetching https://dl.flathub.org/repo/summary.idx: [6] Could not resolve hostname"), network},
+		{"Homebrew's curl cannot connect", errors.New("curl: (7) Failed to connect to ghcr.io port 443 after 3 ms: Couldn't connect to server"), network},
+		{"bootc cannot reach the registry", errors.New("error: Fetching: error sending request for url (https://ghcr.io/v2/): dns error: failed to lookup address information"), network},
+		{"glibc resolver", errors.New("Temporary failure in name resolution"), network},
+		{"Flatpak remote without a cause", errors.New("Flatpak command failed: error: Unable to load summary from remote flathub"), logged},
+		{"Homebrew local permission error", errors.New("permission denied @ rb_sysopen - /home/linuxbrew/.linuxbrew/var"), logged},
+		{"updex incomplete check", errors.New("updex feature check incomplete: feature store unreadable"), logged},
+		{"deadline", fmt.Errorf("flatpak remote-ls timed out: %w", context.DeadlineExceeded), timeout},
+		{"cancellation", fmt.Errorf("flatpak remote-ls: %w", context.Canceled), logged},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FailureHint(tt.err); got != tt.want {
+				t.Fatalf("FailureHint(%q) = %q, want %q", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+// The check-failure detail line carries one hint for every failed source; it
+// names the network only when every failure was the network.
+func TestCheckFailedDetailNamesTheNetworkOnlyWhenEveryFailureWasIt(t *testing.T) {
+	offline := errors.New("curl: (6) Could not resolve host: formulae.brew.sh")
+	local := errors.New("permission denied")
+	tests := []struct {
+		name    string
+		sources []updateflow.SourceState
+		want    string
+	}{
+		{
+			name: "every source offline",
+			sources: []updateflow.SourceState{
+				{ID: updateflow.Applications, CheckErr: offline},
+				{ID: updateflow.DeveloperTools, CheckErr: offline},
+			},
+			want: "Not checked: Applications, Developer tools. Check your internet connection.",
+		},
+		{
+			name:    "one local failure",
+			sources: []updateflow.SourceState{{ID: updateflow.DeveloperTools, CheckErr: local}},
+			want:    "Not checked: Developer tools. Details are in the log.",
+		},
+		{
+			name: "offline and local mixed",
+			sources: []updateflow.SourceState{
+				{ID: updateflow.Applications, CheckErr: offline},
+				{ID: updateflow.DeveloperTools, CheckErr: local},
+			},
+			want: "Not checked: Applications, Developer tools. Details are in the log.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Snapshot(updateflow.Snapshot{Phase: updateflow.PhaseCheckFailed, Sources: tt.sources})
+			if got.Detail != tt.want {
+				t.Fatalf("Detail = %q, want %q", got.Detail, tt.want)
+			}
+		})
+	}
+}
+
+// The restart lives on the Operating system row (#439); the header must not
+// grow a restart, destructive, or any other primary action for it.
+func TestRestartRequiredLeavesTheActionOnTheRow(t *testing.T) {
+	got := Snapshot(updateflow.Snapshot{
+		Phase:   updateflow.PhaseRestartRequired,
+		Action:  updateflow.ActionNone,
+		Sources: []updateflow.SourceState{{ID: updateflow.OperatingSystem, RestartRequired: true}},
+	})
+	if got.ShowAction || got.ActionLabel != "" || got.ActionStyle != "" {
+		t.Fatalf("restart phase offers a primary action: %#v", got)
+	}
+	if !strings.Contains(strings.ToLower(got.Status), "restart") {
+		t.Fatalf("restart phase status = %q, want it to say a restart is needed", got.Status)
+	}
+}
+
+func TestStatusHeaderKeepsVisibleContent(t *testing.T) {
 	tests := []struct {
 		name         string
 		presentation Presentation
 		phase        updateflow.Phase
 		want         bool
 	}{
-		{name: "empty panel", phase: updateflow.PhaseReady},
-		{name: "announcement only", presentation: Presentation{Announcement: "Deployment staged"}, phase: updateflow.PhaseRestartRequired},
-		{name: "banner outside panel", presentation: Presentation{Banner: "Check failed"}, phase: updateflow.PhaseCheckFailed},
-		{name: "title", presentation: Presentation{Title: "Updates available"}, phase: updateflow.PhaseReady, want: true},
-		{name: "description", presentation: Presentation{Description: "Permission denied"}, phase: updateflow.PhaseCheckFailed, want: true},
+		{name: "empty header", phase: updateflow.PhaseReady},
+		{name: "status", presentation: Presentation{Status: "Up to date"}, phase: updateflow.PhaseReady, want: true},
+		{name: "detail", presentation: Presentation{Detail: "Permission denied"}, phase: updateflow.PhaseCheckFailed, want: true},
 		{name: "action", presentation: Presentation{ShowAction: true}, phase: updateflow.PhaseReady, want: true},
 		{name: "checking progress", phase: updateflow.PhaseChecking, want: true},
 		{name: "installing progress", phase: updateflow.PhaseUpdating, want: true},
@@ -508,24 +749,29 @@ func TestStatusPanelKeepsVisibleContent(t *testing.T) {
 	}
 }
 
-func TestStatusPanelReturnsAfterStagedDeployment(t *testing.T) {
-	for _, phase := range []updateflow.Phase{
-		updateflow.PhaseIdle,
-		updateflow.PhaseChecking,
-		updateflow.PhaseReady,
-		updateflow.PhaseCheckFailed,
-		updateflow.PhaseUpdating,
-		updateflow.PhasePartialFailure,
-	} {
-		staged := Snapshot(updateflow.Snapshot{Phase: updateflow.PhaseRestartRequired})
-		if staged.ShowStatus(updateflow.PhaseRestartRequired) {
-			t.Fatal("staged deployment leaves an empty status panel visible")
-		}
-		if staged.Announce() != "Deployment staged" {
-			t.Fatal("collapsing the staged panel drops the restart announcement")
-		}
+func TestEveryPhaseShowsTheHeader(t *testing.T) {
+	for _, phase := range everyPhase {
 		if !Snapshot(updateflow.Snapshot{Phase: phase}).ShowStatus(phase) {
-			t.Fatalf("phase %v stays hidden after leaving the staged state", phase)
+			t.Errorf("phase %v hides the status header", phase)
 		}
+	}
+}
+
+// RestartFailedMessage is the toast shown when a restart cannot be started.
+// Restart is the one privileged update action with no "Details" expander, so
+// the raw error is logged, never shown. This guards chairlift#554: the message
+// must be a fixed, plain-words prompt with no format verb, so a raw error can
+// never be formatted into the toast again.
+func TestRestartFailedMessageHasNoRawError(t *testing.T) {
+	got := RestartFailedMessage()
+	if got == "" {
+		t.Fatal("RestartFailedMessage() must not be empty")
+	}
+	if strings.Contains(got, "%") {
+		t.Fatalf("RestartFailedMessage() = %q must not format a raw error", got)
+	}
+	want := "Couldn't restart your computer. Try again."
+	if got != want {
+		t.Fatalf("RestartFailedMessage() = %q, want %q", got, want)
 	}
 }

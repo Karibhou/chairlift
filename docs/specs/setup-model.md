@@ -19,6 +19,11 @@ the embedded, theme-aware Bluefin wordmark. Welcome presents introductory body
 text and the website's Zavala quote. The conclusion quotes Edith Wharton from
 the website's Mission section and names `branding.AppName` as the menu entry.
 
+Setup reuses the real page widgets and their action gates; `internal/firstrun`
+owns page selection and disposition helpers, not duplicated configuration
+controls. There is no choice inventory, `SetupHost` bridge, or Update
+Preferences step.
+
 ## Native window adapter
 
 The main window keeps the same built page controls, widgets, and action owners.
@@ -28,7 +33,8 @@ Back and Next, with **Launch Bazaar App Store** on the conclusion. Back is
 insensitive on Welcome and returns there from the first selection page.
 Selection navigation passes through `Window.navigateToPage`; bookends use the
 setup stack. Other routes cannot leave the current step. The sidebar is
-insensitive and its native Back route is disabled; dismissal restores both.
+insensitive and its native Back route is disabled; dismissal restores both
+while keeping the current page. Each selection step opens at the top of its page.
 
 Moving Back or Next changes only navigation. It never installs software,
 changes configuration, or writes disposition. Next from Livery opens the
@@ -38,6 +44,8 @@ Save or launch errors show a toast and restore the retryable final action.
 While finishing, duplicate actions, dismissal and window close cannot interrupt
 the save/launch boundary. Escape, Dismiss and intentional window close otherwise
 dismiss setup without closing the application.
+`Ctrl+Q` quits in one press, setup included; only a running update or the
+final save/launch boundary refuses it.
 
 ## Disposition and dry run
 
@@ -57,3 +65,14 @@ tests cover persistence, dry-run suppression, and completion-preserving skips.
 `test/e2e/features/setup.feature` covers both bookend Back transitions, all
 selection pages, final exit, persistence preview, Bazaar suppression, both
 launch options, menu presentation and dismissal on Dakota.
+
+## Source authority
+
+- [`internal/firstrun/flow.go`](../../internal/firstrun/flow.go) — eligible-page
+  sequence, not a catalog of choices.
+- [`internal/window/window.go`](../../internal/window/window.go) —
+  `PresentFirstRun`, footer navigation, intentional dismissal, and persistence.
+- [`internal/firstrun/settings.go`](../../internal/firstrun/settings.go) —
+  explicit-only presentation and dry-run-aware disposition/version storage.
+- [`test/e2e/features/setup.feature`](../../test/e2e/features/setup.feature) —
+  separate desktop interaction evidence; model tests do not replace it.

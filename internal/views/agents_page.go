@@ -2,7 +2,6 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -10,20 +9,30 @@ import (
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
-	"github.com/projectbluefin/chairlift/internal/agentmode"
 	"github.com/projectbluefin/chairlift/internal/aistack"
-	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
-// Agent Mode is a loopback model server managed by a systemd user unit.
-// No operation on this page is privileged.
+// Agent Mode is a loopback model server managed by a systemd user unit;
+// Troubleshooting is Goose on that server's model. Model selection happens
+// in llmman's own web UI; ChairLift links there rather than re-implementing
+// a picker (#568). No operation on this page is privileged.
 func (uh *UserHome) buildAgentsPage() {
-	if uh.agentsPrefsPage != nil && uh.groupEnabled("agents_page", "agents_group") {
-		uh.buildAgentModeGroup(uh.agentsPrefsPage)
-		uh.buildContributeGroup(uh.agentsPrefsPage)
+	page := uh.agentsPrefsPage
+	if page == nil {
+		return
+	}
+	agents := uh.groupEnabled("agents_page", "agents_group")
+	if agents {
+		uh.buildAgentModeGroup(page)
+	}
+	if uh.groupEnabled("agents_page", "troubleshooting_group") {
+		uh.buildTroubleshootGroup(page)
+	}
+	if agents {
+		uh.buildContributeGroup(page)
 	}
 }
 
@@ -57,44 +66,25 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	uh.agentModelRow = modelRow
 	group.Add(&modelRow.Widget)
 
-	presetRow := adw.NewActionRow()
-	presetRow.SetTitle(pageview.AgentModePresetsTitle())
-	uh.agentPresetSpinner = newActivitySpinner()
-	presetRow.AddSuffix(&uh.agentPresetSpinner.Widget)
-	choose := gtk.NewButtonWithLabel(pageview.AgentModeSwitchPresetLabel())
-	choose.SetValign(gtk.AlignCenterValue)
-	clicked := func(_ gtk.Button) { uh.presentModelPresetChooser() }
-	choose.ConnectClicked(&clicked)
-	presetRow.AddSuffix(&choose.Widget)
-	uh.agentPresetRow = presetRow
-	group.Add(&presetRow.Widget)
-
-	gooseRow := adw.NewActionRow()
-	gooseRow.SetTitle(pageview.GooseRowTitle())
-	gooseRow.SetUseMarkup(false)
-	uh.gooseRow = gooseRow
-	uh.gooseSpinner = newActivitySpinner()
-	gooseRow.AddSuffix(&uh.gooseSpinner.Widget)
-	launchBtn := gtk.NewButtonWithLabel(pageview.GooseLaunchButtonLabel())
-	launchBtn.SetValign(gtk.AlignCenterValue)
-	launchClicked := func(_ gtk.Button) { uh.onGooseLaunchClicked() }
-	launchBtn.ConnectClicked(&launchClicked)
-	launchBtn.SetSensitive(false)
-	gooseRow.AddSuffix(&launchBtn.Widget)
-	uh.gooseLaunchBtn = launchBtn
-	group.Add(&gooseRow.Widget)
-
-	askBluefinRow := adw.NewActionRow()
-	askBluefinRow.SetTitle(pageview.AskBluefinMenuRowTitle())
-	askBluefinRow.SetSubtitle(pageview.AskBluefinMenuRowSubtitle())
-	uh.askBluefinMenuRow = askBluefinRow
-	uh.askBluefinToggle = newGuardedSwitch(false, func(on bool) {
-		uh.onAskBluefinMenuToggled(on, uh.askBluefinToggle)
-	})
-	uh.askBluefinToggle.widget.SetSensitive(false)
-	askBluefinRow.AddSuffix(&uh.askBluefinToggle.widget.Widget)
-	askBluefinRow.SetActivatableWidget(&uh.askBluefinToggle.widget.Widget)
-	group.Add(&askBluefinRow.Widget)
+	// Models, chat, and everything else llmman manages live in its own web
+	// UI; ChairLift links there rather than growing a second copy (#568).
+	manageRow := adw.NewActionRow()
+	manageRow.SetTitle(pageview.AgentModeManageTitle())
+	manageRow.SetSubtitle(pageview.AgentModeManageSubtitle())
+	manageBtn := gtk.NewButtonWithLabel(pageview.AgentModeManageLabel())
+	manageBtn.SetValign(gtk.AlignCenterValue)
+	manageClicked := func(_ gtk.Button) { uh.openURL(aistack.WebUIURL()) }
+	manageBtn.ConnectClicked(&manageClicked)
+	manageRow.AddSuffix(&manageBtn.Widget)
+	manageRow.SetActivatableWidget(&manageBtn.Widget)
+	// AdwActionRow labels its activatable widget by the row title. The
+	// title matches the button label today, so the reset changes nothing
+	// audible; it keeps the button named by its own visible label if the
+	// title and label ever diverge (WCAG 2.5.3).
+	manageBtn.ResetRelation(gtk.AccessibleRelationLabelledByValue)
+	manageRow.SetVisible(false)
+	uh.agentManageRow = manageRow
+	group.Add(&manageRow.Widget)
 
 	address := adw.NewActionRow()
 	address.SetTitle("Local connection")
@@ -102,33 +92,6 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	address.SetSubtitleSelectable(true)
 	group.Add(&address.Widget)
 	page.Add(group)
-
-	// The menu entry is read the first time the Agents page is shown, not
-	// at window build: opening another page must not touch dconf.
-	uh.askBluefinMapped = func(gtk.Widget) {
-		if uh.askBluefinProbed {
-			return
-		}
-		uh.askBluefinProbed = true
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			avail, vis, err := devmenu.AskBluefinState(ctx)
-			sgtk.RunOnMainThread(func() {
-				if uh.askBluefinMenuRow == nil || uh.askBluefinToggle == nil {
-					return
-				}
-				if err != nil || !avail {
-					uh.askBluefinToggle.widget.SetSensitive(false)
-					return
-				}
-				uh.askBluefinToggle.set(vis)
-				uh.askBluefinToggle.widget.SetSensitive(true)
-			})
-		}()
-	}
-	page.ConnectMap(&uh.askBluefinMapped)
-
 	uh.showAgentModeState(state)
 
 	if !facts.UnitPresent {
@@ -161,8 +124,8 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 			uh.showAgentModeState(state)
 			if migrationErr != nil {
 				log.Printf("views: local-only model service migration failed: %v", migrationErr)
-				uh.agentModeRow.SetSubtitle("Local-only setup could not be updated. Turn Agent Mode off and on to retry.")
-				uh.toastAdder.ShowErrorToast("Agent Mode could not update its local-only service.")
+				uh.agentModeRow.SetSubtitle("Agent Mode needs an update. Turn it off and on again.")
+				uh.toastAdder.ShowErrorToast("Couldn't update Agent Mode. Turn it off and on again.")
 			}
 		})
 	}()
@@ -174,156 +137,32 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeSubtitle(state))
 	ready := state == aistack.StateReady
 	uh.agentModelRow.SetSensitive(ready)
-	uh.agentPresetRow.SetSensitive(ready)
 	uh.agentModelRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
-	uh.agentPresetRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
+	if uh.agentManageRow != nil {
+		uh.agentManageRow.SetVisible(ready)
+	}
+	// Goose runs on this server's model; its row follows every change.
+	uh.refreshGooseState()
 	if !ready {
-		if uh.gooseRow != nil {
-			uh.gooseRow.SetSubtitle(agentmode.StateDaemonUnavailable.Subtitle(""))
-		}
-		if uh.gooseLaunchBtn != nil {
-			uh.gooseLaunchBtn.SetSensitive(false)
-		}
 		return
 	}
-	uh.agentPresetRow.SetSubtitle(pageview.AgentModePresetsSubtitle())
-	uh.agentModelRow.SetSubtitle("Checking the selected model…")
-	if uh.gooseRow != nil {
-		uh.gooseRow.SetSubtitle("Checking Goose readiness…")
-	}
-	if uh.gooseLaunchBtn != nil {
-		uh.gooseLaunchBtn.SetSensitive(false)
-	}
+	uh.agentModelRow.SetSubtitle("Checking…")
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
 		modelRef, err := aistack.ReadActiveModel(ctx)
-		gState, _, _ := agentmode.ObserveLive(ctx)
 		sgtk.RunOnMainThread(func() {
 			if !uh.agentRefresh.IsCurrent(generation) {
 				return
 			}
 			if err != nil {
 				log.Printf("views: read active model failed: %v", err)
-				uh.agentModelRow.SetSubtitle("Could not read the selected model. Choose a preset to set one.")
-				if uh.gooseRow != nil {
-					uh.gooseRow.SetSubtitle(agentmode.StateModelUnavailable.Subtitle(""))
-				}
-				if uh.gooseLaunchBtn != nil {
-					uh.gooseLaunchBtn.SetSensitive(false)
-				}
+				uh.agentModelRow.SetSubtitle("Couldn't check the model. Use Manage Models to pick one.")
 				return
 			}
 			uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-			if uh.gooseRow != nil {
-				uh.gooseRow.SetSubtitle(gState.Subtitle(modelRef))
-			}
-			if uh.gooseLaunchBtn != nil {
-				uh.gooseLaunchBtn.SetSensitive(gState.Ready())
-			}
 		})
 	}()
-}
-
-func (uh *UserHome) presentModelPresetChooser() {
-	if uh.agentModeState != aistack.StateReady || !uh.agentPresetGate.TryStart() {
-		return
-	}
-	dialog := adw.NewAlertDialog("Choose a Model", "Choose a model family. A model that fits this computer's memory will be downloaded.")
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.SetCloseResponse("cancel")
-	for _, fam := range aistack.Families() {
-		dialog.AddResponse(string(fam), fam.DisplayName())
-	}
-	uh.agentPresetDialogs.connect(dialog, func(response string) {
-		fam := aistack.Family(response)
-		valid := false
-		for _, available := range aistack.Families() {
-			valid = valid || fam == available
-		}
-		if !valid {
-			uh.agentPresetGate.Reset()
-			return
-		}
-		// The chooser may have remained open while a toggle changed readiness.
-		// One mutation gate protects the service and model configuration together.
-		if uh.agentModeState != aistack.StateReady || !uh.agentModeGate.TryStart() {
-			uh.agentPresetGate.Reset()
-			uh.toastAdder.ShowErrorToast("Wait until Agent Mode is ready before choosing a model.")
-			return
-		}
-		uh.agentRefresh.Begin()
-		previous := uh.agentModelRow.GetSubtitle()
-		uh.agentModeToggle.widget.SetSensitive(false)
-		uh.agentPresetRow.SetSensitive(false)
-		uh.agentModelRow.SetSubtitle(fmt.Sprintf("Downloading a %s model…", fam.DisplayName()))
-		setActivitySpinner(uh.agentPresetSpinner, true)
-		go uh.applyModelFamilyPreset(fam, previous)
-	})
-	dialog.Present(&uh.agentsPrefsPage.Widget)
-}
-
-// Pull first, then configure the alias. Failed pulls and previews keep the
-// previous model; controls and gates are restored together on the GTK thread.
-func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family, previous string) {
-	ctx, cancel := aistack.DefaultContext()
-	defer cancel()
-	finish := func(modelRef, message string, failed bool) {
-		facts := aistack.Observe(true)
-		if facts.UnitPresent {
-			facts.Checked, facts.Healthy = true, aistack.Healthy(context.Background())
-		}
-		sgtk.RunOnMainThread(func() {
-			uh.agentModeGate.Reset()
-			uh.agentPresetGate.Reset()
-			uh.agentModeToggle.widget.SetSensitive(true)
-			setActivitySpinner(uh.agentPresetSpinner, false)
-			state := aistack.Resolve(facts)
-			uh.agentModeToggle.set(state.On())
-			uh.showAgentModeState(state)
-			if state == aistack.StateReady {
-				if modelRef == "" {
-					uh.agentModelRow.SetSubtitle(previous)
-				} else {
-					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-				}
-			}
-			if failed {
-				uh.toastAdder.ShowErrorToast(message)
-			} else {
-				uh.toastAdder.ShowToast(message)
-			}
-		})
-	}
-	status, err := aistack.FetchNodeStatus(ctx)
-	if err != nil {
-		log.Printf("views: fetch node status failed: %v", err)
-		finish("", "Could not reach the model server to check memory.", true)
-		return
-	}
-	candidate, err := aistack.ResolveCandidate(ctx, fam, status.Memory, aistack.DefaultFetch)
-	if err != nil {
-		log.Printf("views: resolve candidate failed: %v", err)
-		finish("", fmt.Sprintf("Could not find a model that fits for %s.", fam.DisplayName()), true)
-		return
-	}
-	modelRef := candidate.ModelRef()
-	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would configure alias %s to %s and pull", aistack.ActiveModelAlias, modelRef)
-		finish("", fmt.Sprintf("[DRY-RUN] Would switch to %s", modelRef), false)
-		return
-	}
-	if err := aistack.PullModel(ctx, modelRef); err != nil {
-		log.Printf("views: pull model failed: %v", err)
-		finish("", fmt.Sprintf("Could not download %s. The previous model was kept.", modelRef), true)
-		return
-	}
-	if err := aistack.ConfigureActiveModel(ctx, modelRef); err != nil {
-		log.Printf("views: configure alias failed: %v", err)
-		finish("", "Could not select the downloaded model.", true)
-		return
-	}
-	finish(modelRef, fmt.Sprintf("Selected %s.", fam.DisplayName()), false)
 }
 
 func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
@@ -334,11 +173,9 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 	previous := uh.agentModeState
 	uh.agentRefresh.Begin()
 	toggle.widget.SetSensitive(false)
-	uh.agentPresetRow.SetSensitive(false)
 	uh.agentModelRow.SetSensitive(false)
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeWorkingSubtitle(enabled))
-	uh.agentModelRow.SetSubtitle("Waiting for the model server…")
-	uh.agentPresetRow.SetSubtitle("Waiting for the model server…")
+	uh.agentModelRow.SetSubtitle("Waiting for Agent Mode…")
 	setActivitySpinner(uh.agentModeSpinner, true)
 	dryRun := dryrun.Enabled()
 	go func() {
@@ -369,13 +206,18 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 			}
 			toggle.set(state.On())
 			uh.showAgentModeState(state)
+			if enabled && !dryRun {
+				// Enabling installs llmman through Homebrew when it is
+				// missing, possibly before a later step fails.
+				uh.homebrewInventoryChanged()
+			}
 			if err != nil {
 				log.Printf("views: agent mode toggle to %v failed: %v", enabled, err)
 				uh.toastAdder.ShowErrorToast(pageview.AgentModeFailureToast(enabled))
 				return
 			}
 			if enabled && !dryRun && state != aistack.StateReady {
-				uh.toastAdder.ShowErrorToast("The model server did not become ready. Turn Agent Mode off and on to retry.")
+				uh.toastAdder.ShowErrorToast("Agent Mode didn't start. Turn it off and on again.")
 				return
 			}
 			uh.toastAdder.ShowToast(actionmsg.AgentMode(dryRun, enabled).Toast)
@@ -384,83 +226,3 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 }
 
 const agentModeReadyWait = time.Minute
-
-func (uh *UserHome) onGooseLaunchClicked() {
-	if uh.gooseLaunchBtn == nil || !uh.gooseGate.TryStart() {
-		return
-	}
-	uh.gooseLaunchBtn.SetSensitive(false)
-	setActivitySpinner(uh.gooseSpinner, true)
-	uh.gooseRow.SetSubtitle("Launching Goose Desktop…")
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		state, facts, err := agentmode.ObserveLive(ctx)
-		if err != nil || !state.Ready() {
-			sgtk.RunOnMainThread(func() {
-				uh.gooseGate.Reset()
-				setActivitySpinner(uh.gooseSpinner, false)
-				if uh.gooseLaunchBtn != nil {
-					uh.gooseLaunchBtn.SetSensitive(state.Ready())
-				}
-				if uh.gooseRow != nil {
-					uh.gooseRow.SetSubtitle(state.Subtitle(facts.ActiveModel))
-				}
-				uh.toastAdder.ShowErrorToast("Goose cannot be launched: " + state.MissingPrerequisite())
-			})
-			return
-		}
-
-		dryRun := dryrun.Enabled()
-		launchErr := agentmode.Launch(ctx, facts.ActiveModel, func(asyncErr error) {
-			sgtk.RunOnMainThread(func() {
-				log.Printf("views: goose desktop exited with error: %v", asyncErr)
-				uh.toastAdder.ShowErrorToast("Goose Desktop encountered an error.")
-			})
-		})
-
-		sgtk.RunOnMainThread(func() {
-			uh.gooseGate.Reset()
-			setActivitySpinner(uh.gooseSpinner, false)
-			if uh.gooseLaunchBtn != nil {
-				uh.gooseLaunchBtn.SetSensitive(state.Ready())
-			}
-			if uh.gooseRow != nil {
-				uh.gooseRow.SetSubtitle(state.Subtitle(facts.ActiveModel))
-			}
-			if launchErr != nil {
-				log.Printf("views: launch goose desktop failed: %v", launchErr)
-				uh.toastAdder.ShowErrorToast("Failed to launch Goose Desktop.")
-				return
-			}
-			if dryRun {
-				uh.toastAdder.ShowToast("[DRY-RUN] Would launch Goose Desktop")
-			}
-		})
-	}()
-}
-
-func (uh *UserHome) onAskBluefinMenuToggled(enabled bool, toggle *guardedSwitch) {
-	if !uh.askBluefinGate.TryStart() {
-		return
-	}
-	toggle.widget.SetSensitive(false)
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err := devmenu.SetAskBluefinVisible(ctx, enabled)
-		_, visible, readErr := devmenu.AskBluefinState(ctx)
-		sgtk.RunOnMainThread(func() {
-			uh.askBluefinGate.Reset()
-			toggle.widget.SetSensitive(true)
-			if readErr == nil {
-				toggle.set(visible)
-			}
-			if err != nil {
-				log.Printf("views: setting ask bluefin menu visibility failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not update the Ask Bluefin menu entry.")
-			}
-		})
-	}()
-}

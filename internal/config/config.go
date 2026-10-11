@@ -33,7 +33,7 @@ type GroupConfig struct {
 	BundlesPaths []string       `yaml:"bundles_paths,omitempty"`
 	// InstallPulp and StageFeeds are the optional developer feed onboarding
 	// steps `dx_group` may run after a confirmed Developer Mode enable. Both
-	// default to false: they have side effects (a user-scope Flatpak install
+	// default to false: they have side effects (a system-scope Flatpak install
 	// and a file written into the user's data directory), so the same
 	// conservative posture as reset_group applies — an administrator opts in
 	// explicitly rather than every enable performing them. Neither is
@@ -321,6 +321,10 @@ func defaultConfig() *Config {
 		// crosses no privilege boundary and needs no administrator route.
 		AgentsPage: PageConfig{
 			"agents_group": GroupConfig{Enabled: true},
+			// Troubleshooting: Goose on the Agent Mode model, with
+			// read-only tools. Installs nothing until Set Up, and is
+			// accepted under help_page too, its old home (legacy.go).
+			"troubleshooting_group": GroupConfig{Enabled: true},
 		},
 		UpdatesPage: PageConfig{
 			// Whether this system updates itself on a schedule. Updating
@@ -340,14 +344,7 @@ func defaultConfig() *Config {
 			"bootc_status_group": GroupConfig{Enabled: true},
 		},
 		ApplicationsPage: PageConfig{
-			"applications_installed_group": GroupConfig{
-				Enabled: true,
-				AppID:   "io.github.kolunmi.Bazaar",
-			},
-			"flatpak_user_group":   GroupConfig{Enabled: true},
-			"flatpak_system_group": GroupConfig{Enabled: true},
-			"brew_group":           GroupConfig{Enabled: true},
-			"brew_search_group":    GroupConfig{Enabled: true},
+			"brew_group": GroupConfig{Enabled: true},
 			"brew_bundles_group": GroupConfig{
 				Enabled:      true,
 				BundlesPaths: []string{"/usr/share/ublue-os/homebrew", "/usr/share/chairlift/bundles", "/etc/chairlift/bundles"},
@@ -391,8 +388,7 @@ func defaultConfig() *Config {
 			"gaming_group": GroupConfig{Enabled: true},
 			// Printer applications: one rootless quadlet per driver family,
 			// floored on Podman by internal/capability. Enabled because the
-			// group does nothing until a switch is turned on, and today no
-			// switch can be (internal/printerapp.CanEnable, ADR-0016).
+			// group does nothing until a switch is turned on.
 			"printers_group": GroupConfig{Enabled: true},
 		},
 		// The panel mark and the Files application mark. Both write only
@@ -406,16 +402,11 @@ func defaultConfig() *Config {
 			"livery_dock_group":       GroupConfig{Enabled: true},
 		},
 		HelpPage: PageConfig{
-			// Enhanced Troubleshooting lives on Help (issue #249): one
-			// task-oriented destination for help and support, with the AI
-			// assistant leading. It keeps the Homebrew-backed self-hiding
-			// behavior, so it is safe to enable everywhere Homebrew exists.
-			"troubleshooting_group": GroupConfig{Enabled: true},
 			"help_resources_group": GroupConfig{
 				Enabled: true,
-				Website: "https://projectbluefin.io",
+				Website: "https://docs.projectbluefin.io/",
 				Issues:  "https://github.com/projectbluefin/dakota/issues",
-				Chat:    "https://docs.projectbluefin.io/",
+				Chat:    "https://ask.projectbluefin.io/",
 			},
 		},
 	}

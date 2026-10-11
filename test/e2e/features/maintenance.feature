@@ -1,7 +1,7 @@
 @maintenance
-Feature: Maintenance and its Recovery detail
+Feature: Maintenance and its Powerwash detail
   The Maintenance page holds one routine "Free up space" action, whatever
-  maintenance tasks the administrator configured, and the entry to Recovery:
+  maintenance tasks the administrator configured, and the entry to Powerwash:
   the detail screen for going back to the previous system version and for
   the two irreversible resets, Powerwash and Factory Reset.
 
@@ -27,7 +27,7 @@ Feature: Maintenance and its Recovery detail
     And the stubbed "brew" never ran "cleanup"
     And the stubbed "flatpak" answered a read-only query
     And the stubbed "flatpak" never ran "uninstall"
-    And the "Free up space" row says "Removes old downloads and supporting software nothing uses any more."
+    And the "Free up space" row says "Delete old downloads and app parts nothing uses."
     And I do not see "Freed"
     And I do not see "Cleanup finished."
     And the "Clean up" button in the "Free up space" row is sensitive
@@ -48,26 +48,29 @@ Feature: Maintenance and its Recovery detail
     And the application log contains "[DRY-RUN] Would execute: /usr/libexec/bls-gc"
     And the "Run" button in the "Clean Up Boot Old Entries" row is sensitive
 
-  # ------------------------------------------------------------ Recovery
+  # ------------------------------------------------------------ Powerwash detail
 
   @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
-  Scenario: Recovery is a detail of Maintenance and Back returns there
+  Scenario: Powerwash is a detail of Maintenance and Back returns there
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
-    Then I see "Go back to the previous version"
-    And I see "Reset the system"
-    When I go back from the Recovery detail
+    Then the "Powerwash" row says "Roll back to the previous system version or reset this machine."
+    When I open the Powerwash detail
+    Then the Powerwash detail is shown
+    And I see "Go back to the previous version"
+    And I see "Reset this computer"
+    And I do not see "Powerwash and Factory Reset are turned off"
+    When I go back from the Powerwash detail
     Then the "Maintenance" page is shown
     And I see "Free up space"
-    And I do not see "Reset the system"
+    And I do not see "Reset this computer"
 
   @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
-  Scenario: The Recovery back button names the page it returns to
+  Scenario: The Powerwash back button names the page it returns to
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
-    Then the Recovery back button is named "Back to Maintenance"
+    And I open the Powerwash detail
+    Then the Powerwash back button is named "Back to Maintenance"
 
   # ------------------------------------------------------------ Powerwash
 
@@ -75,15 +78,15 @@ Feature: Maintenance and its Recovery detail
   Scenario: Cancelling Powerwash removes nothing and leaves it available
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
-    And I click the "Remove…" button in the "Remove apps you installed" row
-    Then a dialog titled "Remove Everything I Installed?" is shown
-    And the dialog says "This removes every Flatpak application and every Distrobox container for your account. It does not touch the system image or your files. This cannot be undone."
+    And I open the Powerwash detail
+    And I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    Then a dialog titled "Remove Flatpak Apps and Containers?" is shown
+    And the dialog says "Every Flatpak app and Distrobox container in your account will be removed. Your files and everything on the Apps page stay. This can't be undone."
     When I choose "Cancel" in the dialog
     Then no dialog is shown
-    And the "Remove…" button in the "Remove apps you installed" row is sensitive
-    When I click the "Remove…" button in the "Remove apps you installed" row
-    Then a dialog titled "Remove Everything I Installed?" is shown
+    And the "Remove…" button in the "Remove Flatpak apps and containers" row is sensitive
+    When I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    Then a dialog titled "Remove Flatpak Apps and Containers?" is shown
     When I choose "Cancel" in the dialog
     Then no dialog is shown
     And the application log does not contain "Would execute: flatpak uninstall"
@@ -93,25 +96,43 @@ Feature: Maintenance and its Recovery detail
     And the stubbed "distrobox" never ran "rm"
     And the action journal is empty
 
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
+  @stub.maintenance_bootc_rollback @stub.maintenance_powerwash_inventory
   Scenario: Confirming Powerwash previews both removals, claims nothing, and can run again
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
-    And I click the "Remove…" button in the "Remove apps you installed" row
-    And I choose "Remove Everything" in the dialog
-    Then I see "[DRY-RUN] Preview: would remove your Flatpaks and Distrobox containers — no changes made"
+    And I open the Powerwash detail
+    And I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    And I choose "Remove Apps and Containers" in the dialog
+    Then I see "[DRY-RUN] Preview: would remove your Flatpak apps and containers — no changes made"
     And no dialog is shown
     And the application log contains "[DRY-RUN] Would execute: flatpak uninstall --user --all -y"
     And the application log contains "[DRY-RUN] would execute: distrobox rm --all --force"
     And the stubbed "flatpak" never ran "uninstall"
     And the stubbed "distrobox" never ran "rm"
-    And the "Remove apps you installed" row says "Your files, settings, and the system itself stay as they are."
-    And I do not see "Removed the apps you installed"
-    And the "Remove…" button in the "Remove apps you installed" row is sensitive
+    And the "Remove Flatpak apps and containers" row says "Your files and everything on the Apps page stay."
+    And I do not see "Removed your Flatpak apps and containers."
+    And the "Remove…" button in the "Remove Flatpak apps and containers" row is sensitive
     And the action journal is empty
-    When I click the "Remove…" button in the "Remove apps you installed" row
-    Then a dialog titled "Remove Everything I Installed?" is shown
+    When I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    Then a dialog titled "Remove Flatpak Apps and Containers?" is shown
+
+  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
+  Scenario: Powerwash on an account that holds nothing previews no removal
+    Given ChairLift is running
+    When I open the "Maintenance" page
+    And I open the Powerwash detail
+    And I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    And I choose "Remove Apps and Containers" in the dialog
+    Then I see "[DRY-RUN] Preview: nothing is installed to remove — no changes made"
+    And no dialog is shown
+    And the application log contains "views: powerwash finished succeeded=0 failed=0 skipped=2"
+    And the application log does not contain "Would execute: flatpak uninstall"
+    And the application log does not contain "would execute: distrobox"
+    And the stubbed "flatpak" never ran "uninstall"
+    And the stubbed "distrobox" never ran "rm"
+    And I do not see "would remove your Flatpaks and Distrobox containers"
+    And the "Remove…" button in the "Remove Flatpak apps and containers" row is sensitive
+    And the action journal is empty
 
   # --------------------------------------------------------- Factory Reset
 
@@ -119,15 +140,15 @@ Feature: Maintenance and its Recovery detail
   Scenario: Cancelling Factory Reset reaches no privileged helper and leaves it available
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
-    And I click the "Reset…" button in the "Reset the system" row
-    Then a dialog titled "Factory Reset This System?" is shown
-    And the dialog says "This discards every local change and reinstalls the current system image from scratch, using bootc's --experimental reset path. Your applications and home directory are not touched, but this cannot be undone. The reset applies at the next restart."
+    And I open the Powerwash detail
+    And I click the "Reset…" button in the "Reset this computer" row
+    Then a dialog titled "Factory Reset This Computer?" is shown
+    And the dialog says "The operating system will be reinstalled and any changes made to it will be lost. Your files and apps stay. This uses a reset method that is still experimental, and it can't be undone. The reset happens the next time you restart."
     When I choose "Cancel" in the dialog
     Then no dialog is shown
-    And the "Reset…" button in the "Reset the system" row is sensitive
-    When I click the "Reset…" button in the "Reset the system" row
-    Then a dialog titled "Factory Reset This System?" is shown
+    And the "Reset…" button in the "Reset this computer" row is sensitive
+    When I click the "Reset…" button in the "Reset this computer" row
+    Then a dialog titled "Factory Reset This Computer?" is shown
     When I choose "Cancel" in the dialog
     Then no dialog is shown
     And the application log does not contain "chairlift-helper"
@@ -137,17 +158,17 @@ Feature: Maintenance and its Recovery detail
   Scenario: Confirming Factory Reset journals the fixed helper command word and claims nothing
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
-    And I click the "Reset…" button in the "Reset the system" row
+    And I open the Powerwash detail
+    And I click the "Reset…" button in the "Reset this computer" row
     And I choose "Factory Reset" in the dialog
-    Then I see "[DRY-RUN] Preview: would factory reset this system — no changes made"
+    Then I see "[DRY-RUN] Preview: would reset this computer — no changes made"
     And no dialog is shown
     And the action journal records "factory-reset" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper factory-reset --dry-run"
     And the journalled action carries no argument
     And the action journal has no "rollback" entry
-    And I do not see "Factory reset applied"
-    And the "Reset…" button in the "Reset the system" row is sensitive
+    And I do not see "Restart to finish resetting this computer."
+    And the "Reset…" button in the "Reset this computer" row is sensitive
 
   # ------------------------------------------------------------ Roll Back
 
@@ -155,10 +176,10 @@ Feature: Maintenance and its Recovery detail
   Scenario: Roll Back names the kept version, journals a dry-run, and stays available after the preview
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
-    Then the "Go back to the previous version" row says "Return to version 44.20260913, released 13 September 2026, the next time you restart"
+    And I open the Powerwash detail
+    Then the "Go back to the previous version" row says "Return to version 44.20260913 from 13 September 2026 the next time you restart."
     When I click the "Roll Back" button in the "Go back to the previous version" row
-    Then I see "[DRY-RUN] Preview: would roll back to the previous system image — no changes made"
+    Then I see "[DRY-RUN] Preview: would go back to the previous version — no changes made"
     And the action journal records "rollback" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper rollback --dry-run"
     And the journalled action carries no argument
@@ -169,78 +190,11 @@ Feature: Maintenance and its Recovery detail
   Scenario: A host that keeps no previous version is not offered a rollback
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
-    Then I see "Published versions"
-    And I see "Reset the system"
+    And I open the Powerwash detail
+    Then I do not see "Published versions"
+    And I see "Reset this computer"
     And I do not see "Go back to the previous version"
     And the "Roll Back" button is not shown
-
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_registry_unreachable
-  Scenario: An unreachable registry lists no published versions and the check can be retried
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Recovery detail
-    And I click the "Check" button in the "Published versions" row
-    Then I see "Could not read the published versions from the image registry"
-    And the application log contains "published versions: "
-    And the "Published versions" row says "See the latest versions the image registry still offers from the last 90 days."
-    And the "Check Again" button in the "Published versions" row is sensitive
-    And I do not see "versions from the last 90 days"
-    And the action journal is empty
-
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_published_versions
-  Scenario: Cancelling pin to a published version leaves the build unpinned and controls available
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Recovery detail
-    And I click the "Check" button in the "Published versions" row
-    Then the "Check Again" button is shown
-    When I click the "Pin" button in the "13 September 2026" row
-    Then a dialog titled "Pin to 13 September 2026?" is shown
-    And the dialog says "This stages a switch to the build from 13 September 2026. Automatic updates will stay at this version until you return to the stream. The change applies the next time you restart."
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-    And the "Pin" button in the "13 September 2026" row is sensitive
-    And the action journal is empty
-
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_published_versions
-  Scenario: Confirming pin to a published version journals the pin command and keeps controls usable
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Recovery detail
-    And I click the "Check" button in the "Published versions" row
-    Then the "Check Again" button is shown
-    When I click the "Pin" button in the "13 September 2026" row
-    Then a dialog titled "Pin to 13 September 2026?" is shown
-    When I choose "Pin" in the dialog
-    Then I see "[DRY-RUN] Preview: would pin to build 20260913 — no changes made"
-    And no dialog is shown
-    And the action journal records "pin" as dry-run
-    And the journalled command is "pkexec /usr/bin/chairlift-helper pin 20260913 --dry-run"
-    And the "Pin" button in the "13 September 2026" row is sensitive
-
-  @stub.maintenance_bootc_pinned @stub.maintenance_package_tools
-  Scenario: A host booted on a dated tag offers returning to the stream and journals unpin
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Recovery detail
-    Then I see "Return to stream"
-    And the "Return to stream" row says "Switch back to the latest updates on the latest stream"
-    When I click the "Return to Stream" button in the "Return to stream" row
-    Then a dialog titled "Return to Stream?" is shown
-    And the dialog says "This stages a switch back to regular updates on the latest stream. The change applies the next time you restart."
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-    And the "Return to Stream" button in the "Return to stream" row is sensitive
-    When I click the "Return to Stream" button in the "Return to stream" row
-    And I choose "Return to Stream" in the dialog
-    Then I see "[DRY-RUN] Preview: would return to the stream — no changes made"
-    And no dialog is shown
-    And the action journal records "unpin" as dry-run
-    And the journalled command is "pkexec /usr/bin/chairlift-helper unpin --dry-run"
-    And the journalled action carries no argument
-    And the "Return to Stream" button in the "Return to stream" row is sensitive
-
   # ------------------------------------------------ configuration & capability
 
   @config.maintenance-shipped @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
@@ -249,10 +203,14 @@ Feature: Maintenance and its Recovery detail
     When I open the "Maintenance" page
     Then I see "Free up space"
     And I do not see "Maintenance tasks"
-    When I open the Recovery detail
+    And the "Powerwash" row says "Roll back to the previous system version."
+    And I do not see "reset this machine"
+    When I open the Powerwash detail
     Then I see "Go back to the previous version"
-    And I do not see "Reset the system"
-    And I do not see "Remove apps you installed"
+    And I see "Powerwash and Factory Reset are turned off in this computer's configuration."
+    And I do not see "Published versions"
+    And I do not see "Reset this computer"
+    And I do not see "Remove Flatpak apps and containers"
     And the application log does not contain "views: reset group built"
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,brew,podman,bootc-stage
@@ -260,16 +218,16 @@ Feature: Maintenance and its Recovery detail
   Scenario: Without Flatpak or Distrobox the enabled reset group stays hidden
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Recovery detail
+    And I open the Powerwash detail
     Then I see "Go back to the previous version"
-    And I do not see "Reset the system"
-    And I do not see "Remove apps you installed"
+    And I do not see "Reset this computer"
+    And I do not see "Remove Flatpak apps and containers"
     And the application log does not contain "views: reset group built"
 
   @config.maintenance-shipped @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,podman
   @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
-  Scenario: With no reset enabled and no bootc staging there is no Recovery entry
+  Scenario: With no reset enabled and no bootc staging there is no Powerwash entry
     Given ChairLift is running
     When I open the "Maintenance" page
     Then I see "Free up space"
-    And I do not see "Recovery"
+    And I do not see "Powerwash"

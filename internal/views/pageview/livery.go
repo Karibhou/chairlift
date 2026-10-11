@@ -15,9 +15,9 @@ const LiveryPageDescription = "Choose a profile picture and customize the icons 
 // Each section names the surface it changes rather than the old Livery
 // taxonomy. Configuration identities remain the original livery_page groups.
 const (
-	LiveryAppGridFragment = "The Show Applications button on GNOME or Kickoff on Plasma"
-	LiveryPanelFragment   = "The top-bar menu on GNOME"
-	LiveryDockFragment    = "Files across your desktop"
+	LiveryAppGridFragment = "The button that shows all your apps."
+	LiveryPanelFragment   = "The menu button in the top bar."
+	LiveryDockFragment    = "The Files app, wherever it appears."
 )
 
 const (
@@ -106,6 +106,24 @@ func LiveryFoundationResults(query, selectedID string) []LiveryPickerResult {
 	return out
 }
 
+// LiveryFoundationTiles is the Top Bar Icon gallery's model: every foundation
+// in catalog order, so tile i is grid child i, with the confirmed selection
+// marked. A custom file or an unknown id marks no tile.
+func LiveryFoundationTiles(selectedID string) []LiveryPickerResult {
+	return LiveryFoundationResults("", selectedID)
+}
+
+// LiveryFoundationSelectedLabel names the badge on the selected gallery tile.
+const LiveryFoundationSelectedLabel = "Selected"
+
+// LiveryChooserEscapeCloses reports whether Escape in the chooser's search
+// field closes the dialog. GtkSearchEntry consumes Escape as stop-search, so
+// the chooser decides: a typed query is cleared first, and an empty field —
+// the state the chooser opens in — closes it.
+func LiveryChooserEscapeCloses(query string) bool {
+	return query == ""
+}
+
 // LiveryProjectResults returns the dock picker's rows for a query.
 func LiveryProjectResults(query, selectedID string) []LiveryPickerResult {
 	projects := livery.SearchCNCF(query, LiveryProjectResultLimit)
@@ -136,10 +154,11 @@ const LiveryBrandPickerTitle = "Choose a Brand"
 // LiveryBrandSearchPlaceholder is the brand search box's placeholder.
 const LiveryBrandSearchPlaceholder = "Search brands…"
 
-// LiverySelectedBrandRow describes the current app-grid selection.
-func LiverySelectedBrandRow(slug string) Row {
+// LiverySelectedBrandRow describes the current app-grid selection. A custom
+// selection names its file, exactly as the row read right after the pick.
+func LiverySelectedBrandRow(slug, customPath string) Row {
 	if slug == livery.CustomID {
-		return Row{Title: "Brand", Subtitle: "Your own file"}
+		return Row{Title: "Brand", Subtitle: LiveryCustomRow(customPath).Subtitle}
 	}
 	if icon, ok := livery.LookupSimpleIcon(slug); ok {
 		return Row{Title: "Brand", Subtitle: icon.Title}
@@ -147,15 +166,16 @@ func LiverySelectedBrandRow(slug string) Row {
 	return Row{Title: "Brand", Subtitle: "Choose a brand mark"}
 }
 
-// LiverySelectedProjectRow describes the current dock selection.
-func LiverySelectedProjectRow(selectedID string) Row {
+// LiverySelectedProjectRow describes the current dock selection. A custom
+// selection names its file, exactly as the row read right after the pick.
+func LiverySelectedProjectRow(selectedID, customPath string) Row {
 	if selectedID == livery.CustomID {
-		return Row{Title: "Project", Subtitle: "Your own file"}
+		return Row{Title: "Project", Subtitle: LiveryCustomRow(customPath).Subtitle}
 	}
 	if project, ok := livery.LookupCNCF(selectedID); ok {
 		return Row{Title: "Project", Subtitle: project.Name}
 	}
-	return Row{Title: "Project", Subtitle: "Choose a CNCF project"}
+	return Row{Title: "Project", Subtitle: "Choose a project"}
 }
 
 // LiveryNoResultsRow is shown when a query matches nothing, so the section
@@ -168,17 +188,17 @@ func LiveryNoResultsRow(surface livery.Surface, query string) Row {
 	case livery.AppGrid:
 		return Row{
 			Title:    "No matching brand",
-			Subtitle: fmt.Sprintf("Nothing in Simple Icons matches %q", query),
+			Subtitle: fmt.Sprintf("No brand matches %q.", query),
 		}
 	case livery.Panel:
 		return Row{
 			Title:    "No matching mark",
-			Subtitle: fmt.Sprintf("No foundation mark matches %q", query),
+			Subtitle: fmt.Sprintf("No mark matches %q.", query),
 		}
 	default:
 		return Row{
 			Title:    "No matching project",
-			Subtitle: fmt.Sprintf("Nothing in cncf/artwork matches %q", query),
+			Subtitle: fmt.Sprintf("No project matches %q.", query),
 		}
 	}
 }
@@ -193,15 +213,13 @@ func LiveryIDForIndex(index uint) string {
 }
 
 // LiveryAppGridRow is the app-grid section's switch row text.
-//
-// The subtitle says "wherever GNOME draws it" rather than naming the dash,
-// because view-app-grid-symbolic is a shared Adwaita name: overriding it
-// changes that glyph in the dash, the overview, and anything else drawing it.
-// The same honesty the Files row owes, for the same reason.
+// The subtitle does not name the dash alone, because view-app-grid-symbolic
+// is a shared Adwaita name: overriding it changes that glyph wherever GNOME
+// draws it.
 func LiveryAppGridRow() Row {
 	return Row{
 		Title:    "Customize the App Launcher Icon",
-		Subtitle: "Replaces the Show Applications glyph on GNOME or the Kickoff icon on KDE Plasma",
+		Subtitle: "Use a brand logo on the button that shows all your apps.",
 	}
 }
 
@@ -209,7 +227,7 @@ func LiveryAppGridRow() Row {
 // configuration ChairLift can update.
 func LiveryAppGridGroupDescription(available bool) string {
 	if !available {
-		return "App-grid customization is unavailable: no KDE Kickoff applet was found in this session."
+		return "Not available on this desktop."
 	}
 	return LiveryAppGridFragment
 }
@@ -218,7 +236,7 @@ func LiveryAppGridGroupDescription(available bool) string {
 // Custom Command Menu extension never shows the section, so there is no
 // unavailable variant.
 func LiveryPanelRow() Row {
-	return Row{Title: "Customize the Top Bar Icon", Subtitle: "Replaces the top-bar menu button, in your theme's color"}
+	return Row{Title: "Customize the Top Bar Icon", Subtitle: "Use a logo on the menu button in the top bar."}
 }
 
 // LiveryDockRow is the dock section's switch row text.
@@ -230,7 +248,7 @@ func LiveryPanelRow() Row {
 func LiveryDockRow() Row {
 	return Row{
 		Title:    "Customize the Files Icon",
-		Subtitle: "Replaces the Files icon in full color — on the dock, in the app grid, and in the window switcher",
+		Subtitle: "Changes the Files icon everywhere, including the dock, app grid, and window switcher.",
 	}
 }
 
@@ -244,12 +262,12 @@ func LiveryRotationRow(systemInstall bool) Row {
 	if !systemInstall {
 		return Row{
 			Title:    "Rotate at Login",
-			Subtitle: "Runs this build by its current path — reinstall or move it and rotation stops",
+			Subtitle: "Stops working if this copy of " + branding.AppName + " is moved or reinstalled.",
 		}
 	}
 	return Row{
 		Title:    "Rotate at Login",
-		Subtitle: "Advances to the next mark each time you log in",
+		Subtitle: "Show the next logo each time you log in.",
 	}
 }
 
@@ -277,7 +295,7 @@ func LiveryCustomRow(path string) Row {
 func LiveryCNCFArtworkRow() Row {
 	return Row{
 		Title:    "Browse CNCF Artwork",
-		Subtitle: "Every mark here is the project's own icon from cncf/artwork",
+		Subtitle: "See where these project logos come from.",
 	}
 }
 
@@ -285,7 +303,7 @@ func LiveryCNCFArtworkRow() Row {
 const CNCFArtworkURL = livery.CNCFArtworkURL
 
 // LiveryProjectSearchPlaceholder is the search box's placeholder text.
-const LiveryProjectSearchPlaceholder = "Search CNCF projects…"
+const LiveryProjectSearchPlaceholder = "Search projects…"
 
 // LiveryCustomResult is the chooser row every picker ends with.
 func LiveryCustomResult(selected bool) LiveryPickerResult {
@@ -329,23 +347,29 @@ const LiveryCustomRowSubtitle = "Use your own file instead of the list above"
 // LiverySchemaMissingMessage is shown when ChairLift's GSettings schemas are
 // not on the schema search path. Most people who see it did not build from
 // source: a Homebrew cask install that copied the binary but never compiled
-// the schemas produces the same condition. So it names what is missing and
-// tells an installed user to reinstall first; `make schemas` is only the
-// source-checkout remedy. It is deliberately not phrased as a configuration
-// error — config.yml is fine, and saying otherwise sends people to the wrong
-// file.
-const LiverySchemaMissingMessage = "Livery settings are unavailable because " + branding.AppName +
-	"'s settings schema is not installed. Reinstall " + branding.AppName +
-	" to restore it; in a source checkout, run `make schemas`."
+// the schemas produces the same condition, so it tells them to reinstall.
+// (`make schemas` is the source-checkout remedy; docs/reference.md says so.)
+// It is deliberately not phrased as a configuration error.
+const LiverySchemaMissingMessage = "Livery settings are unavailable. Reinstall " + branding.AppName + " to fix this."
 
 // LiverySectionName is the object of a preview toggle's consequence.
 func LiverySectionName(surface livery.Surface) string {
 	switch surface {
 	case livery.AppGrid:
-		return "the app grid icon"
+		return "the app launcher icon"
 	case livery.Panel:
-		return "the panel icon"
+		return "the top bar icon"
 	default:
 		return "the Files icon"
 	}
+}
+
+// LiveryFailure is the toast for a failed Livery change. what is the
+// log's description of the step; downloads get a network hint and every
+// other step a plain retry, so no raw error reaches the user.
+func LiveryFailure(what string) string {
+	if strings.HasPrefix(what, "fetching") {
+		return "Couldn't download that icon. Check your internet connection."
+	}
+	return "Couldn't change the icon. Try again."
 }

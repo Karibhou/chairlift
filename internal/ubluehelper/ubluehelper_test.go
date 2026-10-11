@@ -2,6 +2,7 @@ package ubluehelper
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -340,14 +341,14 @@ func TestRestartArgsTakeNoCallerControlledValues(t *testing.T) {
 	}
 }
 
-// FactoryResetArgs is the one helper argv that legitimately carries flags —
-// --experimental and --apply are fixed, not caller-supplied, so they are not
-// the caller-controlled-value risk the other Args functions guard against.
+// FactoryResetArgs is the one helper argv that legitimately carries a flag —
+// --experimental is fixed, not caller-supplied, so it is not the
+// caller-controlled-value risk the other Args functions guard against.
 // What must still never appear is a registry reference or an image path,
 // since a factory reset takes exactly one target: the image already booted.
 func TestFactoryResetArgsAreFixedAndCarryNoTarget(t *testing.T) {
 	args := FactoryResetArgs()
-	want := []string{"install", "reset", "--experimental", "--apply"}
+	want := []string{"install", "reset", "--experimental"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("FactoryResetArgs() = %v, want %v", args, want)
 	}
@@ -369,6 +370,18 @@ func TestFactoryResetArgsAreFixedAndCarryNoTarget(t *testing.T) {
 	}
 }
 
+// bootc's `install reset --apply` "always reboots" (bootc install reset
+// --help). Every Factory Reset string promises the reset applies at the next
+// restart, so the argv must never reboot the machine the moment the user
+// authenticates.
+func TestFactoryResetArgsNeverRebootImmediately(t *testing.T) {
+	for _, arg := range FactoryResetArgs() {
+		if arg == "--apply" || strings.HasPrefix(arg, "--apply=") {
+			t.Fatalf("FactoryResetArgs() carries %q, which reboots immediately", arg)
+		}
+	}
+}
+
 func TestRollbackArgsTakeNoCallerControlledValues(t *testing.T) {
 	args := RollbackArgs()
 	if !reflect.DeepEqual(args, []string{"rollback"}) {
@@ -378,6 +391,47 @@ func TestRollbackArgsTakeNoCallerControlledValues(t *testing.T) {
 		if strings.HasPrefix(arg, "-") || strings.Contains(arg, "/") || strings.Contains(arg, ":") {
 			t.Errorf("RollbackArgs() carries %q; the rollback argv must be fixed", arg)
 		}
+	}
+}
+
+func TestSameRollbackRefusal(t *testing.T) {
+	cases := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{
+			name:   "exact composefs refusal message",
+			output: "error: Target image has the same fs-verity digest as the existing Some(Rollback) deployment",
+			want:   true,
+		},
+		{
+			name:   "generic fs-verity and rollback refusal",
+			output: "error: same fs-verity digest for Rollback",
+			want:   true,
+		},
+		{
+			name:   "network error",
+			output: "error: failed to fetch image: connection refused",
+			want:   false,
+		},
+		{
+			name:   "unrelated fs-verity error without rollback",
+			output: "error: Target image has the same fs-verity digest as the existing Booted deployment",
+			want:   false,
+		},
+		{
+			name:   "empty output",
+			output: "",
+			want:   false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsSameRollbackRefusal(tc.output); got != tc.want {
+				t.Errorf("IsSameRollbackRefusal(%q) = %v, want %v", tc.output, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -392,6 +446,7 @@ func TestAutoUpdateArgsHandleBothRepresentationsOfOff(t *testing.T) {
 	want := [][]string{
 		{"unmask", autoupdate.TimerUnit},
 		{"enable", "--now", autoupdate.TimerUnit},
+		{"unmask", autoupdate.ResumeTimerUnit},
 	}
 	if !reflect.DeepEqual(enable, want) {
 		t.Errorf("AutoUpdateArgs(enable) = %v, want %v", enable, want)
@@ -406,6 +461,7 @@ func TestAutoUpdateArgsHandleBothRepresentationsOfOff(t *testing.T) {
 	wantDisable := [][]string{
 		{"disable", "--now", autoupdate.TimerUnit},
 		{"mask", autoupdate.TimerUnit},
+		{"mask", "--now", autoupdate.ResumeTimerUnit},
 	}
 	if !reflect.DeepEqual(disable, wantDisable) {
 		t.Errorf("AutoUpdateArgs(disable) = %v, want %v", disable, wantDisable)
@@ -418,29 +474,62 @@ func TestAutoUpdateArgsHandleBothRepresentationsOfOff(t *testing.T) {
 	}
 }
 
-// Every step must name only the unattended-update timer.
-func TestAutoUpdateArgsTouchOnlyTheUpdateTimer(t *testing.T) {
+// Every step must name exactly one of the fixed unattended-update triggers,
+// and nothing else.
+func TestAutoUpdateArgsTouchOnlyTheUpdateTimers(t *testing.T) {
+	fixed := map[string]bool{autoupdate.TimerUnit: true, autoupdate.ResumeTimerUnit: true}
 	for _, command := range []string{CommandAutoEnable, CommandAutoDisable} {
 		steps, ok := AutoUpdateArgs(command)
 		if !ok {
 			t.Fatalf("AutoUpdateArgs(%q) ok = false", command)
 		}
 		for _, args := range steps {
-			named := false
+			named := 0
 			for _, arg := range args {
-				if arg == autoupdate.TimerUnit {
-					named = true
+				if fixed[arg] {
+					named++
 					continue
 				}
 				if strings.Contains(arg, ".service") || strings.Contains(arg, ".timer") {
 					t.Errorf("AutoUpdateArgs(%q) touches unit %q", command, arg)
 				}
 			}
-			if !named {
-				t.Errorf("AutoUpdateArgs(%q) step %v does not name %s", command, args, autoupdate.TimerUnit)
+			if named != 1 {
+				t.Errorf("AutoUpdateArgs(%q) step %v names %d fixed timers, want 1", command, args, named)
 			}
 		}
 	}
+}
+
+// uupd-resume.timer runs uupd.service 20 minutes after every resume. Turning
+// automatic updates off must mask (and stop) it, and turning them back on
+// must unmask it, or "off" still updates after each suspend.
+func TestAutoUpdateArgsCoverTheResumeTrigger(t *testing.T) {
+	disable, _ := AutoUpdateArgs(CommandAutoDisable)
+	if !containsStep(disable, []string{"mask", "--now", autoupdate.ResumeTimerUnit}) {
+		t.Errorf("AutoUpdateArgs(disable) = %v, does not mask --now %s", disable, autoupdate.ResumeTimerUnit)
+	}
+	enable, _ := AutoUpdateArgs(CommandAutoEnable)
+	if !containsStep(enable, []string{"unmask", autoupdate.ResumeTimerUnit}) {
+		t.Errorf("AutoUpdateArgs(enable) = %v, does not unmask %s", enable, autoupdate.ResumeTimerUnit)
+	}
+	// Enabling must not `enable` the resume timer: an image may not ship it,
+	// and `systemctl enable` of an absent unit fails after the main timer is
+	// already on.
+	for _, step := range enable {
+		if step[0] == "enable" && slices.Contains(step, autoupdate.ResumeTimerUnit) {
+			t.Errorf("AutoUpdateArgs(enable) enables %s: %v", autoupdate.ResumeTimerUnit, step)
+		}
+	}
+}
+
+func containsStep(steps [][]string, want []string) bool {
+	for _, step := range steps {
+		if reflect.DeepEqual(step, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDevGroupsMatchBluefinctl(t *testing.T) {

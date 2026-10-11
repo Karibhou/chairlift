@@ -147,11 +147,7 @@ var routes = []Item{
 		Icon:  "application-x-executable-symbolic",
 		Kind:  KindPrimary,
 		Refs: refsOn("applications_page",
-			"applications_installed_group",
-			"flatpak_user_group",
-			"flatpak_system_group",
 			"brew_group",
-			"brew_search_group",
 			"brew_bundles_group",
 		),
 	},
@@ -160,7 +156,7 @@ var routes = []Item{
 		Title: "Agents",
 		Icon:  "starred-symbolic",
 		Kind:  KindPrimary,
-		Refs:  refsOn("agents_page", "agents_group"),
+		Refs:  refsOn("agents_page", "agents_group", "troubleshooting_group"),
 	},
 	{
 		Name:  "features",
@@ -199,15 +195,11 @@ var routes = []Item{
 		),
 	},
 	{
-		Name:  "help",
-		Title: "Help",
-		Icon:  "help-browser-symbolic",
-		Kind:  KindPrimary,
-		// Troubleshooting leads Help (issue #249); resources follow it.
-		Refs: refsOn("help_page",
-			"troubleshooting_group",
-			"help_resources_group",
-		),
+		Name:       "help",
+		Title:      "Help",
+		Icon:       "help-browser-symbolic",
+		Kind:       KindPrimary,
+		Refs:       refsOn("help_page", "help_resources_group"),
 		AlwaysShow: true,
 	},
 
@@ -219,7 +211,7 @@ var routes = []Item{
 	// internal/window, which is the duplication this table removes.
 	{
 		Name:   "recovery",
-		Title:  "Recovery",
+		Title:  "Powerwash",
 		Kind:   KindDetail,
 		Parent: "maintenance",
 		Refs: []Ref{
@@ -235,6 +227,7 @@ var routes = []Item{
 }
 
 var generalShortcuts = []Shortcut{
+	{Action: "win.show-preferences", Accelerator: "<Primary>comma", Display: "Ctrl+,", Title: "Preferences", Group: GroupGeneral},
 	{Action: "win.show-shortcuts", Accelerator: "<Primary>question", Display: "Ctrl+?", Title: "Keyboard Shortcuts", Group: GroupGeneral},
 	{Action: "app.quit", Accelerator: "<Primary>q", Display: "Ctrl+Q", Title: "Quit", Group: GroupGeneral},
 	{Action: "win.navigate-help", Accelerator: "F1", Display: "F1", Title: "Help", Group: GroupGeneral},

@@ -1,12 +1,12 @@
 package views
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/registrytags"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
+
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
@@ -18,13 +18,13 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// createRecoveryPage builds the Recovery detail page: a ToolbarView whose
+// createRecoveryPage builds the Powerwash detail page: a ToolbarView whose
 // header bar carries a back button (this is a detail, reached from Maintenance),
-// hosting the Recovery preferences page.
+// hosting the Powerwash preferences page.
 func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage) {
 	toolbarView := adw.NewToolbarView()
 
-	// Header bar with a back button: Recovery is a detail, so the user
+	// Header bar with a back button: Powerwash is a detail, so the user
 	// returns to Maintenance. The back button only fires once the window has
 	// wired closeRecoveryDetail, which it does right after New.
 	headerBar := adw.NewHeaderBar()
@@ -53,7 +53,7 @@ func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage
 	return toolbarView, prefsPage
 }
 
-// Recovery is the single named detail view a user opens deliberately to return
+// Powerwash is the single named detail view a user opens deliberately to return
 // to a previous system version or perform an explicitly scoped reset. It is
 // reached from Maintenance, never from routine Free Up Space.
 //
@@ -62,44 +62,66 @@ func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage
 // invents a mutation the backend cannot perform: the bootc Roll Back row
 // appears only when bootc records a previous deployment.
 
-// RecoveryPage returns the Recovery detail ToolbarView so the window can add
+// RecoveryPage returns the Powerwash detail ToolbarView so the window can add
 // it to its content stack. Nil-guarded: the page is always built by New.
 func (uh *UserHome) RecoveryPage() *adw.ToolbarView {
 	return uh.recoveryPage
 }
 
 // SetOpenRecoveryDetail wires the callback the Maintenance page calls to open the
-// Recovery detail view.
+// Powerwash detail view.
 func (uh *UserHome) SetOpenRecoveryDetail(fn func()) {
 	uh.openRecoveryDetail = fn
 }
 
-// SetCloseRecoveryDetail wires the callback the Recovery back button calls to
+// SetCloseRecoveryDetail wires the callback the Powerwash back button calls to
 // return to Maintenance.
 func (uh *UserHome) SetCloseRecoveryDetail(fn func()) {
 	uh.closeRecoveryDetail = fn
 }
 
-// buildRecoveryPage builds the Recovery detail page.
+// buildRecoveryPage builds the Powerwash detail page.
 func (uh *UserHome) buildRecoveryPage() {
 	page := uh.recoveryPrefsPage
 	if page == nil {
 		return
 	}
 
-	page.SetTitle("Recovery")
+	page.SetTitle("Powerwash")
+	// The reset rows (built by buildMaintenancePage when reset_group is on)
+	// carry their own description; without them the page says why, so the
+	// destination's name does not send the user hunting for a reset.
+	page.SetDescription(pageview.RecoveryPageDescription(pageview.ResetAvailabilityFor(
+		uh.config.IsGroupEnabled("maintenance_page", "reset_group"),
+		uh.groupEnabled("maintenance_page", "reset_group"),
+	)))
 
 	// Roll Back: gated by the OS provider group, built hidden, revealed
 	// asynchronously once a previous deployment is confirmed to exist.
+	// The published-versions calendar (pin / return to stream) is withdrawn
+	// (#522): its dated tags exist only for the deprecated `latest` stream.
 	if uh.groupEnabled("updates_page", "bootc_updates_group") {
 		uh.buildRecoveryRollbackGroup(page)
 		go uh.loadBootcRollbackStatus()
 	}
+	uh.refreshRecoveryEntry()
 }
 
-// buildRecoveryRollbackGroup builds the bootc Roll Back row on the Recovery
-// page. It is built hidden and revealed asynchronously, so a fresh install
-// never offers a rollback to nothing.
+// refreshRecoveryEntry rewrites the Maintenance page's Powerwash entry
+// subtitle from what the detail currently holds. Main thread only.
+func (uh *UserHome) refreshRecoveryEntry() {
+	if uh.recoveryEntryRow == nil {
+		return
+	}
+	uh.recoveryEntryRow.SetSubtitle(pageview.RecoveryEntrySubtitle(pageview.RecoveryOffer{
+		Rollback: uh.bootcRollbackOffered,
+		Reset:    uh.groupEnabled("maintenance_page", "reset_group"),
+	}))
+}
+
+// buildRecoveryRollbackGroup builds the bootc Roll Back group on the Powerwash
+// page. The whole group is built hidden and revealed asynchronously, so a
+// fresh install shows neither a rollback to nothing nor its heading.
 func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	// bootc Roll Back returns to the deployment bootc records as the
 	// rollback target. Hidden until that deployment is confirmed to exist.
@@ -114,119 +136,29 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	}
 	uh.bootcRollbackBtn.ConnectClicked(&rollbackClickedCb)
 	uh.bootcRollbackRow.AddSuffix(&uh.bootcRollbackBtn.Widget)
-	uh.bootcRollbackRow.SetVisible(false)
+	uh.bootcRestartBtn = gtk.NewButtonWithLabel("Restart now")
+	uh.bootcRestartBtn.SetValign(gtk.AlignCenterValue)
+	uh.bootcRestartBtn.AddCssClass("suggested-action")
+	uh.bootcRestartBtn.SetVisible(false)
+	restartClickedCb := func(gtk.Button) {
+		uh.onBootcRollbackRestartClicked()
+	}
+	uh.bootcRestartBtn.ConnectClicked(&restartClickedCb)
+	uh.bootcRollbackRow.AddSuffix(&uh.bootcRestartBtn.Widget)
 
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Roll Back")
-	group.SetDescription("Return to the previous system version if an update went badly")
+	group.SetDescription("Go back if an update caused problems.")
 	group.Add(&uh.bootcRollbackRow.Widget)
-	// The return to stream row is offered when booted on a dated tag.
-	// The published-versions list is a bootc image concept: it reads the
-	// registry the booted image comes from.
-	if uh.groupEnabled("updates_page", "bootc_updates_group") {
-		uh.buildReturnToStreamRow(group)
-		uh.buildPublishedVersionsRow(group)
-	}
+	group.SetVisible(false)
 	page.Add(group)
+	uh.bootcRollbackGroup = group
 }
 
-// buildReturnToStreamRow builds the Return to stream row on the Recovery
-// page when booted on a dated tag.
-func (uh *UserHome) buildReturnToStreamRow(group *adw.PreferencesGroup) {
-	status := ublue.StatusCached()
-	build, pinned := registrytags.ParseBuild(status.Tag)
-	if !status.Available || !pinned {
-		return
-	}
-
-	stream := build.Stream
-	supported := status.Supports(ubluehelper.CommandUnpin)
-	presentation := pageview.UnpinRow(stream, supported)
-
-	row := adw.NewActionRow()
-	row.SetTitle(presentation.Title)
-	row.SetSubtitle(presentation.Subtitle)
-
-	btn := gtk.NewButtonWithLabel("Return to Stream")
-	btn.SetValign(gtk.AlignCenterValue)
-	btn.SetSensitive(supported)
-	if !supported {
-		btn.SetTooltipText(pageview.UnpinUnsupportedExplanation())
-	} else {
-		clickedCb := func(gtk.Button) {
-			uh.confirmReturnToStream(stream, btn)
-		}
-		btn.ConnectClicked(&clickedCb)
-	}
-
-	row.AddSuffix(&btn.Widget)
-	group.Add(&row.Widget)
-	uh.unpinRow = row
-	uh.unpinBtn = btn
-}
-
-// confirmReturnToStream presents an AdwAlertDialog confirmation before
-// returning to the regular release stream.
-func (uh *UserHome) confirmReturnToStream(stream string, button *gtk.Button) {
-	if !uh.unpinGate.TryStart() {
-		return
-	}
-
-	title, body := pageview.UnpinConfirmation(stream)
-	dialog := adw.NewAlertDialog(title, body)
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("confirm", "Return to Stream")
-	dialog.SetResponseAppearance("confirm", adw.ResponseSuggestedValue)
-
-	uh.recoveryDialogs.connect(dialog, func(response string) {
-		if response != "confirm" {
-			uh.unpinGate.Reset()
-			return
-		}
-		uh.runReturnToStream(button)
-	})
-	dialog.Present(&uh.recoveryPrefsPage.Widget)
-}
-
-// runReturnToStream unpins the machine and returns to the stream via
-// pkexec chairlift-helper unpin.
-func (uh *UserHome) runReturnToStream(button *gtk.Button) {
-	button.SetSensitive(false)
-	button.SetLabel("Returning…")
-
-	go func() {
-		ctx, cancel := ublue.DefaultContext()
-		defer cancel()
-
-		err := ublue.Unpin(ctx)
-
-		sgtk.RunOnMainThread(func() {
-			uh.unpinGate.Reset()
-			button.SetSensitive(true)
-			button.SetLabel("Return to Stream")
-
-			if err != nil {
-				log.Printf("views: return to stream failed: %v", err)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Return to stream failed: %v", err))
-				return
-			}
-
-			decision := actionmsg.ReturnToStream(dryrun.Enabled())
-			if decision.Confirm {
-				go uh.loadBootcRollbackStatus()
-				if uh.updateShell != nil {
-					uh.updateShell.StartCheck()
-				}
-			}
-			uh.toastAdder.ShowToast(decision.Toast)
-		})
-	}()
-}
-
-// loadBootcRollbackStatus reveals the Roll Back row when bootc records a
+// loadBootcRollbackStatus reveals the Roll Back group when bootc records a
 // rollback deployment. A host with no previous image — a fresh install, or
-// one whose rollback slot has been pruned — leaves the row hidden rather than
-// showing an inert control.
+// one whose rollback slot has been pruned — leaves the whole group hidden
+// rather than showing an inert control or an orphaned heading.
 func (uh *UserHome) loadBootcRollbackStatus() {
 	ctx, cancel := bootc.DefaultContext()
 	defer cancel()
@@ -236,40 +168,37 @@ func (uh *UserHome) loadBootcRollbackStatus() {
 	helperSupported := ublue.StatusCached().Supports(ubluehelper.CommandRollback)
 
 	sgtk.RunOnMainThread(func() {
-		if err == nil && status != nil {
-			// Kept for the Published versions list, which marks the
-			// running and previous days.
-			uh.runningVersion = status.Status.Booted.Version()
-			uh.previousVersion = status.Status.Rollback.Version()
-		}
-		if uh.bootcRollbackRow == nil {
+		if uh.bootcRollbackRow == nil || uh.bootcRollbackGroup == nil {
 			return
 		}
-		if err != nil || status.Status.Rollback == nil || !helperSupported {
-			uh.bootcRollbackRow.SetVisible(false)
+		offered := err == nil && status != nil && status.Status.Rollback != nil && helperSupported
+		uh.bootcRollbackGroup.SetVisible(offered)
+		uh.bootcRollbackOffered = offered
+		uh.refreshRecoveryEntry()
+		if !offered {
 			return
 		}
 
 		deployment := status.Status.Rollback
 		presentation := pageview.BootcRollbackRow(deployment.Version(), deployment.Timestamp())
 		uh.bootcRollbackRow.SetSubtitle(presentation.Subtitle)
-		uh.bootcRollbackRow.SetVisible(true)
 		log.Printf("views: bootc rollback available version=%q", deployment.Version())
 	})
 }
 
-// recoveryProvidersAvailable reports whether the Recovery detail view has
+// recoveryProvidersAvailable reports whether the Powerwash detail view has
 // anything to show: a reset (reset_group) or the bootc rollback provider
 // (bootc_updates_group) is enabled. The Maintenance page uses it to decide
-// whether to show its Recovery entry, so the entry's gate lives in one place
+// whether to show its Powerwash entry, so the entry's gate lives in one place
 // and does not reach across pages from maintenance_page.go.
 func (uh *UserHome) recoveryProvidersAvailable() bool {
 	return uh.groupEnabled("maintenance_page", "reset_group") ||
 		uh.groupEnabled("updates_page", "bootc_updates_group")
 }
 
-// onBootcRollbackClicked stages a rollback to the previous deployment. It
-// does not restart: rolling back and restarting are separate decisions.
+// onBootcRollbackClicked queues a rollback to the previous deployment. It
+// does not restart: rolling back and restarting are separate decisions, so
+// a live success swaps in a Restart now button rather than rebooting.
 func (uh *UserHome) onBootcRollbackClicked() {
 	if !uh.bootcRollbackGate.TryStart() {
 		return
@@ -287,9 +216,10 @@ func (uh *UserHome) onBootcRollbackClicked() {
 
 		sgtk.RunOnMainThread(func() {
 			if err != nil {
+				log.Printf("views: rollback failed: %v", err)
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Rollback failed: %v", err))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't go back to the previous version. Try again."))
 				return
 			}
 
@@ -298,11 +228,34 @@ func (uh *UserHome) onBootcRollbackClicked() {
 				uh.bootcRollbackGate.Complete()
 				button.SetSensitive(false)
 				row.SetSubtitle(pageview.BootcRollbackResultSubtitle())
+				if ublue.StatusCached().Supports(ubluehelper.CommandRestart) {
+					button.SetVisible(false)
+					uh.bootcRestartBtn.SetVisible(true)
+				}
 			} else {
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
+		})
+	}()
+}
+
+// onBootcRollbackRestartClicked restarts into the queued rollback through the
+// helper's fixed restart command, the same one Updates offers for a staged
+// deployment.
+func (uh *UserHome) onBootcRollbackRestartClicked() {
+	button := uh.bootcRestartBtn
+	button.SetSensitive(false)
+	go func() {
+		ctx, cancel := ublue.DefaultContext()
+		defer cancel()
+		err := ublue.Restart(ctx)
+		sgtk.RunOnMainThread(func() {
+			button.SetSensitive(true)
+			if err != nil {
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't restart. Try again."))
+			}
 		})
 	}()
 }

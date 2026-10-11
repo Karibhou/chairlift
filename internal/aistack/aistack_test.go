@@ -101,6 +101,7 @@ type host struct {
 	config  string
 	exe     string
 	calls   []string
+	brew    []string
 	bundles []string
 	fail    map[string]error
 	outputs map[string]string
@@ -118,7 +119,19 @@ func newHost(t *testing.T) *host {
 	saved := []func(){}
 	restore := func(f func()) { saved = append(saved, f) }
 	oc, ol, ob, oi, or, on := configDir, lookPath, brewPath, installBundle, run, nodeURL
-	restore(func() { configDir, lookPath, brewPath, installBundle, run, nodeURL = oc, ol, ob, oi, or, on })
+	ot, otr := tapRepo, trustFormula
+	restore(func() {
+		configDir, lookPath, brewPath, installBundle, run, nodeURL = oc, ol, ob, oi, or, on
+		tapRepo, trustFormula = ot, otr
+	})
+	tapRepo = func(name string) error {
+		h.brew = append(h.brew, "brew tap "+name)
+		return h.fail["brew tap "+name]
+	}
+	trustFormula = func(name string) error {
+		h.brew = append(h.brew, "brew trust --formula "+name)
+		return h.fail["brew trust --formula "+name]
+	}
 	configDir = func() (string, error) { return h.config, nil }
 	lookPath = func(string) (string, error) { return "", errors.New("not on PATH") }
 	brewPath = func() string { return filepath.Join(bin, "brew") }
@@ -183,6 +196,7 @@ func TestEnableInstallsTheFormulaWhenLLMManIsMissing(t *testing.T) {
 	installBundle = func(path string) error {
 		data, _ := os.ReadFile(path)
 		h.bundles = append(h.bundles, string(data))
+		h.brew = append(h.brew, "brew bundle")
 		return os.WriteFile(h.exe, []byte("#!/bin/sh\n"), 0o755)
 	}
 	if err := Enable(context.Background()); err != nil {
@@ -190,6 +204,28 @@ func TestEnableInstallsTheFormulaWhenLLMManIsMissing(t *testing.T) {
 	}
 	if len(h.bundles) != 1 || !strings.Contains(h.bundles[0], `brew "`+Formula+`"`) {
 		t.Errorf("bundles = %q", h.bundles)
+	}
+	// Homebrew refuses to load a formula from an untrusted tap, and
+	// llmmanorg/tap is untrusted on a stock host: the tap must exist and
+	// the one formula be trusted before the bundle loads it — and nothing
+	// broader than that formula is trusted.
+	want := []string{"brew tap " + Tap, "brew trust --formula " + Formula, "brew bundle"}
+	if got := h.brew; strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("brew steps = %q, want %q", got, want)
+	}
+}
+
+func TestEnableStopsWhenTrustFails(t *testing.T) {
+	h := newHost(t)
+	if err := os.Remove(h.exe); err != nil {
+		t.Fatal(err)
+	}
+	h.fail["brew trust --formula "+Formula] = errors.New("trust failed")
+	if err := Enable(context.Background()); err == nil {
+		t.Fatal("Enable succeeded although the formula could not be trusted")
+	}
+	if len(h.bundles) != 0 || h.exists(t, unitRel) {
+		t.Errorf("bundled or wrote a unit after trust failed: bundles=%q", h.bundles)
 	}
 }
 
@@ -347,5 +383,41 @@ func TestExecutablePrefersPathThenBrewSibling(t *testing.T) {
 	brewPath = func() string { return "" }
 	if got := Executable(); got != "" {
 		t.Errorf("no brew, no PATH: got %q", got)
+	}
+}
+
+// WebUIURL is the loopback daemon's models page; ChairLift links there
+// rather than re-implementing a picker (#568).
+func TestWebUIURLIsTheLoopbackDaemon(t *testing.T) {
+	if got, want := WebUIURL(), "http://"+Address+"/#/models"; got != want {
+		t.Errorf("WebUIURL() = %q, want %q", got, want)
+	}
+	if !strings.HasPrefix(Address, "127.0.0.1:") {
+		t.Errorf("Address %q is not loopback", Address)
+	}
+}
+
+// ReadActiveModel reads the alias llmman reports; a fresh runtime has no
+// alias set, which is the ordinary no-selection state, not an error. Other
+// failures still surface so a misconfigured daemon is not silently accepted.
+func TestReadActiveModelDistinguishesUnsetAliasFromFailure(t *testing.T) {
+	newHost(t)
+	failure := errors.New("command failed")
+	for _, test := range []struct {
+		name, output, model string
+		err                 error
+		wantError           bool
+	}{
+		{name: "fresh runtime", output: "Error: aliases.bluefin-active: not set", err: failure},
+		{name: "configured", output: "unsloth/example:Q4_K_M\n", model: "unsloth/example:Q4_K_M"},
+		{name: "config read failed", output: "Error: permission denied", err: failure, wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			run = func(context.Context, string, ...string) (string, error) { return test.output, test.err }
+			model, err := ReadActiveModel(context.Background())
+			if model != test.model || (err != nil) != test.wantError {
+				t.Fatalf("ReadActiveModel = %q, %v", model, err)
+			}
+		})
 	}
 }

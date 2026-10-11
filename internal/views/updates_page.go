@@ -12,6 +12,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/progresslog"
@@ -51,7 +52,7 @@ func (uh *UserHome) buildUpdatesPage() {
 	if uh.groupEnabled("updates_page", "bootc_updates_group") {
 		group := adw.NewPreferencesGroup()
 		group.SetTitle("System update details")
-		group.SetDescription("Download a system update on its own, or compare the version waiting for your next restart.")
+		group.SetDescription("Download a system update on its own, or see what it changes.")
 		group.SetVisible(false)
 
 		uh.bootcStageExpander = adw.NewExpanderRow()
@@ -64,7 +65,7 @@ func (uh *UserHome) buildUpdatesPage() {
 		uh.bootcStageExpander.SetTitle("Download system update")
 		uh.bootcStageExpander.SetSubtitle("Checking…")
 
-		uh.bootcStageBtn = gtk.NewButtonWithLabel("Check for updates")
+		uh.bootcStageBtn = gtk.NewButtonWithLabel(pageview.BootcStageButtonLabel)
 		uh.bootcStageBtn.SetValign(gtk.AlignCenterValue)
 		stageClickedCb := func(btn gtk.Button) {
 			uh.onBootcStageClicked()
@@ -86,7 +87,7 @@ func (uh *UserHome) buildUpdatesPage() {
 	if uh.groupEnabled("updates_page", "brew_trust_group") {
 		uh.brewTrustGroup = adw.NewPreferencesGroup()
 		uh.brewTrustGroup.SetTitle("Unverified sources")
-		uh.brewTrustGroup.SetDescription("Some software came from a source you have not said you trust, so it stays at the version you have. Trusting a source lets its software update again.")
+		uh.brewTrustGroup.SetDescription("Updates are paused for software from sources you haven't trusted yet.")
 		uh.brewTrustGroup.SetVisible(false)
 		page.Add(uh.brewTrustGroup)
 
@@ -121,13 +122,10 @@ func (uh *UserHome) loadUntrustedTaps() {
 		uh.trustButtons.clear()
 		if err != nil {
 			row := adw.NewActionRow()
-			// err.Error() is the message returned by the untrusted-tap
-			// check; AdwActionRow parses a subtitle as Pango markup by
-			// default, so a '<' or '&' in that text would garble or drop
-			// the row with a GTK warning (issue #437).
+			// The raw error is logged above; the row says what to do.
 			row.SetUseMarkup(false)
-			row.SetTitle("Could not check software sources")
-			row.SetSubtitle(err.Error())
+			row.SetTitle("Couldn't check for paused updates")
+			row.SetSubtitle("Check your internet connection and try again.")
 			button := gtk.NewButtonWithLabel("Retry")
 			button.SetValign(gtk.AlignCenterValue)
 			uh.trustButtons.connect(button, func(btn gtk.Button) {
@@ -163,7 +161,7 @@ func (uh *UserHome) loadUntrustedTaps() {
 func (uh *UserHome) confirmTrustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 	dialog := adw.NewAlertDialog(
 		fmt.Sprintf("Trust software from %s?", tap.Name),
-		"Software from this source can run its own code on your computer while it installs and updates. Only trust sources you recognize.",
+		"Software from this source can change anything on this computer. Only trust sources you recognize.",
 	)
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("trust", "Trust")
@@ -191,7 +189,7 @@ func (uh *UserHome) trustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 		if err != nil {
 			button.SetSensitive(true)
 			button.SetLabel("Trust…")
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not trust %s", tap.Name))
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't trust %s. Try again.", tap.Name))
 			return
 		}
 
@@ -240,7 +238,7 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 		group.SetVisible(true)
 		if err != nil {
 			log.Printf("reading system status failed: %v", err)
-			uh.bootcStageExpander.SetSubtitle("The system's update status could not be read")
+			uh.bootcStageExpander.SetSubtitle("Couldn't check for system updates.")
 			return
 		}
 		version := ""
@@ -332,12 +330,20 @@ func (s *stageProgressSink) flush() {
 
 	s.activityRow.SetSubtitle(batch.Lines[len(batch.Lines)-1].Text)
 	s.logExpander.SetSubtitle(pageview.StagingLogSubtitle(s.rows.Len(), batch.Total))
+	// The expander is built hidden and revealed by its first line, so a run
+	// whose helper printed nothing never offers an expander that opens to
+	// nothing (on Dakota, bootc logged a stage to the journal, not the pipe).
+	s.logExpander.SetVisible(true)
 }
 
 // onBootcStageClicked runs the stage script with streamed log output.
-// The script checks, downloads, and stages in one idempotent operation.
+// The script checks, downloads, and stages in one idempotent operation, which
+// is why the action is labelled Download rather than as a check.
 func (uh *UserHome) onBootcStageClicked() {
-	if uh.updateShell == nil || !uh.updateShell.beginMutation() {
+	// beginMutation refuses while a check, an update run, or a restart owns
+	// the system; say so instead of ignoring the click.
+	if !uh.updateShell.beginMutation() {
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}
 	button := uh.bootcStageBtn
@@ -346,7 +352,7 @@ func (uh *UserHome) onBootcStageClicked() {
 	button.SetSensitive(false)
 	button.SetLabel("Working…")
 	expander.SetExpanded(true)
-	expander.SetSubtitle("Checking for updates…")
+	expander.SetSubtitle(pageview.BootcStageRunningSubtitle)
 
 	// Remove rows from any previous run before adding new ones, otherwise
 	// repeated clicks stack duplicate Progress/Details rows.
@@ -376,6 +382,8 @@ func (uh *UserHome) onBootcStageClicked() {
 	logExpander := adw.NewExpanderRow()
 	logExpander.SetTitle("Details")
 	logExpander.SetSubtitle(pageview.StagingLogSubtitle(0, 0))
+	// Hidden until the helper prints a line; flush reveals it.
+	logExpander.SetVisible(false)
 	expander.AddRow(&logExpander.Widget)
 	uh.bootcLogExpander = logExpander
 
@@ -393,40 +401,56 @@ func (uh *UserHome) onBootcStageClicked() {
 			stageErr = bootc.StageUpdate(ctx, progressCh)
 		}()
 
-		// The sink's return value is the stage helper's own last line.
-		// It is deliberately discarded: it is terminal output that can
-		// name paths a person has no use for, which is why
+		// The sink's return value is the stage helper's own last line. Only
+		// whether there was one is used: the text is terminal output that
+		// can name paths a person has no use for, which is why
 		// pageview.BootcStageResultSubtitle takes no such argument.
-		newStageProgressSink(activityRow, logExpander).consume(progressCh)
+		hadOutput := newStageProgressSink(activityRow, logExpander).consume(progressCh) != ""
 
 		wg.Wait()
 
 		// Re-read status so the subtitle and badge reflect reality
 		// (staged vs already-current) rather than guessing from output.
+		// The System version readout is re-rendered from the same read.
 		statusCtx, statusCancel := bootc.DefaultContext()
 		status, statusErr := bootc.GetStatus(statusCtx)
 		statusCancel()
 
 		staged := statusErr == nil && status.Status.Staged != nil
+		version := ""
+		if staged {
+			version = status.Status.Staged.Version()
+		}
 
 		sgtk.RunOnMainThread(func() {
 			uh.updateShell.finishMutation()
 			spinner.Stop()
 			button.SetSensitive(true)
-			button.SetLabel("Check for updates")
+			button.SetLabel(pageview.BootcStageButtonLabel)
 
 			if stageErr != nil {
 				log.Printf("staging the system update failed: %v", stageErr)
-				expander.SetSubtitle("The update could not be downloaded. Open Details to see what happened.")
-				uh.toastAdder.ShowErrorToast("The system update could not be downloaded")
+				toast, isError := pageview.PrivilegedFailureToast(stageErr, "The system update could not be downloaded")
+				if !isError {
+					// Authentication was dismissed: nothing ran, so the row
+					// reads as it did before the click.
+					expander.SetSubtitle(pageview.BootcUpdateSubtitle(staged, version))
+					uh.toastAdder.ShowToast(toast)
+					return
+				}
+				expander.SetSubtitle(pageview.BootcStageFailureSubtitle(hadOutput))
+				uh.toastAdder.ShowErrorToast(toast)
 				return
 			}
 
 			if statusErr == nil {
 				uh.refreshChangelogAvailability(status)
+				versionGeneration := uh.systemVersionRefresh.Begin()
+				uh.renderSystemVersion(versionGeneration, status)
 			}
 			if statusErr != nil {
-				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
+				log.Printf("reading status after staging failed: %v", statusErr)
+				message := "Couldn't confirm the update is ready. Try again."
 				expander.SetSubtitle(message)
 				if dryrun.Enabled() {
 					uh.toastAdder.ShowToast(actionmsg.SystemStage(true, false))
@@ -436,10 +460,6 @@ func (uh *UserHome) onBootcStageClicked() {
 				return
 			}
 
-			version := ""
-			if staged {
-				version = status.Status.Staged.Version()
-			}
 			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version))
 			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
 			if !dryrun.Enabled() {
@@ -466,19 +486,23 @@ func (uh *UserHome) buildSystemVersionGroup(page *adw.PreferencesPage) {
 
 	details := adw.NewExpanderRow()
 	details.SetTitle("Details")
-	details.SetSubtitle("Identifiers to quote when asking for help")
+	details.SetSubtitle("Share these when asking for help.")
 	group.Add(&details.Widget)
 
 	page.Add(group)
 
-	go uh.loadSystemVersion(group, versionRow, details)
+	uh.systemVersionGroup = group
+	uh.systemVersionRow = versionRow
+	uh.systemVersionDetails = details
+
+	go uh.loadSystemVersion(uh.systemVersionRefresh.Begin())
 }
 
-// loadSystemVersion fills the System version group. Runs in a goroutine and
-// shows the group only on a host whose version can actually be read; the
-// widgets are parameters rather than fields because nothing refreshes them
-// after this single pass.
-func (uh *UserHome) loadSystemVersion(group *adw.PreferencesGroup, versionRow *adw.ActionRow, details *adw.ExpanderRow) {
+// loadSystemVersion reads the booted and staged deployments for the System
+// version group's first render. Runs in a goroutine; the group stays hidden
+// on a host whose version cannot be read. Later renders come from the
+// status a staging or update run already re-read (renderSystemVersion).
+func (uh *UserHome) loadSystemVersion(generation uint64) {
 	if !bootc.IsBootcBootedCached() {
 		return // group stays hidden on hosts with no system image
 	}
@@ -492,6 +516,27 @@ func (uh *UserHome) loadSystemVersion(group *adw.PreferencesGroup, versionRow *a
 		return // an unreadable version is not worth a row that says so
 	}
 
+	sgtk.RunOnMainThread(func() {
+		uh.renderSystemVersion(generation, status)
+	})
+}
+
+// renderSystemVersion fills the System version group from one observed
+// bootc status. It runs on the GTK main thread, after the startup read and
+// again after every staging or update run that re-read the status, so a
+// version staged in this session is named without a restart. generation
+// comes from systemVersionRefresh.Begin, claimed before the status was read:
+// a slower, older read must not overwrite a newer one. The group belongs to
+// bootc_status_group, which may be disabled while the paths that call this
+// are not, so every widget is nil-guarded.
+func (uh *UserHome) renderSystemVersion(generation uint64, status *bootc.Status) {
+	if uh.systemVersionRow == nil || uh.systemVersionDetails == nil || uh.systemVersionGroup == nil || status == nil {
+		return
+	}
+	if !uh.systemVersionRefresh.IsCurrent(generation) {
+		return
+	}
+
 	booted := status.Status.Booted
 	staged := status.Status.Staged
 	presentation := pageview.SystemVersionRow(booted.Version(), booted.Timestamp(), staged != nil, staged.Version())
@@ -502,20 +547,29 @@ func (uh *UserHome) loadSystemVersion(group *adw.PreferencesGroup, versionRow *a
 		booted.Digest(),
 	)
 
-	sgtk.RunOnMainThread(func() {
-		versionRow.SetTitle(presentation.Title)
-		versionRow.SetSubtitle(presentation.Subtitle)
+	uh.systemVersionRow.SetTitle(presentation.Title)
+	uh.systemVersionRow.SetSubtitle(presentation.Subtitle)
 
-		for _, detail := range detailRows {
-			row := adw.NewActionRow()
-			row.SetTitle(detail.Title)
-			row.SetSubtitle(detail.Subtitle)
-			details.AddRow(&row.Widget)
-		}
-		details.SetVisible(len(detailRows) > 0)
-
-		group.SetVisible(true)
+	details := uh.systemVersionDetails
+	uh.systemVersionRows.Clear(func(row *adw.ActionRow) {
+		details.Remove(&row.Widget)
 	})
+	for _, detail := range detailRows {
+		row := adw.NewActionRow()
+		// The image reference and digest are registry output; render them
+		// literally rather than as Pango markup (issue #437).
+		row.SetUseMarkup(false)
+		row.SetTitle(detail.Title)
+		row.SetSubtitle(detail.Subtitle)
+		// These are the identifiers a person is told to quote, so they
+		// must be selectable and copyable.
+		row.SetSubtitleSelectable(true)
+		details.AddRow(&row.Widget)
+		uh.systemVersionRows.Add(row)
+	}
+	details.SetVisible(len(detailRows) > 0)
+
+	uh.systemVersionGroup.SetVisible(true)
 }
 
 // buildImageIdentityGroup builds the two controls that decide which
@@ -560,7 +614,7 @@ func (uh *UserHome) buildChannelErrorGroup(page *adw.PreferencesPage) {
 
 	row := adw.NewActionRow()
 	row.SetTitle("Unavailable right now")
-	row.SetSubtitle("Early updates and graphics driver choices can't be changed until this system's update settings are repaired.")
+	row.SetSubtitle("These options are off because of a problem with this computer's update settings.")
 	group.Add(&row.Widget)
 
 	page.Add(group)
@@ -575,7 +629,7 @@ func (uh *UserHome) buildChannelErrorGroup(page *adw.PreferencesPage) {
 func (uh *UserHome) buildChannelGroup(page *adw.PreferencesPage, status ublue.Status) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Advanced")
-	group.SetDescription("These replace the operating system itself. Both need your administrator password, a large download, and a restart.")
+	group.SetDescription("These change the whole operating system. Each needs your administrator password, a large download, and a restart.")
 
 	onTesting := status.Channel == imageinfo.ChannelTesting
 	// Nothing to switch to, or an image that does not provide the helper
@@ -652,9 +706,16 @@ func (uh *UserHome) buildDriverRow(status ublue.Status) {
 
 // onDriverSwitchClicked asks for the recommended graphics driver. Only the
 // driver word crosses the privileged boundary; the helper derives the
-// operating system to install from its own read-only table.
+// operating system to install from its own read-only table. The switch
+// replaces the operating system, so it is admitted through the update shell
+// like a stage: it must not race an update run's own staging.
 func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.Button, row *adw.ActionRow) {
 	if !uh.driverGate.TryStart() {
+		return
+	}
+	if !uh.updateShell.beginMutation() {
+		uh.driverGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}
 
@@ -662,19 +723,22 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 	button.SetLabel("Switching…")
 
 	go func() {
-		ctx, cancel := ublue.DefaultContext()
+		ctx, cancel := ublue.ImageSwitchContext()
 		defer cancel()
 
 		err := ublue.SwitchDriver(ctx, driver)
 
 		sgtk.RunOnMainThread(func() {
+			// Ends the admission before refreshAfterOSSwitch, whose check
+			// the shell refuses while a mutation is in flight.
+			uh.updateShell.finishMutation()
 			uh.driverGate.Reset()
 			button.SetSensitive(true)
 			button.SetLabel("Switch")
 
 			if err != nil {
 				log.Printf("switching the graphics driver failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not switch the graphics driver")
+				uh.showPrivilegedFailure(err, "Could not switch the graphics driver")
 				return
 			}
 
@@ -682,6 +746,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 			if decision.Confirm {
 				row.SetSubtitle(pageview.GraphicsDriverResultSubtitle(driver.DisplayName()))
 				button.SetVisible(false)
+				uh.refreshAfterOSSwitch()
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
@@ -689,28 +754,39 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 }
 
 // onChannelToggled asks for the other release channel. Only the channel word
-// crosses the privileged boundary.
+// crosses the privileged boundary. Like a driver switch it replaces the
+// operating system, so the update shell admits it.
 func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row *adw.ActionRow) {
 	channel := imageinfo.ChannelStable
 	if toTesting {
 		channel = imageinfo.ChannelTesting
 	}
 
+	if !uh.updateShell.beginMutation() {
+		// This runs inside the switch's state-set emission, where moving
+		// the switch is overridden when the emission finishes; revert on
+		// the next main-loop turn instead.
+		sgtk.RunOnMainThread(func() { toggle.set(!toTesting) })
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
+
 	toggle.widget.SetSensitive(false)
 
 	go func() {
-		ctx, cancel := ublue.DefaultContext()
+		ctx, cancel := ublue.ImageSwitchContext()
 		defer cancel()
 
 		err := ublue.SwitchChannel(ctx, channel)
 
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			toggle.widget.SetSensitive(true)
 
 			if err != nil {
 				toggle.set(!toTesting)
 				log.Printf("switching the release channel failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not change when this system gets updates")
+				uh.showPrivilegedFailure(err, "Could not change when this system gets updates")
 				return
 			}
 
@@ -718,8 +794,34 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 			toggle.set(decision.Confirm == toTesting)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.ChannelSwitchResultSubtitle(toTesting))
+				uh.refreshAfterOSSwitch()
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
 	}()
+}
+
+// showPrivilegedFailure reports a failed privileged switch: a persistent
+// error toast, or the brief cancellation toast when the user dismissed the
+// authentication prompt and nothing ran.
+func (uh *UserHome) showPrivilegedFailure(err error, failure string) {
+	toast, isError := pageview.PrivilegedFailureToast(err, failure)
+	if isError {
+		uh.toastAdder.ShowErrorToast(toast)
+		return
+	}
+	uh.toastAdder.ShowToast(toast)
+}
+
+// refreshAfterOSSwitch re-reads what a live channel or driver switch staged,
+// the way a dedicated stage does: the Operating system row learns a restart
+// is due and offers Restart now, and Compare learns the new pending image.
+// Without it both kept describing the system before the switch until the
+// next manual check.
+func (uh *UserHome) refreshAfterOSSwitch() {
+	if dryrun.Enabled() {
+		return
+	}
+	uh.updateShell.StartCheck()
+	uh.OnUpdateFinished(updateflow.Snapshot{CompletedSources: []updateflow.SourceID{updateflow.OperatingSystem}})
 }

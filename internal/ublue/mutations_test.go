@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/journal"
@@ -71,12 +72,12 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 		},
 		{
 			name:     "SetDeveloperMode enabled",
-			call:     func(ctx context.Context) error { return SetDeveloperMode(ctx, true) },
+			call:     func(ctx context.Context) error { _, err := SetDeveloperMode(ctx, true); return err },
 			wantArgs: []string{ubluehelper.CommandDXEnable},
 		},
 		{
 			name:     "SetDeveloperMode disabled",
-			call:     func(ctx context.Context) error { return SetDeveloperMode(ctx, false) },
+			call:     func(ctx context.Context) error { _, err := SetDeveloperMode(ctx, false); return err },
 			wantArgs: []string{ubluehelper.CommandDXDisable},
 		},
 		{name: "EnableKVMAccess", call: EnableKVMAccess, wantArgs: []string{ubluehelper.CommandKVMEnable}},
@@ -87,12 +88,6 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 			call:     Restart,
 			wantArgs: []string{ubluehelper.CommandRestart},
 		},
-		{
-			name:     "Pin",
-			call:     func(ctx context.Context) error { return Pin(ctx, "20240229") },
-			wantArgs: []string{ubluehelper.CommandPin, "20240229"},
-		},
-		{name: "Unpin", call: Unpin, wantArgs: []string{ubluehelper.CommandUnpin}},
 		{
 			name:     "Rollback",
 			call:     Rollback,
@@ -237,14 +232,58 @@ func TestDefaultContextCarriesTheDefaultDeadline(t *testing.T) {
 	if !ok {
 		t.Fatal("DefaultContext returned a context with no deadline")
 	}
+	limit := ubluehelper.DefaultTimeout + AuthenticationAllowance
 	remaining := time.Until(deadline)
-	if remaining <= 0 || remaining > DefaultTimeout {
-		t.Errorf("DefaultContext deadline in %v, want (0, %v]", remaining, DefaultTimeout)
+	if remaining <= ubluehelper.DefaultTimeout || remaining > limit {
+		t.Errorf("DefaultContext deadline in %v, want (%v, %v]", remaining, ubluehelper.DefaultTimeout, limit)
 	}
 
 	cancel()
 	if !errors.Is(ctx.Err(), context.Canceled) {
 		t.Errorf("after cancel, ctx.Err() = %v, want context.Canceled", ctx.Err())
+	}
+}
+
+// A channel switch, driver switch, pin, or unpin pulls a full image, the same
+// transfer OS staging does, so the helper gives it at least the staging
+// budget; at ten minutes a slow link had `bootc switch` killed mid-pull. The
+// GUI's context must outlast the helper's, because its clock also covers the
+// PolicyKit prompt and the helper should report its own outcome.
+func TestSwitchTimeoutsCoverAFullImagePull(t *testing.T) {
+	ctx, cancel := ImageSwitchContext()
+	defer cancel()
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("ImageSwitchContext returned a context with no deadline")
+	}
+	gui := time.Until(deadline)
+
+	for _, command := range []string{
+		ubluehelper.CommandChannelSwitch,
+		ubluehelper.CommandDriverSwitch,
+		ubluehelper.CommandPin,
+		ubluehelper.CommandUnpin,
+	} {
+		helper := ubluehelper.Timeout(command)
+		if helper < bootc.DefaultTimeout {
+			t.Errorf("ubluehelper.Timeout(%q) = %v, want at least bootc.DefaultTimeout %v", command, helper, bootc.DefaultTimeout)
+		}
+		if gui <= helper {
+			t.Errorf("ImageSwitchContext deadline in %v does not outlast the helper's %v for %q", gui, helper, command)
+		}
+	}
+
+	// Every other command keeps the default budget, which DefaultContext
+	// outlasts (TestDefaultContextCarriesTheDefaultDeadline).
+	for _, command := range ubluehelper.SupportedCommands() {
+		switch command {
+		case ubluehelper.CommandChannelSwitch, ubluehelper.CommandDriverSwitch,
+			ubluehelper.CommandPin, ubluehelper.CommandUnpin:
+			continue
+		}
+		if got := ubluehelper.Timeout(command); got != ubluehelper.DefaultTimeout {
+			t.Errorf("ubluehelper.Timeout(%q) = %v, want %v", command, got, ubluehelper.DefaultTimeout)
+		}
 	}
 }
 
@@ -332,20 +371,5 @@ func TestStatusCachedDetectsOnceAndRepeats(t *testing.T) {
 	}
 	if calls > 1 {
 		t.Errorf("StatusCached ran detection %d times, want at most 1", calls)
-	}
-}
-
-func TestPinRejectionNeverReachesTheHelper(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "journal.jsonl")
-	t.Setenv(journal.PathEnv, path)
-	journal.Reset()
-	t.Cleanup(journal.Reset)
-	for _, day := range []string{"ghcr.io/evil/image:stable", "20260230", "99991231", "stable-20240229"} {
-		if err := Pin(context.Background(), day); err == nil {
-			t.Errorf("accepted %q", day)
-		}
-	}
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("invalid input reached journal: %v", err)
 	}
 }

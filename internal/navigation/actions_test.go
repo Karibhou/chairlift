@@ -1,6 +1,9 @@
 package navigation
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -115,4 +118,60 @@ func matchesPrefix(action string, prefixes []string) bool {
 		}
 	}
 	return false
+}
+
+// funcBody returns the source text of the named function's body in the file
+// at path, or fails the test when the function is missing.
+func funcBody(t *testing.T, path, name string) string {
+	t.Helper()
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	set := token.NewFileSet()
+	parsed, err := parser.ParseFile(set, path, source, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	for _, declaration := range parsed.Decls {
+		if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Name.Name == name && fn.Body != nil {
+			return string(source[set.Position(fn.Body.Pos()).Offset:set.Position(fn.Body.End()).Offset])
+		}
+	}
+	t.Fatalf("%s declares no %s", path, name)
+	return ""
+}
+
+// TestQuitAndCloseHonourTheUpdateGuard holds two halves of one contract: a
+// running update keeps the window open and says why. Ctrl+Q's app.quit called
+// g_application_quit, which never emits close-request, so it skipped the
+// update-in-progress guard and killed the run; and a close refused from any
+// page but Updates revealed the banner on a page nobody could see.
+func TestQuitAndCloseHonourTheUpdateGuard(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate actions_test.go")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+
+	quit := funcBody(t, filepath.Join(repoRoot, actionScopes["app."]), "registerQuitAction")
+	guardAt := strings.Index(quit, "a.window.RefuseCloseWhileUpdating()")
+	quitAt := strings.Index(quit, "a.Quit()")
+	if guardAt < 0 || quitAt < 0 || quitAt < guardAt {
+		t.Error("app.quit must consult the window's update guard before a.Quit()")
+	}
+
+	actions := funcBody(t, filepath.Join(repoRoot, actionScopes["win."]), "setupActions")
+	if !strings.Contains(actions, "return w.RefuseCloseWhileUpdating()") {
+		t.Error("the close-request handler no longer uses the shared update guard")
+	}
+	guard := funcBody(t, filepath.Join(repoRoot, actionScopes["win."]), "RefuseCloseWhileUpdating")
+	navigate := strings.Index(guard, `w.navigateToPage("updates")`)
+	banner := strings.Index(guard, "w.updateShell.RevealBusyBanner()")
+	if banner < 0 {
+		t.Fatal("the update guard no longer reveals the busy banner")
+	}
+	if navigate < 0 || navigate > banner {
+		t.Error("a refused close reveals the busy banner without first showing the Updates page")
+	}
 }

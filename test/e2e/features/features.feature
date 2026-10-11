@@ -1,7 +1,8 @@
 @features
 Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, and Printers
-  Optional tools are explicit choices. Gaming mutations are user-scope only;
-  the fixed helper grants only the access each developer option needs.
+  Optional tools are explicit choices. Gaming installs system-wide and removes
+  a selected app from every scope it is in, except a system copy the image
+  ships; the fixed helper grants only the access each developer option needs.
   Dry runs restore every control and preserve observed installed state.
 
   @stub.features-gaming-installed @stub.features-devmenu
@@ -9,7 +10,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Given ChairLift is running
     When I open the "Features" page
     Then the Developer Mode switch shows this account's developer-group membership
-    And each gaming component says "Installed for your account"
+    And each gaming component says "Installed system-wide"
     And no gaming component is selected
     And the action journal is empty
     And the fake flatpak was never asked to "install"
@@ -51,25 +52,41 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     Then I see "Developer Mode"
     And I see "WSL Mode"
-    And I see "WSL Backend"
+    And I see "Virtual machine engine"
+    And I see "Your built-in engine runs Debian. Lima runs Ubuntu."
     And I see "Enable Docker"
     When I expand the "IDEs and terminal editors" list under "Developer"
     Then the developer editor choices match the documented catalog
-    And the "Install" button in the "VSCodium" row is sensitive
-    When I click the "Install" button in the "VSCodium" row
+    And the "Install VSCodium" button in the "VSCodium" row is sensitive
+    When I click the "Install VSCodium" button in the "VSCodium" row
     Then the application log contains "Would execute: brew install --cask ublue-os/tap/vscodium-linux"
     And the application log does not contain "Would execute: brew install --cask ublue-os/tap/jetbrains-toolbox-linux"
-    And the "Install" button in the "VSCodium" row is sensitive
+    And the "Install VSCodium" button in the "VSCodium" row is sensitive
+    And the "VSCodium" row says "without Microsoft branding or telemetry."
+    And the action journal is empty
+
+  @stub.features-gaming-none @stub.features-developer-micro
+  Scenario: An optional tool removed outside Features is offered again when the page is shown
+    Given ChairLift is running
+    When I open the "Features" page
+    And I expand the "IDEs and terminal editors" list under "Developer"
+    Then the "Micro installed" button in the "Micro" row is insensitive
+    And the "Micro" row says "Installed through Homebrew."
+    When Homebrew stops listing "micro"
+    And I open the "Help" page
+    And I open the "Features" page
+    Then the "Install Micro" button in the "Micro" row is sensitive
+    And the "Micro" row says "Installs through Homebrew when you choose it."
     And the action journal is empty
 
   @stub.features-gaming-none @stub.features-developer
   Scenario: Disabling a running WSL machine previews stop without deleting data
     Given ChairLift is running
     When I open the "Features" page
-    Then I see "WSL Backend"
+    Then I see "Virtual machine engine"
     And the switch in the "WSL Mode" row is on
     When I toggle the switch in the "WSL Mode" row
-    Then the application log contains "would stop nsl machines and VM without deleting data"
+    Then the application log contains "would stop the ubuntu or debian nsl machine WSL Mode manages"
     And the switch in the "WSL Mode" row is on
     And the switch in the "WSL Mode" row accepts input
     And the fake nsl was never asked to "shutdown"
@@ -82,7 +99,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     Then the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row refuses input
-    And the "Enable Docker" row says "This base image has no Docker daemon. Installing CLI tools alone cannot run containers."
+    And the "Enable Docker" row says "Docker isn't available on this system, so containers can't run here."
     And the action journal is empty
 
   @stub.features-gaming-none
@@ -100,9 +117,22 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     And I select the "Steam" gaming component
     And I click the "Install Selected" button
-    Then the gaming preview installs only "Steam"
+    Then the gaming preview installs only "Steam" into the system scope
     And the "Install Selected" button is sensitive
     And each gaming component says "Not installed"
+    And the fake flatpak was never asked to "install"
+    And the action journal is empty
+
+  # Flathub publishes MangoHud once per Platform release, so a bare ID stops
+  # at flatpak's "Which do you want to use?" prompt and fails.
+  @stub.features-gaming-none
+  Scenario: MangoHud is installed in the branch Steam's runtime uses
+    Given ChairLift is running
+    When I open the "Features" page
+    And I select the "MangoHud" gaming component
+    And I click the "Install Selected" button
+    Then the gaming preview installs only "MangoHud" into the system scope
+    And the application log contains "[DRY-RUN] Would execute: flatpak install -y --system org.freedesktop.Platform.VulkanLayer.MangoHud//26.08"
     And the fake flatpak was never asked to "install"
     And the action journal is empty
 
@@ -123,38 +153,54 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And I click the "Remove Selected" button
     Then a dialog titled "Remove selected gaming apps?" is shown
     When I choose "Remove" in the dialog
-    Then the gaming preview removes only "ProtonUp-Qt"
-    And each gaming component says "Installed for your account"
+    Then the gaming preview removes only "ProtonUp-Qt" from the system scope
+    And each gaming component says "Installed system-wide"
     And the "Remove Selected" button is sensitive
     And the fake flatpak was never asked to "uninstall"
 
-  @stub.features-gaming-system
-  Scenario: Selected system gaming apps are left in place
+  # Dakota's /usr/share/ublue-os/homebrew/system-flatpaks.Brewfile ships
+  # Flatseal system-wide, so undoing gaming mode must leave that copy alone.
+  @stub.features-gaming-installed
+  Scenario: A selected gaming app that came with the system is left in place
     Given ChairLift is running
     When I open the "Features" page
-    Then each gaming component says "Installed system-wide; left in place"
-    When I select the "Steam" gaming component
+    And I select the "Flatseal" gaming component
     And I click the "Remove Selected" button
     And I choose "Remove" in the dialog
     Then the Gaming inventory is read again after the change
+    And the application log contains "views: gaming component com.github.tchx84.Flatseal came with the system"
     And the application log does not contain "flatpak uninstall"
-    And each gaming component says "Installed system-wide; left in place"
+    And each gaming component says "Installed system-wide"
+    And the "Remove Selected" button is sensitive
+
+  @stub.features-gaming-user
+  Scenario: Per-user gaming apps an earlier release installed are removed from your account
+    Given ChairLift is running
+    When I open the "Features" page
+    Then each gaming component says "Installed for your account"
+    When I select the "Steam" gaming component
+    And I click the "Remove Selected" button
+    And I choose "Remove" in the dialog
+    Then the gaming preview removes only "Steam" from the user scope
+    And the Gaming inventory is read again after the change
+    And each gaming component says "Installed for your account"
+    And the fake flatpak was never asked to "uninstall"
 
   @stub.features-gaming-unlistable
   Scenario: Gaming fails closed when installed components cannot be listed
     Given ChairLift is running
     When I open the "Features" page
-    Then the "Gaming Mode" row says "Could not check which gaming apps are installed."
+    Then the "Gaming Mode" row says "Couldn't check which gaming apps are installed."
     And the "Install Selected" button is insensitive
     And the "Remove Selected" button is insensitive
     And the application log contains "views: gaming status unavailable"
     And the action journal is empty
 
-  @stub.features-gaming-image @stub.features-gaming-system
-  Scenario: A gaming image still lists verified system-managed components
+  @stub.features-gaming-image @stub.features-gaming-installed
+  Scenario: A gaming image lists its system-wide components
     Given ChairLift is running
     When I open the "Features" page
-    Then each gaming component says "Installed system-wide; left in place"
+    Then each gaming component says "Installed system-wide"
     And I see "Gaming Mode"
 
   @config.features-no-desktop @stub.features-no-descriptor @stub.features-gaming-none
@@ -180,7 +226,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Then the Features page shows a "Gaming" group
     And the Features page shows no "Developer" group
     And I do not see "WSL Mode"
-    And I do not see "WSL Backend"
+    And I do not see "Virtual machine engine"
     And I do not see "Enable Docker"
 
   @config.features-no-desktop @stub.features-no-descriptor @stub.features-gaming-none
@@ -193,23 +239,21 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
 
   # ------------------------------------------------------------ Printers
   #
-  # ADR-0016: a printer application may be enabled only when its web
-  # administration is authenticated or absent. No published image accepts
-  # that setting yet, so every family is an actionable, non-enabled state:
-  # the row is shown, its switch is off and locked, and the subtitle says
-  # what is needed. Rendering the group runs nothing and writes nothing.
+  # Every family is offered with its switch off. Each runs on loopback only
+  # (ADR-0020), so the subtitle says only this computer can use it.
+  # Rendering the group runs nothing and writes nothing.
 
   @stub.printers @stub.features-gaming-none
-  Scenario: Every printer family is shown locked until its image can secure its administration page
+  Scenario: Every printer family is shown off and ready to turn on
     Given ChairLift is running
     When I open the "Features" page
     Then the Features page shows a "Printers" group
-    And the Printers group offers exactly these rows, each off and locked
+    And the Printers group offers exactly these rows, each off and ready to turn on
       | row                  |
       | Ghostscript printers |
       | HP printers (HPLIP)  |
       | Gutenprint printers  |
-    And the application log contains "views: printers group built families=3 blocked=3"
+    And the application log contains "views: printers group built families=3"
     And the systemctl tool was never asked to mutate
     And no printer quadlet was written
     And the action journal is empty
@@ -272,7 +316,9 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
   Scenario: Missing desktop extensions are explained without permitting changes
     Given ChairLift is running
     When I open the "Features" page
-    Then the "Tailscale Integration" row says "This GNOME extension is not installed."
+    Then the "Tailscale Integration" row says "Not installed on this computer."
     And the switch in the "Tailscale Integration" row refuses input
-    And the "Sync Folder Integration" row says "This GNOME extension is not installed."
+    And the "Sync Folder Integration" row says "Not installed on this computer."
     And the switch in the "Sync Folder Integration" row refuses input
+    And the switch in the "Tailscale Integration" row is off
+    And the switch in the "Sync Folder Integration" row is off

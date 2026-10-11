@@ -91,6 +91,10 @@ type Snapshot struct {
 	Preview          bool
 	MaintenanceRan   bool
 	MaintenanceErr   error
+	// Maintaining is true only while post-update maintenance runs. No source
+	// is updating then, yet the run is not finished: cleanup still executes
+	// and may prompt for a password, so the phase stays PhaseUpdating.
+	Maintaining bool
 }
 
 // Progress is one provider progress update.
@@ -183,7 +187,7 @@ func derive(s Snapshot) Snapshot {
 	case checking:
 		s.Phase = PhaseChecking
 		s.Action = ActionNone
-	case updating:
+	case updating || s.Maintaining:
 		s.Phase = PhaseUpdating
 		s.Action = ActionNone
 	case hasApplyFailure(s.Sources):
@@ -294,4 +298,22 @@ func preferenceEnabled(values userprefs.Values, id SourceID) bool {
 	default:
 		return false
 	}
+}
+
+// StaleFor reports whether a user preference change has made this snapshot's
+// source enablement wrong: some source the administrator configured and the
+// host can back is enabled when the preference now says off, or the reverse.
+// Sources locked by configuration or the capability floor never count,
+// because no preference can change them. A stale snapshot needs a new Check,
+// which recomputes enablement and checks any source the user turned on.
+func (s Snapshot) StaleFor(preferences userprefs.Values) bool {
+	for _, source := range s.Sources {
+		if !source.Configured || !source.Available {
+			continue
+		}
+		if source.Enabled != preferenceEnabled(preferences, source.ID) {
+			return true
+		}
+	}
+	return false
 }

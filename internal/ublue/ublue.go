@@ -41,15 +41,24 @@ const (
 	// (the default).
 	HelperPath = "/usr/bin/chairlift-helper"
 
-	// DefaultTimeout bounds a helper invocation. Channel switching only
-	// stages a bootc transaction, but that transaction contacts a registry,
-	// so it gets the same generous ceiling the updex helper uses.
-	DefaultTimeout = 10 * time.Minute
+	// AuthenticationAllowance is how much longer the GUI waits than the
+	// helper's own budget (ubluehelper.Timeout). The GUI's clock also runs
+	// while the PolicyKit prompt is open, and the helper's starts only after
+	// authentication, so without the margin a slow password entry made the
+	// GUI give up and report a timeout while the helper was still working.
+	AuthenticationAllowance = 5 * time.Minute
 )
 
-// DefaultContext returns a context with the default timeout.
+// DefaultContext returns a context for a helper command that does not pull
+// an image.
 func DefaultContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), DefaultTimeout)
+	return context.WithTimeout(context.Background(), ubluehelper.DefaultTimeout+AuthenticationAllowance)
+}
+
+// ImageSwitchContext returns a context for a channel switch, driver switch,
+// pin, or unpin: each runs `bootc switch`, which pulls a full image.
+func ImageSwitchContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), ubluehelper.ImageSwitchTimeout+AuthenticationAllowance)
 }
 
 // Error represents a ublue helper error. It aliases
@@ -87,7 +96,7 @@ type Status struct {
 	ChannelTableError string
 	// Gaming reports that the running image already ships the gaming stack
 	// as system packages. The views must not offer gaming mode when it is
-	// set: that toggle installs the same applications as user Flatpaks, so
+	// set: that toggle installs the same applications as Flatpaks, so
 	// on these images it would only shadow what the image already provides.
 	Gaming bool
 	// Commands is the set of helper commands this host can run: the helper
@@ -273,14 +282,19 @@ func SwitchChannel(ctx context.Context, channel imageinfo.Channel) error {
 
 // SetDeveloperMode adds or removes the invoking user's developer-group
 // membership. No username crosses the pkexec boundary; the helper resolves
-// it from PKEXEC_UID.
-func SetDeveloperMode(ctx context.Context, enabled bool) error {
+// it from PKEXEC_UID. A successful run still reports, in skipped, every
+// developer group the helper could not change — typically one this image
+// does not define — so a partial grant is not presented as complete.
+func SetDeveloperMode(ctx context.Context, enabled bool) (skipped []string, err error) {
 	command := ubluehelper.CommandDXDisable
 	if enabled {
 		command = ubluehelper.CommandDXEnable
 	}
-	_, _, err := runHelper(ctx, pkexecCommand, command)
-	return err
+	_, stderr, err := runHelper(ctx, pkexecCommand, command)
+	if err != nil {
+		return nil, err
+	}
+	return ubluehelper.SkippedGroups(stderr), nil
 }
 
 // EnableKVMAccess grants this account access to hardware virtualization.
@@ -312,23 +326,6 @@ func Restart(ctx context.Context) error {
 // action.
 func Rollback(ctx context.Context) error {
 	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandRollback)
-	return err
-}
-
-// Pin stages a dated build of the booted stream. Only the day crosses pkexec;
-// the helper derives and verifies the target. Callers must confirm first.
-func Pin(ctx context.Context, day string) error {
-	if err := ubluehelper.ValidateDay(day, time.Now()); err != nil {
-		return &Error{Message: err.Error()}
-	}
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandPin, day)
-	return err
-}
-
-// Unpin stages the stream recovered from the booted dated tag. Callers must
-// confirm first; no target crosses the privilege boundary.
-func Unpin(ctx context.Context) error {
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandUnpin)
 	return err
 }
 

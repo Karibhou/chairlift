@@ -108,6 +108,9 @@ func parseAndValidate(src configSource, data []byte) (*rawConfig, *LoadError) {
 			return nil, err
 		}
 		migrateLegacySystemPage(top)
+		migrateLegacyFeaturesPage(top)
+		migrateLegacyGroups(top)
+		stripLegacyGroups(top)
 		var raw rawConfig
 		if err := effective.Decode(&raw); err != nil {
 			return nil, validatorDecodeError(src.path, err)
@@ -188,7 +191,8 @@ func validatePageEntries(src configSource, top *yaml.Node) *LoadError {
 // page's mapping value, so each entry is a group) exactly like
 // validatePageEntries does for pages, one schema level down: key shape via
 // schemaKeyName, then name membership against SchemaGroups(page)'s
-// canonical group names for this page (never a literal list here), then
+// canonical group names for this page plus any retired names from
+// legacyGroupNames(page), then
 // value shape (null is a no-op; scalar/sequence is KindParseType; a mapping
 // descends into validateGroupFieldEntries). The first failing entry's error
 // is returned; nil means every entry passed. SchemaGroups can only fail for
@@ -200,10 +204,11 @@ func validateGroupEntries(src configSource, page string, groupsNode *yaml.Node) 
 	if err != nil {
 		return validatorSchemaGroupsError(src.path, err)
 	}
-	return validateNamedGroupEntries(src, groups, groupsNode)
+	groups = acceptedGroups(page, append(append([]string(nil), groups...), legacyGroupNames(page)...))
+	return validateNamedGroupEntries(src, page, groups, groupsNode)
 }
 
-func validateNamedGroupEntries(src configSource, groups []string, groupsNode *yaml.Node) *LoadError {
+func validateNamedGroupEntries(src configSource, page string, groups []string, groupsNode *yaml.Node) *LoadError {
 	known := make(map[string]bool, len(groups))
 	for _, group := range groups {
 		known[group] = true
@@ -230,7 +235,7 @@ func validateNamedGroupEntries(src configSource, groups []string, groupsNode *ya
 		case yaml.SequenceNode:
 			return validatorGroupValueShapeError(src.path, name, value)
 		case yaml.MappingNode:
-			if err := validateGroupFieldEntries(src, name, value); err != nil {
+			if err := validateGroupFieldEntries(src, page, name, value); err != nil {
 				return err
 			}
 		default:
@@ -244,8 +249,8 @@ func validateNamedGroupEntries(src configSource, groups []string, groupsNode *ya
 // validateGroupFieldEntries walks fieldsNode's entries (fieldsNode is a
 // known group's mapping value, so each entry is a group field): key shape
 // via schemaKeyName, then name membership against groupFieldTypes()'s
-// canonical field names (never a literal list here, aside from the literal
-// "actions" itself). The special-cased "actions" name is recognized as known
+// canonical field names plus any retired fields legacyGroupFieldTypes
+// reports for this page's group (aside from the literal "actions" itself). The special-cased "actions" name is recognized as known
 // but is validated structurally by validateActionsEntries (I5) instead of by
 // a generic decode into its declared Go type. Every other known field's
 // effective value node is decoded into a fresh value of its declared Go
@@ -254,7 +259,7 @@ func validateNamedGroupEntries(src configSource, groups []string, groupsNode *ya
 // (validatorDecodeError, matching stage 4's own decode-failure handling).
 // The first failing entry's error is returned; nil means every entry
 // passed.
-func validateGroupFieldEntries(src configSource, group string, fieldsNode *yaml.Node) *LoadError {
+func validateGroupFieldEntries(src configSource, page, group string, fieldsNode *yaml.Node) *LoadError {
 	fieldTypes, err := groupFieldTypes()
 	if err != nil {
 		return validatorGroupFieldTypesError(src.path, err)
@@ -269,6 +274,9 @@ func validateGroupFieldEntries(src configSource, group string, fieldsNode *yaml.
 			return validatorKeyShapeError(src.path, key)
 		}
 		fieldType, known := fieldTypes[name]
+		if !known {
+			fieldType, known = legacyGroupFieldTypes(page, group)[name]
+		}
 		if !known {
 			return validatorSchemaError(src.path, key, name)
 		}

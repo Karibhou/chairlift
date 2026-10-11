@@ -3,37 +3,36 @@
 package updatepresent
 
 import (
+	"context"
+	"errors"
+	"net"
+	"strings"
+
 	"github.com/leonelquinteros/gotext"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
+	"github.com/projectbluefin/chairlift/internal/userprefs"
 )
 
-// Presentation is the aggregate status shown by the update shell.
+// Presentation is the aggregate status shown by the update shell's header:
+// the wordmark, then the primary action, then one line of supporting text.
 type Presentation struct {
-	Title       string
-	Description string
+	// Status is the one line of supporting text under the primary action.
+	// Every phase sets it, and it is also what a screen reader hears when
+	// the phase changes.
+	Status string
+	// Detail is an optional second line naming what went wrong. Only the
+	// failure phases set it; every normal state is the single Status line.
+	Detail      string
 	ActionLabel string
 	ShowAction  bool
 	ActionStyle string
-	Banner      string
-	// Announcement is what a screen reader hears when the phase changes.
-	// It is empty for every phase whose Title already says it; only
-	// PhaseRestartRequired, which clears the panel, sets it on its own.
-	Announcement string
 }
 
-// Announce returns the text to announce on a phase change: the explicit
-// Announcement when the panel carries no title, the Title otherwise.
-func (p Presentation) Announce() string {
-	if p.Announcement != "" {
-		return p.Announcement
-	}
-	return p.Title
-}
-
-// ShowStatus keeps active status controls visible but collapses an empty panel.
-// Announcements and banners do not need the status page to occupy space.
+// ShowStatus keeps active status controls visible but collapses an empty
+// header, so an empty box adds no spacing between the wordmark and the
+// source groups.
 func (p Presentation) ShowStatus(phase updateflow.Phase) bool {
-	return p.Title != "" || p.Description != "" || p.ShowAction || ShowProgress(phase)
+	return p.Status != "" || p.Detail != "" || p.ShowAction || ShowProgress(phase)
 }
 
 // Snapshot maps one coordinator snapshot to aggregate widget text and action
@@ -41,53 +40,56 @@ func (p Presentation) ShowStatus(phase updateflow.Phase) bool {
 func Snapshot(state updateflow.Snapshot) Presentation {
 	switch state.Phase {
 	case updateflow.PhaseChecking:
-		return Presentation{Title: gotext.Get("Checking for updates"),
-			Description: checkingDescription(state)}
+		return Presentation{Status: gotext.Get("Checking for updates…")}
 	case updateflow.PhaseReady:
 		return readyPresentation(state)
 	case updateflow.PhaseCheckFailed:
-		presentation := Presentation{Title: gotext.Get("Unable to check for updates"),
-			Description: checkErrorDescription(state),
-			Banner:      gotext.Get("Unable to check for updates")}
+		presentation := Presentation{Status: gotext.Get("Couldn't check for updates"),
+			Detail: checkErrorDetail(state)}
 		addAction(&presentation, state.Action, gotext.Get("Try again"))
 		return presentation
 	case updateflow.PhaseUpdating:
-		return Presentation{Title: gotext.Get("Installing updates"),
-			Description: updatingDescription(state)}
+		return Presentation{Status: updatingStatus(state)}
 	case updateflow.PhasePartialFailure:
-		banner := gotext.Get("Some updates could not be installed")
-		if state.MaintenanceErr != nil && len(state.FailedSources) == 0 {
-			banner = gotext.Get("Maintenance failed")
-		}
-		presentation := Presentation{Title: gotext.Get("Some updates could not be installed"),
-			Description: partialFailureDescription(state),
-			Banner:      banner}
+		presentation := partialFailurePresentation(state)
 		addAction(&presentation, state.Action, gotext.Get("Retry failed"))
 		return presentation
 	case updateflow.PhaseRestartRequired:
-		// The restart action lives on the Operating system row, not on the
-		// page-level status panel: an in-progress row that says "Deployment
-		// staged" with a "Restart now" suffix tells the user both halves of
-		// the story without a banner above the wordmark. The status page is
-		// left with empty text so the Bluefin logo leads straight into the
-		// "System updates" group, and the announcement repeats the row's
-		// subtitle so a screen reader still reports the pending reboot.
-		return Presentation{Announcement: gotext.Get("Deployment staged")}
+		// The restart action lives on the Operating system row ("Deployment
+		// staged" with a "Restart now" suffix, #439), so the header offers
+		// no primary action here: its one line says what is left to do.
+		return Presentation{Status: gotext.Get("Restart to finish updating")}
 	default:
-		return Presentation{Title: gotext.Get("Checking for updates"),
-			Description: gotext.Get("Preparing to check for updates…")}
+		return Presentation{Status: gotext.Get("Checking for updates…")}
 	}
 }
 
-// Source maps one source state to its row title and subtitle.
+// SourceLockReason explains why no user preference can turn a source on: the
+// administrator's configuration first, then the host capability floor. It is
+// empty for an operable source. The Updates page's source rows and the
+// Preferences dialog's source switches both use it, so the two surfaces say
+// the same thing about the same source.
+func SourceLockReason(state updateflow.SourceState) string {
+	switch {
+	case !state.Configured:
+		return gotext.Get("Disabled by administrator")
+	case !state.Available:
+		return gotext.Get("Not available on this computer")
+	default:
+		return ""
+	}
+}
+
+// Source maps one source state to its row title and subtitle. A failure is
+// said in plain words; the raw error is logged where it is produced
+// (updateflow.Coordinator), never shown.
 func Source(state updateflow.SourceState) (title, subtitle string) {
 	title = sourceTitle(state.ID)
 
+	if reason := SourceLockReason(state); reason != "" {
+		return title, reason
+	}
 	switch {
-	case !state.Configured:
-		return title, gotext.Get("Disabled by administrator")
-	case !state.Available:
-		return title, gotext.Get("Not available on this system")
 	case !state.Enabled:
 		return title, gotext.Get("Disabled in preferences")
 	case state.Checking:
@@ -95,17 +97,57 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case state.Updating:
 		return title, gotext.Get("Installing updates…")
 	case state.ApplyErr != nil:
-		return title, gotext.Get("Update failed: %s", state.ApplyErr.Error())
+		return title, gotext.Get("Couldn't update. %s", FailureHint(state.ApplyErr))
 	case state.CheckErr != nil:
-		return title, gotext.Get("Check failed: %s", state.CheckErr.Error())
+		return title, gotext.Get("Couldn't check for updates. %s", FailureHint(state.CheckErr))
 	case state.RestartRequired:
 		return title, gotext.Get("Deployment staged")
 	case len(state.Items) > 0:
+		if item, ok := soleOSItem(state); ok {
+			return title, soleItemSubtitle(item)
+		}
 		return title, gotext.GetN("%d update available", "%d updates available", len(state.Items), len(state.Items))
 	case state.Completed:
 		return title, gotext.Get("Updated")
 	default:
 		return title, gotext.Get("Up to date")
+	}
+}
+
+// ItemRows returns the pending items that get their own row beneath a
+// source row. The Operating system source's one pending item is the
+// deployment itself, so its versions go on the source row (see Source) and
+// no child row repeats the source's name for one fact. Every other source
+// keeps one row per item: Applications and Developer tools carry each item's
+// own Update button on that row, so folding one away would remove its only
+// control.
+func ItemRows(state updateflow.SourceState) []updateflow.Item {
+	if _, ok := soleOSItem(state); ok {
+		return nil
+	}
+	return state.Items
+}
+
+// soleOSItem reports the Operating system source's only pending item. The
+// decision is keyed on the source ID, never on the item's name: a Flatpak or
+// formula that happens to be called "Applications" is still its own item.
+func soleOSItem(state updateflow.SourceState) (updateflow.Item, bool) {
+	if state.ID != updateflow.OperatingSystem || len(state.Items) != 1 {
+		return updateflow.Item{}, false
+	}
+	return state.Items[0], true
+}
+
+// soleItemSubtitle is the source row's subtitle when its one pending item is
+// folded into it.
+func soleItemSubtitle(item updateflow.Item) string {
+	switch {
+	case item.CurrentVersion != "" && item.AvailableVersion != "":
+		return gotext.Get("Update available: %s → %s", item.CurrentVersion, item.AvailableVersion)
+	case item.AvailableVersion != "":
+		return gotext.Get("Update available: %s", item.AvailableVersion)
+	default:
+		return gotext.GetN("%d update available", "%d updates available", 1, 1)
 	}
 }
 
@@ -165,6 +207,27 @@ func CanStartOperation(busy, closed bool) bool {
 	return !busy && !closed
 }
 
+// RecheckForPreferences reports whether a changed update-source preference
+// needs a new coordinator check for the shell to stay truthful: the snapshot
+// on screen enables a source the preferences no longer do (or the reverse),
+// or a check is in flight with the preferences it started from. Only a check
+// recomputes enablement — the coordinator owns it — and a source the user
+// just turned on has not been checked at all.
+func RecheckForPreferences(snapshot updateflow.Snapshot, preferences userprefs.Values) bool {
+	return snapshot.Phase == updateflow.PhaseChecking || snapshot.StaleFor(preferences)
+}
+
+// RecheckAfterCheck reports whether a check that has just returned left the
+// shell describing preferences other than the current ones, so the shell
+// must check again. A preference changed while that check was in flight is
+// otherwise only noticed by a manual Refresh. A snapshot still in
+// PhaseChecking belongs to a newer check, which already started from the
+// current preferences, so it never asks for another: asking would supersede
+// that check and loop for as long as checks overlap.
+func RecheckAfterCheck(snapshot updateflow.Snapshot, preferences userprefs.Values) bool {
+	return snapshot.Phase != updateflow.PhaseChecking && snapshot.StaleFor(preferences)
+}
+
 // PrimaryActionEnabled reports whether the page-level primary action button
 // (check, update all, or retry failed) should be sensitive. Restarting is not
 // a primary action: it lives on the Operating system row (#439). The action
@@ -191,24 +254,24 @@ func SourceSubtitleLines(compact bool) int32 {
 }
 
 func readyPresentation(state updateflow.Snapshot) Presentation {
-	presentation := Presentation{Title: gotext.Get("System is up to date")}
+	var presentation Presentation
 	switch {
 	case state.Action == updateflow.ActionNone && state.TotalUpdates == 0:
-		presentation.Description = gotext.Get("No update sources are available.")
+		presentation.Status = gotext.Get("Nothing to update on this computer")
 	case state.TotalUpdates > 0:
-
-		presentation.Title = gotext.Get("Updates available")
-		presentation.Description = gotext.GetN(
-			"%d update is available.",
-			"%d updates are available.",
+		presentation.Status = gotext.GetN(
+			"%d update available",
+			"%d updates available",
 			state.TotalUpdates,
 			state.TotalUpdates,
 		)
 		if state.RestartRequired() {
-			presentation.Description += " " + gotext.Get("Restart is required to finish installing updates.")
+			presentation.Status = gotext.Get("%s · restart needed", presentation.Status)
 		}
+	case !state.LastChecked.IsZero():
+		presentation.Status = gotext.Get("Up to date · checked at %s", state.LastChecked.Format("15:04"))
 	default:
-		presentation.Description = upToDateDescription(state)
+		presentation.Status = gotext.Get("Up to date")
 	}
 	addAction(&presentation, state.Action, gotext.Get("Check again"))
 	if state.Action == updateflow.ActionUpdateAll {
@@ -217,58 +280,139 @@ func readyPresentation(state updateflow.Snapshot) Presentation {
 	return presentation
 }
 
-func upToDateDescription(state updateflow.Snapshot) string {
-	if !state.LastChecked.IsZero() {
-		return gotext.Get(
-			"No updates are available. Last checked at %s.",
-			state.LastChecked.Format("15:04"),
-		)
-	}
-	return gotext.Get("No updates are available.")
-}
-
-func checkingDescription(state updateflow.Snapshot) string {
-	if state.Current != "" && state.Progress != "" {
+// updatingStatus names the source being updated. The provider's own
+// progress text, when it has any, follows it on the same line.
+func updatingStatus(state updateflow.Snapshot) string {
+	switch {
+	case state.Current != "" && state.Progress != "":
 		return gotext.Get("%s: %s", sourceTitle(state.Current), state.Progress)
-	}
-	if state.Progress != "" {
+	case state.Progress != "":
 		return state.Progress
+	case state.Current != "":
+		return gotext.Get("%s: installing updates…", sourceTitle(state.Current))
+	case state.Maintaining:
+		return gotext.Get("Cleaning up after updates…")
+	default:
+		return gotext.Get("Installing updates…")
 	}
-	if state.Current != "" {
-		return gotext.Get("Checking %s…", sourceTitle(state.Current))
-	}
-	return gotext.Get("Checking available sources…")
 }
 
-func updatingDescription(state updateflow.Snapshot) string {
-	if state.Current != "" && state.Progress != "" {
-		return gotext.Get("%s: %s", sourceTitle(state.Current), state.Progress)
-	}
-	if state.Progress != "" {
-		return state.Progress
-	}
-	if state.Current != "" {
-		return gotext.Get("Installing %s…", sourceTitle(state.Current))
-	}
-	return gotext.Get("Installing updates…")
-}
-
-func checkErrorDescription(state updateflow.Snapshot) string {
+func checkErrorDetail(state updateflow.Snapshot) string {
+	var failed []string
+	hint := ""
 	for _, source := range state.Sources {
-		if source.CheckErr != nil {
-			return gotext.Get("%s: %s", sourceTitle(source.ID), source.CheckErr.Error())
+		if source.CheckErr == nil {
+			continue
+		}
+		failed = append(failed, sourceTitle(source.ID))
+		// One hint covers the line only when every failure earns it;
+		// otherwise the rows carry their own and the line points at the log.
+		sourceHint := FailureHint(source.CheckErr)
+		if hint == "" {
+			hint = sourceHint
+		} else if hint != sourceHint {
+			hint = logHint()
 		}
 	}
-	return gotext.Get("The update check could not be completed.")
+	if len(failed) == 0 {
+		return ""
+	}
+	return gotext.Get("Not checked: %s. %s", strings.Join(failed, ", "), hint)
 }
 
-func partialFailureDescription(state updateflow.Snapshot) string {
-	if state.MaintenanceErr != nil && len(state.FailedSources) == 0 {
-		return gotext.Get("Updates completed, but maintenance failed: %s", state.MaintenanceErr.Error())
+// FailureHint is the sentence that follows a failure's plain description. It
+// names a cause only when the error shows one: a request that could not
+// reach the network, or one that ran out of time. Any other failure — a
+// local Flatpak, Homebrew, or bootc error — is pointed at the log, where the
+// raw error is kept, rather than told a remedy it may not need.
+func FailureHint(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return gotext.Get("It took too long. Try again later.")
+	case NetworkFailure(err):
+		return gotext.Get("Check your internet connection.")
+	default:
+		return logHint()
 	}
-	completed := gotext.GetN("%d source completed", "%d sources completed", len(state.CompletedSources), len(state.CompletedSources))
-	failed := gotext.GetN("%d source failed", "%d sources failed", len(state.FailedSources), len(state.FailedSources))
-	return gotext.Get("%s; %s.", completed, failed)
+}
+
+func logHint() string {
+	return gotext.Get("Details are in the log.")
+}
+
+// RestartFailedMessage is the fixed, non-technical message shown when a
+// restart cannot be started. Restart is the one privileged update action with
+// no "Details" expander to point the user at, so the raw error is logged by
+// the caller (update_shell.go) for diagnostics but never shown. Like the
+// other privileged actions it carries a fixed "Try again" prompt rather than
+// a FailureHint: a raw %v here would reintroduce the exact failure chairlift#554
+// was filed for, so the message is deliberately not built from err.
+func RestartFailedMessage() string {
+	return gotext.Get("Couldn't restart your computer. Try again.")
+}
+
+// networkPhrases are what the tools behind the update sources print when a
+// request never reached its server: libcurl through Flatpak/OSTree and
+// Homebrew, glibc's resolver, Go's net package, and bootc's HTTP client.
+// Each is specific to a failed connection; a tool's generic "unable to load"
+// or "failed" is deliberately absent, because it says nothing about why.
+var networkPhrases = []string{
+	"could not resolve",
+	"temporary failure in name resolution",
+	"name or service not known",
+	"no such host",
+	"failed to lookup address",
+	"dns error",
+	"network is unreachable",
+	"network is down",
+	"no route to host",
+	"connection refused",
+	"connection timed out",
+	"connection reset",
+	"failed to connect",
+	"could not connect",
+	"couldn't connect",
+	"timeout was reached",
+	"i/o timeout",
+	"tls handshake timeout",
+	"error sending request",
+}
+
+// NetworkFailure reports whether err shows that a request could not reach
+// the network: a Go network error in its chain, or a tool's own message
+// naming a failed connection. A cancellation or an exhausted deadline is not
+// one (FailureHint names the deadline itself).
+func NetworkFailure(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	for _, phrase := range networkPhrases {
+		if strings.Contains(message, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+func partialFailurePresentation(state updateflow.Snapshot) Presentation {
+	if state.MaintenanceErr != nil && len(state.FailedSources) == 0 {
+		return Presentation{Status: gotext.Get("Updates installed, but couldn't clean up"),
+			Detail: gotext.Get("Old files are still on this computer. %s", FailureHint(state.MaintenanceErr))}
+	}
+	presentation := Presentation{Status: gotext.Get("Couldn't install some updates")}
+	if len(state.FailedSources) > 0 {
+		failed := make([]string, 0, len(state.FailedSources))
+		for _, id := range state.FailedSources {
+			failed = append(failed, sourceTitle(id))
+		}
+		presentation.Detail = gotext.Get("Not updated: %s", strings.Join(failed, ", "))
+	}
+	return presentation
 }
 
 func addAction(presentation *Presentation, action updateflow.Action, checkLabel string) {
