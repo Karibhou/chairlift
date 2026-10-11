@@ -891,8 +891,9 @@ func (w *Window) finishFirstRun(completed bool) {
 		return
 	}
 	if completed {
-		if w.updateShell != nil && w.updateShell.Busy() {
-			w.updateShell.RevealBusyBanner()
+		if w.RefuseCloseWhileUpdating() {
+			// The busy banner lives on the Updates page, behind the conclusion.
+			w.firstRunContent.SetVisibleChildName("pages")
 			w.ShowErrorToast("Wait for updates to finish before launching Bazaar")
 			return
 		}
@@ -906,23 +907,26 @@ func (w *Window) finishFirstRun(completed bool) {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
 			defer cancel()
+			failure := ""
 			err := firstrun.NewGSettingsStore().SetDisposition(ctx, firstrun.DispositionCompleted)
-			if err == nil {
-				if dryrun.Enabled() {
-					log.Print("[DRY-RUN] would launch bazaar")
-				} else {
-					err = exec.Command("gtk-launch", "io.github.kolunmi.Bazaar").Run()
-				}
+			if err != nil {
+				log.Printf("window: recording setup completion failed: %v", err)
+				failure = "Couldn't save your setup progress. Try again."
+			} else if dryrun.Enabled() {
+				log.Print("[DRY-RUN] would launch bazaar")
+			} else if err = exec.Command("gtk-launch", "io.github.kolunmi.Bazaar").Run(); err != nil {
+				log.Printf("window: launching Bazaar failed: %v", err)
+				failure = "Couldn't open Bazaar App Store. Try again."
 			}
 			sgtk.RunOnMainThread(func() {
 				w.firstRunFinishing = false
 				if quit != nil {
 					gio.SimpleActionNewFromInternalPtr(quit.GoPointer()).SetEnabled(true)
 				}
-				if err != nil {
+				if failure != "" {
 					w.firstRunNext.SetSensitive(true)
 					w.showFirstRunStep()
-					w.ShowErrorToast(err.Error())
+					w.ShowErrorToast(failure)
 					return
 				}
 				w.firstRunActive = false
