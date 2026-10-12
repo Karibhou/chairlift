@@ -69,8 +69,8 @@ type catalogEntry struct {
 	order    int
 	defaults bool
 	// members are sibling collections installed and checked together with
-	// this one (a super-bundle). Each is also listed in retired so it never
-	// gets its own row.
+	// this one (a super-bundle). A member gets no row of its own while its
+	// parent is discovered; see Visible.
 	members []string
 }
 
@@ -134,16 +134,29 @@ var retired = map[string]struct{}{
 	"system-dx-flatpaks":  {},
 	"system-flatpaks":     {},
 	"video-wallpaper":     {},
-	"wallpaper-slideshow": {}, // folded into artwork ("Extra Wallpapers")
-	"dakota-fonts":        {}, // folded into fonts
 	"dakota-dev-flatpaks": {}, // installed automatically with devmode
 }
 
 // Visible reports whether an on-disk collection should be offered as a row.
 // Retired Bluefin bundles are excluded; user-added collections remain visible.
-func Visible(id string) bool {
-	_, isRetired := retired[id]
-	return !isRetired
+// A super-bundle member (e.g. wallpaper-slideshow) is folded into its parent's
+// row when that parent was discovered, and keeps its own row otherwise so it
+// stays installable.
+func Visible(id string, discovered map[string]homebrew.Bundle) bool {
+	if _, isRetired := retired[id]; isRetired {
+		return false
+	}
+	for parent, entry := range catalog {
+		if _, ok := discovered[parent]; !ok {
+			continue
+		}
+		for _, member := range entry.members {
+			if member == id {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Curated reports whether id is one of the curated app collections shown in the UI.

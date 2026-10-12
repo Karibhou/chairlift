@@ -122,7 +122,7 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 	}
 }
 
-// Dakota collections are either curated or explicitly retired.
+// Dakota collections are curated, a curated super-bundle member, or explicitly retired.
 func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	for _, id := range []string{
 		"ai-tools", "artwork", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
@@ -132,8 +132,19 @@ func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	} {
 		_, inCatalog := catalog[id]
 		_, inRetired := retired[id]
-		if !inCatalog && !inRetired {
-			t.Errorf("collection %q is neither in catalog nor retired", id)
+		isMember := false
+		for parent := range catalog {
+			for _, m := range Members(parent) {
+				if m == id {
+					isMember = true
+				}
+			}
+		}
+		if !inCatalog && !inRetired && !isMember {
+			t.Errorf("collection %q is neither in catalog, a member, nor retired", id)
+		}
+		if isMember && (inCatalog || inRetired) {
+			t.Errorf("member collection %q must not also be in catalog or retired", id)
 		}
 		if inCatalog && inRetired {
 			t.Errorf("collection %q is in both catalog and retired", id)
@@ -147,7 +158,7 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 		if !Curated(id) {
 			t.Errorf("Curated(%q) = false, want true", id)
 		}
-		if !Visible(id) {
+		if !Visible(id, nil) {
 			t.Errorf("Visible(%q) = false, want true", id)
 		}
 	}
@@ -166,7 +177,7 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 
 func TestRetiredCollectionsAreNotVisible(t *testing.T) {
 	for id := range retired {
-		if Visible(id) {
+		if Visible(id, nil) {
 			t.Errorf("Visible(%q) = true, want false for retired collection", id)
 		}
 		if Curated(id) {
@@ -174,7 +185,7 @@ func TestRetiredCollectionsAreNotVisible(t *testing.T) {
 		}
 	}
 	// Unknown user-added collections remain visible.
-	if !Visible("team-tools") {
+	if !Visible("team-tools", nil) {
 		t.Errorf("Visible(team-tools) = false, want true for custom user collection")
 	}
 }
@@ -254,15 +265,24 @@ func TestMemberBundlesResolvesDiscoveredSiblings(t *testing.T) {
 	}
 }
 
-// Every super-bundle sibling is retired, so it never gets its own row.
-func TestMembersAreNeverOfferedAsRows(t *testing.T) {
+// A super-bundle sibling is folded into its parent's row when the parent was
+// discovered, and keeps its own row when it was not, so it stays installable.
+func TestMembersFoldIntoDiscoveredParentOnly(t *testing.T) {
 	for id := range catalog {
 		for _, member := range Members(id) {
 			if member == id {
 				t.Errorf("Members(%q) includes itself", id)
 			}
-			if Visible(member) {
-				t.Errorf("Members(%q) includes %q, which is still offered as its own row", id, member)
+			withParent := map[string]homebrew.Bundle{
+				id:     {Name: id},
+				member: {Name: member},
+			}
+			if Visible(member, withParent) {
+				t.Errorf("Visible(%q) = true with parent %q discovered, want folded into parent row", member, id)
+			}
+			alone := map[string]homebrew.Bundle{member: {Name: member}}
+			if !Visible(member, alone) {
+				t.Errorf("Visible(%q) = false without parent %q, want its own row", member, id)
 			}
 		}
 	}

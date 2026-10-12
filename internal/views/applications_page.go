@@ -105,10 +105,11 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 		bundlesByName[b.Name] = b
 	}
 
-	// Filter out retired bundles; keep curated and custom user collections.
+	// Filter out retired bundles and members folded into a discovered parent;
+	// keep curated and custom user collections.
 	var bundles []homebrew.Bundle
 	for _, b := range rawBundles {
-		if bundleview.Visible(b.Name) {
+		if bundleview.Visible(b.Name, bundlesByName) {
 			bundles = append(bundles, b)
 		}
 	}
