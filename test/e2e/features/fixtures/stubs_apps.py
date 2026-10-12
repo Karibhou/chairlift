@@ -42,6 +42,14 @@ APP_COLLECTIONS = {
         'cask "font-jetbrains-mono"\n'
         'cask "font-hack"\n'
     ),
+    # Extra Wallpapers super-bundle
+    "artwork.Brewfile": (
+        'cask "bluefin-wallpapers"\n'
+    ),
+    # Full Desktop Suite (defaults unchecked)
+    "full-desktop.Brewfile": (
+        'flatpak "org.gnome.Calculator"\n'
+    ),
     # An administrator's own collection: humanized id, readable comment.
     "team-tools.Brewfile": (
         "# tools our team relies on every day\n"

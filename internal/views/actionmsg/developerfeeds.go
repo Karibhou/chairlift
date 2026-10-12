@@ -61,6 +61,12 @@ func DeveloperFeedSetupPlan(dryRun, enabled, succeeded, installPulp, stageFeeds 
 	return DeveloperFeedSetup{InstallPulp: installPulp, StageFeeds: stageFeeds}
 }
 
+// DeveloperAppsSetupPlan returns whether the extra developer apps should be installed
+// on Developer Mode enable.
+func DeveloperAppsSetupPlan(dryRun, enabled, succeeded bool) bool {
+	return !dryRun && enabled && succeeded
+}
+
 // DeveloperFeedOutcome is what the optional work actually did. The view fills
 // it in from the two return values, and it is the only thing
 // DeveloperFeedFeedback is allowed to describe: an outcome word is never set

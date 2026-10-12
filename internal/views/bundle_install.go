@@ -5,118 +5,59 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
-	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/shellenv"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
 	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
+	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// bundleInstall is the state one collection's install shares across every
-// surface that offers it: the gate that admits one run at a time, the
-// buttons that must all show the same phase, and the collection's display
-// title that names those buttons for assistive technology.
-type bundleInstall struct {
-	gate     bundleview.InstallGate
-	title    string
-	buttons  []bundleInstallButton
-	progress *installProgress
+// bundleItemRow tracks one collection row in the App collections group.
+type bundleItemRow struct {
+	bundle      homebrew.Bundle
+	memberPaths []string
+	row         *adw.ExpanderRow
+	choice      *gtk.CheckButton
 }
 
-type bundleInstallButton struct {
-	button  *gtk.Button
-	label   *gtk.Label
-	spinner *gtk.Spinner
-	bar     *gtk.ProgressBar
-}
-
-// show applies the label and sensitivity every bound button shows
-// for a phase of the shared install.
-func (b *bundleInstall) show(label string, sensitive bool) {
-	for _, control := range b.buttons {
-		control.label.SetLabel(label)
-		SetAccessibleLabel(control.button, bundleview.InstallButtonName(label, b.title))
-		control.button.SetSensitive(sensitive)
-		busy := label == bundleview.InstallLabelRunning
-		control.spinner.SetVisible(busy)
-		control.spinner.SetSpinning(busy)
-		if control.bar != nil {
-			if busy {
-				b.progress.start(control.bar)
-			} else {
-				b.progress.stop(control.bar)
-			}
-		}
-	}
-}
-
-// ConnectBundleInstall connects an Apps collection to its per-collection gate
-// and the page's shared native progress timer.
-func (uh *UserHome) ConnectBundleInstall(bundle homebrew.Bundle, button *gtk.Button, progress *gtk.ProgressBar) {
-	if uh == nil || button == nil {
-		return
-	}
-	if uh.bundleInstalls == nil {
-		uh.bundleInstalls = make(map[string]*bundleInstall)
-	}
-	shared := uh.bundleInstalls[bundle.Path]
-	if shared == nil {
-		shared = &bundleInstall{
-			title:    bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount).Title,
-			progress: &uh.appInstallProgress,
-		}
-		uh.bundleInstalls[bundle.Path] = shared
-	}
-	content := gtk.NewBox(gtk.OrientationHorizontalValue, 6)
-	spinner := gtk.NewSpinner()
-	SetAccessibleLabel(spinner, "Installing collection")
-	labelWidget := gtk.NewLabel("")
-	content.Append(&labelWidget.Widget)
-	content.Append(&spinner.Widget)
-	button.SetChild(&content.Widget)
-	button.AddCssClass("text-button")
-	shared.buttons = append(shared.buttons, bundleInstallButton{button: button, label: labelWidget, spinner: spinner, bar: progress})
-	// A button connected while a run is in progress, or after one completed,
-	// joins at the phase the others already show; a fresh "Install" here
-	// would be a button that does nothing when clicked.
-	label, sensitive := shared.gate.InstallPhase()
-	shared.show(label, sensitive)
-	uh.bundleButtons.connect(button, func(gtk.Button) {
-		uh.runBundleInstall(bundle, shared)
-	})
-}
-
-// refreshBundleStatuses observes, off the GTK thread, whether each connected
-// collection is already installed, so a row reads "Installed" because the
-// system holds the collection, not only because this session installed it.
-// It must be called on the GTK main thread. Only the newest refresh may
-// publish: each result is dropped once a later refresh has begun, and a
-// worker stops checking as soon as it is superseded. A collection whose
-// check cannot decide keeps the row it had.
+// refreshBundleStatuses observes, off the GTK thread, whether each collection
+// is already installed. If installed, the checkbox is checked, insensitive,
+// and the subtitle indicates installed status. If not installed, it restores
+// the baseline title and subtitle.
 func (uh *UserHome) refreshBundleStatuses() {
-	if uh == nil || len(uh.bundleInstalls) == 0 {
+	if uh == nil || len(uh.bundleItems) == 0 {
 		return
 	}
-	paths := make([]string, 0, len(uh.bundleInstalls))
-	for path := range uh.bundleInstalls {
-		paths = append(paths, path)
+
+	type itemCheck struct {
+		item *bundleItemRow
+		path string
 	}
-	sort.Strings(paths)
+	checks := make([]itemCheck, 0, len(uh.bundleItems))
+	for _, item := range uh.bundleItems {
+		checks = append(checks, itemCheck{item: item, path: item.bundle.Path})
+	}
+	sort.Slice(checks, func(i, j int) bool {
+		return checks[i].path < checks[j].path
+	})
+
 	generation := uh.bundleStatusRefresh.Begin()
 
 	go func() {
-		for _, path := range paths {
+		for _, c := range checks {
 			if !uh.bundleStatusRefresh.IsCurrent(generation) {
 				return
 			}
-			status, err := homebrew.BundleCheck(path)
+			status, err := homebrew.BundleCheck(c.path)
 			if err != nil {
-				log.Printf("Could not check whether app collection %q is installed: %v", path, err)
+				log.Printf("Could not check whether app collection %q is installed: %v", c.path, err)
 			}
 			installed, known := bundleview.ObservedInstalled(status)
 			if !known {
@@ -126,67 +67,121 @@ func (uh *UserHome) refreshBundleStatuses() {
 				if !uh.bundleStatusRefresh.IsCurrent(generation) {
 					return
 				}
-				shared := uh.bundleInstalls[path]
-				if shared == nil || !shared.gate.Observe(installed) {
-					return
+				desc := bundleview.DescribeInstalled(c.item.bundle.Name, c.item.bundle.Description, c.item.bundle.ItemCount, installed)
+				c.item.row.SetSubtitle(desc.Subtitle)
+				if installed {
+					c.item.choice.SetActive(true)
+					c.item.choice.SetSensitive(false)
+				} else {
+					c.item.choice.SetSensitive(true)
 				}
-				shared.show(shared.gate.InstallPhase())
 			})
 		}
 	}()
 }
 
-// runBundleInstall installs one collection behind its shared gate and
-// reports the outcome the way the Apps page always has: a trust refusal
-// names the tap, a partial failure says so, a dry run restores the
-// buttons, and a live success closes the gate for good and refreshes the
-// installed inventory.
-func (uh *UserHome) runBundleInstall(bundle homebrew.Bundle, shared *bundleInstall) {
-	if !shared.gate.TryStart() {
+// runSelectedBundlesInstall installs all checked, uninstalled bundles in one action.
+func (uh *UserHome) runSelectedBundlesInstall() {
+	if !uh.bundleInstallGate.TryStart() {
 		return
 	}
-	collection := bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount)
-	shared.show(bundleview.InstallLabelRunning, false)
+
+	var toInstall []*bundleItemRow
+	for _, item := range uh.bundleItems {
+		if item.choice.GetActive() && item.choice.GetSensitive() {
+			toInstall = append(toInstall, item)
+		}
+	}
+
+	if len(toInstall) == 0 {
+		uh.bundleInstallGate.Reset()
+		if uh.toastAdder != nil {
+			uh.toastAdder.ShowToast("No collections selected to install.")
+		}
+		return
+	}
+
+	uh.setBundleInstallProgress(true)
 
 	go func() {
-		if err := homebrew.BundleInstall(bundle.Path); err != nil {
-			// The error names the file and the failing entry, which is a
-			// log detail; the person gets the one thing they can act on.
-			log.Printf("Error installing app collection %q: %v", bundle.Name, err)
-			sgtk.RunOnMainThread(func() {
-				shared.gate.Reset()
-				shared.show(bundleview.InstallLabelReady, true)
-				// Part of it, or of a collection sharing its items, may
-				// have been installed before it stopped: `brew bundle`
-				// carries on past a failed entry.
-				uh.homebrewInventoryChanged()
-				var trustErr *homebrew.UntrustedTapError
-				if errors.As(err, &trustErr) {
-					uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage(collection.Title))
-					return
+		var failedNames []string
+		var hadTrustErr bool
+		var lastTrustErrName string
+
+		for _, item := range toInstall {
+			b := item.bundle
+			collection := bundleview.Describe(b.Name, b.Description, b.ItemCount)
+			var itemFailed bool
+
+			// Install primary and any configured member Brewfiles
+			paths := item.memberPaths
+			if len(paths) == 0 {
+				paths = []string{b.Path}
+			}
+			for _, p := range paths {
+				if err := homebrew.BundleInstall(p); err != nil {
+					log.Printf("Error installing app collection %q (%s): %v", b.Name, p, err)
+					var trustErr *homebrew.UntrustedTapError
+					if errors.As(err, &trustErr) {
+						hadTrustErr = true
+						lastTrustErrName = collection.Title
+					}
+					itemFailed = true
+					break
 				}
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't install all of %s. Try again.", collection.Title))
-			})
-			return
+			}
+			if itemFailed {
+				failedNames = append(failedNames, collection.Title)
+				continue
+			}
+
+			// If Bluefin CLI was selected, enable shell bling and prompt
+			if b.Name == "cli" {
+				if err := shellenv.EnableBling(); err != nil {
+					log.Printf("Error enabling shell bling: %v", err)
+				}
+			}
 		}
 
-		decision := actionmsg.BundleInstall(dryrun.Enabled(), collection.Title)
 		sgtk.RunOnMainThread(func() {
-			if decision.Complete {
-				shared.gate.Complete()
-				shared.show(bundleview.InstallLabelCompleted, false)
-				// A live install can add packages the current inventory
-				// snapshot predates, so refresh the installed list to
-				// match, and re-observe every collection: they can share
-				// items, and a check begun before this install must not
-				// publish over it. Under dry-run decision.Complete is
-				// false — nothing was changed — so both stay put.
-				uh.homebrewInventoryChanged()
-			} else {
-				shared.gate.Reset()
-				shared.show(bundleview.InstallLabelReady, true)
+			defer uh.bundleInstallGate.Reset()
+			uh.setBundleInstallProgress(false)
+
+			if dryrun.Enabled() {
+				if uh.toastAdder != nil {
+					uh.toastAdder.ShowToast("[DRY-RUN] Preview: selected collections would be installed — no changes made")
+				}
+				return
 			}
-			uh.toastAdder.ShowToast(decision.Toast)
+
+			uh.homebrewInventoryChanged()
+
+			if uh.toastAdder != nil {
+				if len(failedNames) == 0 {
+					uh.toastAdder.ShowToast("Selected collections installed successfully.")
+				} else if hadTrustErr {
+					uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage(lastTrustErrName))
+				} else {
+					uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't install all collections (%s). Try again.", strings.Join(failedNames, ", ")))
+				}
+			}
 		})
 	}()
+}
+
+func (uh *UserHome) setBundleInstallProgress(busy bool) {
+	if uh.bundleInstallButton != nil {
+		uh.bundleInstallButton.SetSensitive(!busy)
+	}
+	if uh.bundleInstallSpinner != nil {
+		uh.bundleInstallSpinner.SetVisible(busy)
+		uh.bundleInstallSpinner.SetSpinning(busy)
+	}
+	if uh.bundleInstallBar != nil {
+		if busy {
+			uh.appInstallProgress.start(uh.bundleInstallBar)
+		} else {
+			uh.appInstallProgress.stop(uh.bundleInstallBar)
+		}
+	}
 }

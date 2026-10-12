@@ -58,58 +58,33 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 		wantSubtitle string
 	}{
 		{
-			name:         "known collection with no comment",
+			name:         "curated collection Bluefin CLI",
 			id:           "cli",
 			itemCount:    16,
-			wantTitle:    "Command line tools",
-			wantSubtitle: "A modern set of everyday terminal utilities. Includes 16 apps and tools.",
+			wantTitle:    "Bluefin CLI",
+			wantSubtitle: "A modern terminal environment with everyday utilities, Starship prompt, and shell bling. Includes 16 apps and tools.",
 		},
 		{
-			name:         "known collection with a jargon comment",
-			id:           "cncf",
-			comment:      "CNCF Projects Brewfile",
-			itemCount:    80,
-			wantTitle:    "Cloud native tools",
-			wantSubtitle: "Tools for building and running cloud native software. Includes 80 apps and tools.",
+			name:         "curated collection Extra Wallpapers",
+			id:           "artwork",
+			itemCount:    4,
+			wantTitle:    "Extra Wallpapers",
+			wantSubtitle: "Extra wallpapers, artwork, and wallpaper cycling for your desktop. Includes 4 apps and tools.",
 		},
 		{
-			name:         "known collection whose comment is its own file name",
+			name:         "curated collection Fonts",
+			id:           "fonts",
+			itemCount:    21,
+			wantTitle:    "Fonts",
+			wantSubtitle: "A broad selection of everyday, design, office, and accessibility fonts. Includes 21 apps and tools.",
+		},
+		{
+			name:         "curated collection Full Desktop Suite",
 			id:           "full-desktop",
 			comment:      "full-desktop.Brewfile",
 			itemCount:    58,
-			wantTitle:    "Full desktop",
-			wantSubtitle: "A complete set of desktop apps for everyday use. Includes 58 apps and tools.",
-		},
-		{
-			name:         "known collection whose comment names packaging",
-			id:           "system-flatpaks",
-			comment:      "Default system-wide flatpaks for Bluefin",
-			itemCount:    39,
-			wantTitle:    "Everyday apps",
-			wantSubtitle: "The desktop apps recommended for everyday use. Includes 39 apps and tools.",
-		},
-		{
-			name:         "known collection whose comment names a tool the person never runs",
-			id:           "dakota-fonts",
-			comment:      "Dakota's optional font selection, installed by ujust install-dev-fonts.",
-			itemCount:    15,
-			wantTitle:    "Extra fonts",
-			wantSubtitle: "An additional font selection for design and development. Includes 15 apps and tools.",
-		},
-		{
-			name:         "known collection whose comment is a heading",
-			id:           "swift",
-			comment:      "Swift Development Environment",
-			itemCount:    3,
-			wantTitle:    "Swift development",
-			wantSubtitle: "Everything needed to build Swift projects. Includes 3 apps and tools.",
-		},
-		{
-			name:         "known collection with a single entry",
-			id:           "ide",
-			itemCount:    1,
-			wantTitle:    "Code editors",
-			wantSubtitle: "Popular code editors and development environments. Includes 1 app or tool.",
+			wantTitle:    "Full Desktop Suite",
+			wantSubtitle: "A complete set of desktop apps for everyday productivity. Includes 58 apps and tools.",
 		},
 		{
 			name:         "unknown collection with a human comment",
@@ -148,19 +123,60 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 	}
 }
 
-// Dakota ships these collections in /usr/share/ublue-os/homebrew (observed on
-// dakota:testing, 2026-10-07). An unnamed one falls back to its title-cased
-// file name and a generic summary, which is how "Nsl" reached the Apps page.
-func TestDakotaCollectionsAreAllNamed(t *testing.T) {
+// Dakota collections are either curated or explicitly retired.
+func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	for _, id := range []string{
 		"ai-tools", "artwork", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
 		"experimental-ide", "fonts", "fonts-dev", "full-desktop", "ide", "k8s-tools",
 		"nsl", "swift", "system-dx-flatpaks", "system-flatpaks", "video-wallpaper",
 		"wallpaper-slideshow",
 	} {
-		if _, ok := catalog[id]; !ok {
-			t.Errorf("collection %q has no catalog entry", id)
+		_, inCatalog := catalog[id]
+		_, inRetired := retired[id]
+		if !inCatalog && !inRetired {
+			t.Errorf("collection %q is neither in catalog nor retired", id)
 		}
+		if inCatalog && inRetired {
+			t.Errorf("collection %q is in both catalog and retired", id)
+		}
+	}
+}
+
+func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
+	curatedIDs := []string{"artwork", "cli", "fonts", "fonts-dev", "ai-tools", "full-desktop"}
+	for _, id := range curatedIDs {
+		if !Curated(id) {
+			t.Errorf("Curated(%q) = false, want true", id)
+		}
+		if !Visible(id) {
+			t.Errorf("Visible(%q) = false, want true", id)
+		}
+	}
+	if DefaultSelected("full-desktop") {
+		t.Errorf("DefaultSelected(full-desktop) = true, want false")
+	}
+	for _, id := range []string{"artwork", "cli", "fonts", "fonts-dev", "ai-tools"} {
+		if !DefaultSelected(id) {
+			t.Errorf("DefaultSelected(%q) = false, want true", id)
+		}
+	}
+	if !DefaultSelected("custom-admin-pack") {
+		t.Errorf("DefaultSelected(custom-admin-pack) = false, want true")
+	}
+}
+
+func TestRetiredCollectionsAreNotVisible(t *testing.T) {
+	for id := range retired {
+		if Visible(id) {
+			t.Errorf("Visible(%q) = true, want false for retired collection", id)
+		}
+		if Curated(id) {
+			t.Errorf("Curated(%q) = true, want false for retired collection", id)
+		}
+	}
+	// Unknown user-added collections remain visible.
+	if !Visible("team-tools") {
+		t.Errorf("Visible(team-tools) = false, want true for custom user collection")
 	}
 }
 

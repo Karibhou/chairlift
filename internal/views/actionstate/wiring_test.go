@@ -348,7 +348,8 @@ func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
 		{"troubleshoot.go", "func (uh *UserHome) setUpGoose()", 1},
 		{"agents_page.go", "func (uh *UserHome) onAgentModeToggled(", 1},
 		// The failure branch (partial install) and the live success.
-		{"bundle_install.go", "func (uh *UserHome) runBundleInstall(", 2},
+		{"bundle_install.go", "func (uh *UserHome) runSelectedBundlesInstall()", 1},
+		{"features_page.go", "func (uh *UserHome) startDeveloperAppsSetup(", 1},
 		{"developer_tools.go", "func (uh *UserHome) onDeveloperOption(", 1},
 	} {
 		if got := strings.Count(body(c.file, c.signature), refresh); got != c.calls {

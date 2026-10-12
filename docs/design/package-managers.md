@@ -274,26 +274,20 @@ Built-in `bundles_paths` contains `/usr/share/ublue-os/homebrew`,
 `/usr/share/chairlift/bundles`, and `/etc/chairlift/bundles`; shipped
 [`config.yml`](../../config.yml) replaces that list with the first directory
 only. Group visibility is floored on Homebrew before discovery.
-Each collection is rendered as an `AdwExpanderRow` whose title and subtitle
-are the curated name and description `bundleview.Describe` already produces,
-whose suffix holds the Install button and its progress bar, and whose
-expanded child rows are the package list. Expansion is opt-in per row,
-so a person scanning the page reads the closed summary first and reveals
-the contents only when they decide to inspect.
-A per-path `bundleview.InstallGate` prevents overlapping collection installs.
-Live success completes that row and refreshes installed packages; failure or
-preview restores Install, and preview requests no inventory refresh.
-Inline install progress pulses rather than inventing a percentage.
-Each row's installed state is observed, not remembered:
-`refreshBundleStatuses` (`internal/views/bundle_install.go`) runs
-`BundleCheck` for every collection off the GTK thread once the rows are
-built, again after every live collection install (success or failure), and
-after a live Homebrew uninstall. `bundleview.ObservedInstalled` maps Installed
-and Update Available to installed, Not Installed to not installed, and
-Indeterminate to no change; `InstallGate.Observe` then closes an idle row as
-Installed or reopens an Installed one, and never touches a running install.
-An `actionstate.RefreshGate` generation lets only the newest refresh publish,
-so a check begun before an install cannot overwrite its outcome.
+Each collection is rendered as an `AdwExpanderRow` with a checkbox prefix
+whose title and subtitle are the curated name and description
+`bundleview.Describe` produces, and whose expanded child rows are the package
+list. Collections are selected with checkboxes (curated sets default checked,
+while Full Desktop Suite defaults unchecked). An "Install" header action installs
+all checked, uninstalled collections in one step. Bluefin CLI additionally enables
+shell bling and prompt integration, while Extra Wallpapers bundles the Damask
+flatpak.
+
+Each row's installed state is observed: `refreshBundleStatuses`
+(`internal/views/bundle_install.go`) runs `BundleCheck` for every collection
+off the GTK thread once the rows are built, again after every collection install
+and after a live Homebrew uninstall. When installed, a collection's checkbox is
+checked and made insensitive, and its subtitle indicates installed status.
 
 ### Tap trust
 

@@ -90,7 +90,7 @@ Feature: Apps destination
     When I open the "Apps" page
     Then the "Command line tools" apps group says "Couldn't load this list."
     And the "Installed apps" apps group says "Couldn't load this list."
-    And the "Install Team tools" button in the "Team tools" row is sensitive
+    And the "Install" button in the "Install selected collections" row is sensitive
     And the "Export" button in the "Export package list" row is sensitive
 
   @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak
@@ -104,13 +104,13 @@ Feature: Apps destination
     When I open the "Apps" page
     Then the "Coding fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool."
-    When I click the "Install Coding fonts" button in the "Coding fonts" row
+    And the "Coding fonts" collection is checked
+    And the "Full Desktop Suite" collection is unchecked
+    When I click the "Install" button in the "Install selected collections" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
-    And the application log contains "/bundles/fonts-dev.Brewfile"
-    And a toast on the Apps page says "[DRY-RUN] Preview: Coding fonts would be installed — no changes made"
-    And the "Install Coding fonts" button in the "Coding fonts" row is sensitive
-    And I do not see "Installing collection"
-    And I do not see "Installing collection…"
+    And a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
+    And the "Install" button in the "Install selected collections" row is sensitive
+    And I do not see "Installing collections…"
     And Homebrew was asked to "bundle check"
     And Homebrew was never asked to "bundle install"
 
@@ -118,8 +118,8 @@ Feature: Apps destination
   Scenario: A collection already on the system reads Installed when the page loads
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Installed Team tools" button in the "Team tools" row is insensitive
-    And the "Install Coding fonts" button in the "Coding fonts" row is sensitive
+    Then the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool. (Installed)"
+    And the "Install" button in the "Install selected collections" row is sensitive
     And Homebrew was asked to "bundle check"
     And Homebrew was never asked to "bundle install"
 
@@ -137,16 +137,14 @@ Feature: Apps destination
     Then the Apps page does not show the "Backup" group
     And the Apps page does not show the "Command line tools" group
     And the Apps page does not show the "Installed apps" group
-    When I click the "Install Team tools" button in the "Team tools" row
+    When I click the "Install" button in the "Install selected collections" row
     Then the application log contains "/bundles/team-tools.Brewfile"
-    And the "Install Team tools" button in the "Team tools" row is sensitive
-    And I do not see "Installing collection"
-    And I do not see "Installing collection…"
+    And the "Install" button in the "Install selected collections" row is sensitive
+    And I do not see "Installing collections…"
     And the application log does not contain "panic"
 
   @config.apps-bundles @stub.apps-brew
   Scenario: Exporting the app list is previewed and writes nothing
-    Given ChairLift is running
     When I open the "Apps" page
     Then the "Export package list" row says "Replaces any Brewfile already there."
     When I click the "Export" button in the "Export package list" row
@@ -161,7 +159,7 @@ Feature: Apps destination
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Pin jq" button in the "jq" row is sensitive
-    And the "Install Team tools" button in the "Team tools" row is sensitive
+    And the "Install" button in the "Install selected collections" row is sensitive
     And the "Uninstall visual-studio-code" button in the "visual-studio-code" row is sensitive
     And the "Export" button in the "Export package list" row is sensitive
     And every visible action control has an accessible name and an action
@@ -184,11 +182,11 @@ Feature: Apps destination
       | font-hack        |
 
   @config.apps-bundles @stub.apps-brew @stub.apps-collections
-  Scenario: A collection row still installs without expanding its list
+  Scenario: Collections install with the group Install button without expanding
     Given ChairLift is running
     When I open the "Apps" page
-    And I click the "Install Coding fonts" button in the "Coding fonts" row
+    And I click the "Install" button in the "Install selected collections" row
     Then the application log contains "/bundles/fonts-dev.Brewfile"
-    And the "Install Coding fonts" button in the "Coding fonts" row is sensitive
-    And I do not see "Installing collection"
+    And the "Install" button in the "Install selected collections" row is sensitive
+    And I do not see "Installing collections…"
     And the application log does not contain "panic"

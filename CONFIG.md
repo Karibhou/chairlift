@@ -126,9 +126,10 @@ unattended-update switch is `updates_page.automatic_updates_group`.
 
 ### Applications Page (`applications_page`)
 
-Apps contains Homebrew app collections first, installed casks and explicitly
-requested formulae second, then the Brewfile exporter. It has no Flatpak
-inventory, external catalog launcher, or package search.
+Apps contains Homebrew app collections first (offered as checkbox rows with a
+single Install action), installed casks and explicitly requested formulae second,
+then the Brewfile exporter. It has no Flatpak inventory, external catalog launcher,
+or package search.
 
 The retired `applications_installed_group`, `flatpak_user_group`,
 `flatpak_system_group`, and `brew_search_group` keys are still accepted,

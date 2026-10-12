@@ -620,10 +620,12 @@ An agent must not break these:
   the count/badge, and refreshes; a failed refresh preserves that last known
   row/count state instead of replacing it with an invented zero.
 - **Apps is Homebrew-only and refresh-safe.** Its only runtime configuration
-  groups are `brew_bundles_group` and `brew_group`: app collections come first,
-  installed casks and explicitly requested formulae next, then the Brewfile
-  exporter (also gated by `brew_group`). No Flatpak inventory, external catalog
-  launcher, or package search belongs here. Installed-package refreshes use
+  groups are `brew_bundles_group` and `brew_group`: app collections come first
+  as checkbox rows with a unified Install action (curated collections default
+  checked; Full Desktop Suite defaults unchecked), installed casks and
+  explicitly requested formulae next, then the Brewfile exporter (also gated
+  by `brew_group`). No Flatpak inventory, external catalog launcher, or package
+  search belongs here. Installed-package refreshes use
   `actionstate.RefreshGate` generations; stale workers must not replace newer rows.
   Installed formula/cask rows likewise confirm uninstall, formula rows confirm
   pin/unpin, and every row shares one gate across its mutation controls so
@@ -638,6 +640,14 @@ An agent must not break these:
   and `Exporting…`, and restores the Export action after every outcome.
   A destructive `run*` entry point added to `internal/views` belongs in
   `internal/installcheck`'s `TestDestructiveActionsRequireConfirmation` inventory.
+- **Shell bling integration is unprivileged, idempotent, and non-interactive.**
+  `internal/shellenv` enables the Bluefin terminal experience (Starship prompt,
+  zoxide, bash-preexec, shell completions) when Bluefin CLI is installed.
+  It targets the active shell config file (`~/.bashrc`, `~/.zshrc`, or
+  `~/.config/fish/config.fish`) and writes the exact `### <script> source start/end`
+  markers used by `ublue-bling`. If already present, it is an idempotent no-op.
+  It never invokes interactive prompts, never runs `pkexec`, and writes nothing
+  under `--dry-run`.
 - **A visible retryable control must reset its action gate.**
   `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
   controls that become permanently unavailable after live success. Driver
@@ -768,12 +778,13 @@ An agent must not break these:
   `UpdateShell.notifyUpdateComplete`), because it is the one action long enough a user may
   have stepped away. A toggle or switch completes in view and already has a
   toast; do not add a second notification for the same instant event.
-- **Developer-mode feed onboarding is opt-in, follows the enable, and never
+- **Developer-mode feed and app onboarding follows the enable, and never
   reverses it.** `dx_group`'s `install_pulp` and `stage_feeds` both default to
-  `false`, and they are the only optional work the Developer Mode switch does
-  beyond the privileged group promotion. `startDeveloperFeedSetup`
-  (`internal/views/features_page.go`) runs them from the same success branch
-  `openDeveloperOnboarding` uses, behind
+  `false`, and Developer Mode also automatically installs `dakota-dev-flatpaks`
+  for development desktop apps (`startDeveloperAppsSetup`).
+  `startDeveloperFeedSetup` and `startDeveloperAppsSetup`
+  (`internal/views/features_page.go`) run from the same success branch
+  `openDeveloperOnboarding` uses, behind confirmed live promotions only:
   `actionmsg.DeveloperFeedSetupPlan(dryRun, enabled, succeeded, …)`: a
   `--dry-run` preview, a disable, a page restore, and a failed helper call all
   produce an empty plan and start no worker. Pulp is a system-scope Flatpak

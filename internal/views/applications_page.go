@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
@@ -87,17 +88,41 @@ func (uh *UserHome) buildApplicationsPage() {
 }
 
 // loadBrewBundles discovers configured collections off the GTK thread and
-// builds their rows on the main thread. ConnectBundleInstall owns the shared
-// callback and per-collection action gate; setup navigates these same widgets.
+// builds their rows on the main thread.
 // Once the rows exist, refreshBundleStatuses observes which collections the
 // system already holds.
 func (uh *UserHome) loadBrewBundles(paths []string) {
-	bundles, discoveryErr := homebrew.AvailableBundles(paths)
+	rawBundles, discoveryErr := homebrew.AvailableBundles(paths)
 	warning := ""
 	if discoveryErr != nil {
 		log.Printf("Error discovering app collections: %v", discoveryErr)
 		warning = discoveryErr.Error()
 	}
+
+	// Index discovered bundles by name so super-bundles can resolve their members.
+	bundlesByName := make(map[string]homebrew.Bundle, len(rawBundles))
+	for _, b := range rawBundles {
+		bundlesByName[b.Name] = b
+	}
+
+	// Filter out retired bundles; keep curated and custom user collections.
+	var bundles []homebrew.Bundle
+	for _, b := range rawBundles {
+		if bundleview.Visible(b.Name) {
+			bundles = append(bundles, b)
+		}
+	}
+
+	// Sort bundles: curated in priority order, then custom by title.
+	sort.SliceStable(bundles, func(i, j int) bool {
+		orderI := bundleview.Order(bundles[i].Name)
+		orderJ := bundleview.Order(bundles[j].Name)
+		if orderI != orderJ {
+			return orderI < orderJ
+		}
+		return bundles[i].Name < bundles[j].Name
+	})
+
 	presentation := bundleview.Present(len(bundles), warning)
 
 	// Parse every Brewfile off the main thread before marshalling: the
@@ -105,9 +130,10 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 	// file scan, and the contract documented on the function above
 	// promises off-thread discovery + main-thread row construction only.
 	type parsed struct {
-		bundle homebrew.Bundle
-		items  []homebrew.BundleItem
-		total  int
+		bundle      homebrew.Bundle
+		memberPaths []string
+		items       []homebrew.BundleItem
+		total       int
 	}
 	parsedBundles := make([]parsed, 0, len(bundles))
 	for _, bundle := range bundles {
@@ -123,7 +149,28 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 		if itemsErr != nil {
 			total = len(items)
 		}
-		parsedBundles = append(parsedBundles, parsed{bundle: bundle, items: items, total: total})
+
+		memberPaths := []string{bundle.Path}
+		// Include items from sibling member bundles (e.g. wallpaper-slideshow for artwork)
+		for _, memberName := range bundleview.Members(bundle.Name) {
+			if memberName == bundle.Name {
+				continue
+			}
+			if memberBundle, ok := bundlesByName[memberName]; ok {
+				memberPaths = append(memberPaths, memberBundle.Path)
+				if mItems, mErr := homebrew.BundleContents(memberBundle.Path); mErr == nil {
+					items = append(items, mItems...)
+					total += memberBundle.ItemCount
+				}
+			}
+		}
+
+		parsedBundles = append(parsedBundles, parsed{
+			bundle:      bundle,
+			memberPaths: memberPaths,
+			items:       items,
+			total:       total,
+		})
 	}
 
 	sgtk.RunOnMainThread(func() {
@@ -141,50 +188,65 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 			return
 		}
 
+		// Add group-level Install button header row
+		headerRow := adw.NewActionRow()
+		headerRow.SetTitle("Install selected collections")
+		headerRow.SetSubtitle("Installs all checked collections in one step.")
+		headerInstallBtn := gtk.NewButtonWithLabel("Install")
+		headerInstallBtn.SetValign(gtk.AlignCenterValue)
+		headerInstallBtn.AddCssClass("suggested-action")
+		uh.bundleInstallButton = headerInstallBtn
+
+		spinner := newActivitySpinner()
+		uh.bundleInstallSpinner = spinner
+		headerRow.AddSuffix(&spinner.Widget)
+
+		progress := newInstallProgress("Installing collections…")
+		uh.bundleInstallBar = progress
+		headerRow.AddSuffix(&progress.Widget)
+		headerRow.AddSuffix(&headerInstallBtn.Widget)
+
+		uh.bundleButtons.connect(headerInstallBtn, func(gtk.Button) {
+			uh.runSelectedBundlesInstall()
+		})
+		uh.brewBundlesGroup.Add(&headerRow.Widget)
+
+		uh.bundleItems = nil
 		for _, p := range parsedBundles {
-			row, installBtn, progress := newBundleRow(p.bundle, p.items, p.total)
-			uh.ConnectBundleInstall(p.bundle, installBtn, progress)
+			row, choice := newBundleRow(p.bundle, p.items, p.total)
 			uh.brewBundlesGroup.Add(&row.Widget)
+			uh.bundleItems = append(uh.bundleItems, &bundleItemRow{
+				bundle:      p.bundle,
+				memberPaths: p.memberPaths,
+				row:         row,
+				choice:      choice,
+			})
 		}
 		uh.refreshBundleStatuses()
 	})
 }
 
-// newBundleRow builds one collection row with its Install button, unwired:
-// the caller connects the button through ConnectBundleInstall. The row is
-// an AdwExpanderRow so the user can reveal the list of packages the
-// collection will install; the Install button lives as a suffix of the
-// expander itself, so it stays in view while the list is collapsed. The
-// description and the count go on the expander's own subtitle because a
-// person scanning the closed row needs both before deciding to expand.
-func newBundleRow(bundle homebrew.Bundle, items []homebrew.BundleItem, total int) (*adw.ExpanderRow, *gtk.Button, *gtk.ProgressBar) {
+// newBundleRow builds one collection expander row with a CheckButton prefix.
+func newBundleRow(bundle homebrew.Bundle, items []homebrew.BundleItem, total int) (*adw.ExpanderRow, *gtk.CheckButton) {
 	collection := bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount)
 	row := adw.NewExpanderRow()
 	// Collection titles and descriptions may carry free-form text from a
 	// shipped Brewfile (comment lines, the humanize() fallback for unknown
 	// collections); AdwExpanderRow parses both as Pango markup by default,
-	// so a '&' or '<' would garble the row with a GTK warning (#437, the
-	// same shape as the bootc stage expander on the Updates page).
+	// so a '&' or '<' would garble the row with a GTK warning (#437).
 	row.SetUseMarkup(false)
 	row.SetTitle(collection.Title)
 	row.SetSubtitle(collection.Subtitle)
 	row.SetTitleLines(1)
 
-	// ConnectBundleInstall gives the button its label-and-spinner child. A
-	// button built with a label and then given another child publishes an
-	// empty accessible name even with an explicit LABEL property (GTK 4.24,
-	// reproduced without ChairLift), so it starts empty.
-	installBtn := gtk.NewButton()
-	installBtn.SetValign(gtk.AlignCenterValue)
-	progress := newInstallProgress("Installing collection…")
-	controls := gtk.NewBox(gtk.OrientationVerticalValue, 6)
-	controls.SetValign(gtk.AlignCenterValue)
-	controls.Append(&installBtn.Widget)
-	controls.Append(&progress.Widget)
-	row.AddSuffix(&controls.Widget)
+	choice := gtk.NewCheckButton()
+	choice.SetValign(gtk.AlignCenterValue)
+	choice.SetActive(bundleview.DefaultSelected(bundle.Name))
+	SetAccessibleLabel(choice, "Select "+collection.Title)
+	row.AddPrefix(&choice.Widget)
 
 	addContentsRows(row, items, total)
-	return row, installBtn, progress
+	return row, choice
 }
 
 // addContentsRows fills the expander with one row per package the

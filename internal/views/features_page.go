@@ -8,12 +8,14 @@ import (
 	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gaming"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updex"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/bundleview"
 	"github.com/projectbluefin/chairlift/internal/views/featurestatus"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -571,6 +573,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 
 			uh.openDeveloperOnboarding(enabled, succeeded)
 			uh.startDeveloperFeedSetup(enabled, succeeded)
+			uh.startDeveloperAppsSetup(enabled, succeeded)
 		})
 	}()
 }
@@ -657,6 +660,56 @@ func (uh *UserHome) startDeveloperFeedSetup(enabled, succeeded bool) {
 				return
 			}
 			uh.toastAdder.ShowToast(result.Message)
+		})
+	}()
+}
+
+// startDeveloperAppsSetup installs extra developer apps (dakota-dev-flatpaks)
+// when Developer Mode is successfully enabled.
+func (uh *UserHome) startDeveloperAppsSetup(enabled, succeeded bool) {
+	if !actionmsg.DeveloperAppsSetupPlan(dryrun.Enabled(), enabled, succeeded) {
+		return
+	}
+
+	var bundlePaths []string
+	if groupCfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group"); groupCfg != nil {
+		bundlePaths = append(bundlePaths, groupCfg.BundlesPaths...)
+	}
+	bundles, err := homebrew.AvailableBundles(bundlePaths)
+	if err != nil {
+		return
+	}
+	var devAppsBrewfile string
+	for _, b := range bundles {
+		if b.Name == bundleview.DeveloperAppsCollection {
+			devAppsBrewfile = b.Path
+			break
+		}
+	}
+	if devAppsBrewfile == "" {
+		return
+	}
+
+	if !uh.developerAppsGate.TryStart() {
+		return
+	}
+
+	go func() {
+		defer uh.developerAppsGate.Reset()
+		if err := homebrew.BundleInstall(devAppsBrewfile); err != nil {
+			log.Printf("views: developer apps setup could not install %s: %v", devAppsBrewfile, err)
+			sgtk.RunOnMainThread(func() {
+				if uh.toastAdder != nil {
+					uh.toastAdder.ShowErrorToast("Couldn't install developer apps.")
+				}
+			})
+			return
+		}
+		sgtk.RunOnMainThread(func() {
+			if uh.toastAdder != nil {
+				uh.toastAdder.ShowToast("Developer apps installed")
+			}
+			uh.homebrewInventoryChanged()
 		})
 	}()
 }

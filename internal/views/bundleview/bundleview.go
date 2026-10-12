@@ -27,6 +27,10 @@ const (
 	gateComplete
 )
 
+// DeveloperAppsCollection is the collection Developer Mode installs when it
+// is turned on. It is never offered as an App collection row.
+const DeveloperAppsCollection = "dakota-dev-flatpaks"
+
 // Presentation describes the group-level text after collection discovery.
 // Placeholder fields are non-empty only when there are no collection rows.
 type Presentation struct {
@@ -66,33 +70,116 @@ type Collection struct {
 }
 
 type catalogEntry struct {
-	title   string
-	summary string
+	title    string
+	summary  string
+	curated  bool
+	order    int
+	defaults bool
 }
 
-// catalog names the collections Bluefin publishes. Their on-disk identifiers
-// are tooling names ("cli", "cncf", "system-flatpaks") and their leading
-// comments are headings or provenance notes, so both the name and the
-// description a person reads are written here.
 var catalog = map[string]catalogEntry{
-	"ai-tools":            {"AI tools", "AI assistants and model runners for the terminal."},
-	"artwork":             {"Wallpapers", "Wallpapers and artwork for your desktop."},
-	"cli":                 {"Command line tools", "A modern set of everyday terminal utilities."},
-	"cncf":                {"Cloud native tools", "Tools for building and running cloud native software."},
-	"dakota-dev-flatpaks": {"Extra developer apps", "Optional desktop apps for development work."},
-	"dakota-fonts":        {"Extra fonts", "An additional font selection for design and development."},
-	"experimental-ide":    {"Experimental code editors", "Early builds of code editors, still being tested."},
-	"fonts":               {"Fonts", "A broad selection of fonts for documents and design."},
-	"fonts-dev":           {"Coding fonts", "Fixed-width fonts made for reading code."},
-	"full-desktop":        {"Full desktop", "A complete set of desktop apps for everyday use."},
-	"ide":                 {"Code editors", "Popular code editors and development environments."},
-	"k8s-tools":           {"Kubernetes tools", "Command line tools for working with Kubernetes clusters."},
-	"nsl":                 {"Linux machines", "Run persistent Linux virtual machines from your account."},
-	"swift":               {"Swift development", "Everything needed to build Swift projects."},
-	"system-dx-flatpaks":  {"Developer apps", "Desktop apps for development work."},
-	"system-flatpaks":     {"Everyday apps", "The desktop apps recommended for everyday use."},
-	"video-wallpaper":     {"Video wallpaper", "Use a video as your desktop background."},
-	"wallpaper-slideshow": {"Wallpaper slideshow", "Change your desktop background on a schedule."},
+	"artwork": {
+		title:    "Extra Wallpapers",
+		summary:  "Extra wallpapers, artwork, and wallpaper cycling for your desktop.",
+		curated:  true,
+		order:    1,
+		defaults: true,
+	},
+	"cli": {
+		title:    "Bluefin CLI",
+		summary:  "A modern terminal environment with everyday utilities, Starship prompt, and shell bling.",
+		curated:  true,
+		order:    2,
+		defaults: true,
+	},
+	"fonts": {
+		title:    "Fonts",
+		summary:  "A broad selection of everyday, design, office, and accessibility fonts.",
+		curated:  true,
+		order:    3,
+		defaults: true,
+	},
+	"fonts-dev": {
+		title:    "Coding fonts",
+		summary:  "Fixed-width fonts made for reading code.",
+		curated:  true,
+		order:    4,
+		defaults: true,
+	},
+	"ai-tools": {
+		title:    "AI tools",
+		summary:  "AI assistants and model runners for the terminal.",
+		curated:  true,
+		order:    5,
+		defaults: true,
+	},
+	"full-desktop": {
+		title:    "Full Desktop Suite",
+		summary:  "A complete set of desktop apps for everyday productivity.",
+		curated:  true,
+		order:    6,
+		defaults: false,
+	},
+}
+
+// retired collections are Bluefin-shipped bundles that have been explicitly
+// removed from the UI. They are filtered out so they do not fall back to
+// raw humanized names ("Cncf", "Nsl", etc.).
+var retired = map[string]struct{}{
+	"cncf":                {},
+	"k8s-tools":           {},
+	"swift":               {},
+	"ide":                 {},
+	"experimental-ide":    {},
+	"nsl":                 {},
+	"system-dx-flatpaks":  {},
+	"system-flatpaks":     {},
+	"video-wallpaper":     {},
+	"wallpaper-slideshow": {}, // folded into artwork ("Extra Wallpapers")
+	"dakota-fonts":        {}, // folded into fonts
+	"dakota-dev-flatpaks": {}, // installed automatically with devmode
+}
+
+// Visible reports whether an on-disk collection should be offered as a row.
+// Retired Bluefin bundles are excluded; user-added collections remain visible.
+func Visible(id string) bool {
+	_, isRetired := retired[id]
+	return !isRetired
+}
+
+// Curated reports whether id is one of the curated app collections shown in the UI.
+func Curated(id string) bool {
+	entry, ok := catalog[id]
+	return ok && entry.curated
+}
+
+// DefaultSelected reports whether id defaults to checked.
+// All collections default to checked except Full Desktop Suite.
+func DefaultSelected(id string) bool {
+	if entry, ok := catalog[id]; ok {
+		return entry.defaults
+	}
+	return true
+}
+
+// Order returns the sort order for a collection.
+func Order(id string) int {
+	if entry, ok := catalog[id]; ok && entry.curated {
+		return entry.order
+	}
+	return 100
+}
+
+// Members returns the collection identifiers that are installed together as a super-bundle.
+func Members(id string) []string {
+	switch id {
+	case "artwork":
+		return []string{"artwork", "wallpaper-slideshow"}
+	case "fonts":
+		return []string{"fonts", "dakota-fonts"}
+	default:
+		return []string{id}
+	}
 }
 
 const fallbackSummary = "A set of apps and tools put together for this computer."
@@ -114,13 +201,25 @@ func Describe(id, comment string, itemCount int) Collection {
 	if !known {
 		entry = catalogEntry{title: humanize(id), summary: fallbackSummary}
 	}
-
 	summary := entry.summary
-	if usable := usableSummary(id, comment); usable != "" {
-		summary = usable
+	if !entry.curated {
+		if usable := usableSummary(id, comment); usable != "" {
+			summary = usable
+		}
 	}
 
-	return Collection{Title: entry.title, Subtitle: joinSentences(summary, itemPhrase(itemCount))}
+	sub := joinSentences(summary, itemPhrase(itemCount))
+	return Collection{Title: entry.title, Subtitle: sub}
+}
+
+// DescribeInstalled returns the row text for one app collection, appending
+// "(Installed)" when installed is true.
+func DescribeInstalled(id, comment string, itemCount int, installed bool) Collection {
+	c := Describe(id, comment, itemCount)
+	if installed {
+		c.Subtitle += " (Installed)"
+	}
+	return c
 }
 
 // usableSummary returns the collection's own comment when it reads as a
