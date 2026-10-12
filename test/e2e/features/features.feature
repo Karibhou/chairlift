@@ -10,6 +10,8 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Given ChairLift is running
     When I open the "Features" page
     Then the Developer Mode switch shows this account's developer-group membership
+    And I do not see "IDEs and terminal editors"
+    And the application log does not contain "brew install devcontainer"
     And each gaming component says "Installed system-wide"
     And no gaming component is selected
     And the action journal is empty
@@ -26,6 +28,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Then the Developer Mode change is journalled as a dry run of the fixed helper
     And the Developer Mode preview toast is shown
     And the Developer Mode switch returns to its restored state
+    And the Dev Container CLI install is previewed only when enabling
 
   @stub.features-gaming-none @stub.features-devmenu
   Scenario: Developer Mode previews only the two Custom Command Menu entries
@@ -45,39 +48,6 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I toggle the switch in the "Developer Mode" row
     Then the Developer Mode preview toast is shown
     And the Developer feed onboarding never starts
-
-  @stub.features-gaming-none @stub.features-developer
-  Scenario: Developer options expose one Toolbox and individually chosen editor installs
-    Given ChairLift is running
-    When I open the "Features" page
-    Then I see "Developer Mode"
-    And I see "WSL Mode"
-    And I see "Virtual machine engine"
-    And I see "Your built-in engine runs Debian. Lima runs Ubuntu."
-    And I see "Enable Docker"
-    When I expand the "IDEs and terminal editors" list under "Developer"
-    Then the developer editor choices match the documented catalog
-    And the "Install VSCodium" button in the "VSCodium" row is sensitive
-    When I click the "Install VSCodium" button in the "VSCodium" row
-    Then the application log contains "Would execute: brew install --cask ublue-os/tap/vscodium-linux"
-    And the application log does not contain "Would execute: brew install --cask ublue-os/tap/jetbrains-toolbox-linux"
-    And the "Install VSCodium" button in the "VSCodium" row is sensitive
-    And the "VSCodium" row says "without Microsoft branding or telemetry."
-    And the action journal is empty
-
-  @stub.features-gaming-none @stub.features-developer-micro
-  Scenario: An optional tool removed outside Features is offered again when the page is shown
-    Given ChairLift is running
-    When I open the "Features" page
-    And I expand the "IDEs and terminal editors" list under "Developer"
-    Then the "Micro installed" button in the "Micro" row is insensitive
-    And the "Micro" row says "Installed through Homebrew."
-    When Homebrew stops listing "micro"
-    And I open the "Help" page
-    And I open the "Features" page
-    Then the "Install Micro" button in the "Micro" row is sensitive
-    And the "Micro" row says "Installs through Homebrew when you choose it."
-    And the action journal is empty
 
   @stub.features-gaming-none @stub.features-developer
   Scenario: Disabling a running WSL machine previews stop without deleting data

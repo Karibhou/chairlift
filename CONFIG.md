@@ -163,16 +163,15 @@ section above); administrators can remove them when convenient.
 
 - `desktop_integrations_group`: Tailscale Integration and Sync Folder Integration GNOME extension switches. Enabled by default; missing extensions or an unavailable GNOME session leave the switches insensitive with an explanation. Existing GNOME preferences are read on load and only explicit user actions change them.
 - `features_group`: System features managed by updex (requires `updex` command)
-- `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups (shown only when `/usr/share/ublue-os/image-info.json` is present)
+- `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups, and after a confirmed enable installs the Dev Container CLI (`devcontainer`) through Homebrew when Homebrew is available — a failed install is reported on its own and does not roll back developer access (shown only when `/usr/share/ublue-os/image-info.json` is present)
   - `wsl_backend`: Backend for WSL Mode (`nsl` or `lima`). Defaults to `nsl`; any other value is a configuration error
   - `install_pulp`: After a confirmed enable, install the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. Defaults to `false`. Opt-in and outside ChairLift's privilege boundary: the `flatpak` CLI authorizes the install through Flatpak's own PolicyKit, which may ask for an administrator password, and a failure here is reported as its own failure rather than rolling back developer access
   - `stage_feeds`: After a confirmed enable, write the curated developer feed catalog to `~/.local/share/chairlift/developer-feeds.opml` so the user can import it into their reader. Defaults to `false`. ChairLift writes the file and stops — nothing is imported automatically, and Pulp's own database is never touched. Disabling Developer Mode never removes Pulp, the staged file, or anything already imported from it
 - `gaming_group`: Selective Gaming applications and runtime extensions, installed system-wide from the system Flathub remote (authorized by Flatpak's own PolicyKit), with installed user/system states and visible partial failures; Remove Selected takes each selected app out of every scope it is installed in, leaving in place a system copy the OS image declares it ships (Flatpak `preinstall.d` or `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`) (shown only when `/usr/share/ublue-os/image-info.json` is present)
 - `printers_group`: Printer applications; one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`, with no `pkexec` route (shown only when `podman` is on `$PATH`). Each unit runs its family's `ghcr.io/projectbluefin/<id>-printer-app:stable` image and is kept current by `podman-auto-update.timer`, which turning a family on enables. The application is published on `127.0.0.1` only ([ADR-0020](docs/adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)): its unauthenticated settings page and IPP are reachable only from this computer (`http://localhost:<port>/`, `ipp://localhost:<port>/ipp/print`), so other computers on the network cannot print to it and it is not advertised over DNS-SD. The rows evaluate systemd state, journal logs, and container images to diagnose and surface actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator
 
-The Developer group also offers WSL Mode (nsl by default, with Lima as alternative),
-Docker, and individually selected IDEs and terminal editors, with one JetBrains
-Toolbox entry. nsl requires an x86-64 Linux host; Lima supports amd64 and arm64.
+The Developer group also offers WSL Mode (nsl by default, with Lima as alternative)
+and Docker. nsl requires an x86-64 Linux host; Lima supports amd64 and arm64.
 Both require hardware virtualization and access to `/dev/kvm`. Missing fixed
 helper actions disable only affected switches, not their discoverability.
 KVM permission changes require a new login; Docker needs an accessible daemon
@@ -238,8 +237,8 @@ agents_page:
   troubleshooting_group:
     enabled: false # Troubleshooting installs Goose and its tools through Homebrew
 
-# Developer IDE/editor installation also uses Homebrew; this disables the
-# whole Developer group, including its permission switches.
+# Developer Mode's Dev Container CLI install also uses Homebrew; this disables
+# the whole Developer group, including its permission switches.
 features_page:
   dx_group:
     enabled: false
