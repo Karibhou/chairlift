@@ -218,6 +218,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 			uh.bundleItems = append(uh.bundleItems, &bundleItemRow{
 				bundle:      p.bundle,
 				memberPaths: p.memberPaths,
+				total:       p.total,
 				row:         row,
 				choice:      choice,
 			})

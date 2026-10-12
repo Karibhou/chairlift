@@ -675,20 +675,6 @@ func (uh *UserHome) startDeveloperAppsSetup(enabled, succeeded bool) {
 	if groupCfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group"); groupCfg != nil {
 		bundlePaths = append(bundlePaths, groupCfg.BundlesPaths...)
 	}
-	bundles, err := homebrew.AvailableBundles(bundlePaths)
-	if err != nil {
-		return
-	}
-	var devAppsBrewfile string
-	for _, b := range bundles {
-		if b.Name == bundleview.DeveloperAppsCollection {
-			devAppsBrewfile = b.Path
-			break
-		}
-	}
-	if devAppsBrewfile == "" {
-		return
-	}
 
 	if !uh.developerAppsGate.TryStart() {
 		return
@@ -696,6 +682,22 @@ func (uh *UserHome) startDeveloperAppsSetup(enabled, succeeded bool) {
 
 	go func() {
 		defer uh.developerAppsGate.Reset()
+		bundles, err := homebrew.AvailableBundles(bundlePaths)
+		if err != nil {
+			log.Printf("views: developer apps setup could not discover bundles: %v", err)
+			return
+		}
+		var devAppsBrewfile string
+		for _, b := range bundles {
+			if b.Name == bundleview.DeveloperAppsCollection {
+				devAppsBrewfile = b.Path
+				break
+			}
+		}
+		if devAppsBrewfile == "" {
+			return
+		}
+
 		if err := homebrew.BundleInstall(devAppsBrewfile); err != nil {
 			log.Printf("views: developer apps setup could not install %s: %v", devAppsBrewfile, err)
 			sgtk.RunOnMainThread(func() {

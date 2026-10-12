@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sort"
 	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -23,6 +22,7 @@ import (
 type bundleItemRow struct {
 	bundle      homebrew.Bundle
 	memberPaths []string
+	total       int
 	row         *adw.ExpanderRow
 	choice      *gtk.CheckButton
 }
@@ -37,16 +37,17 @@ func (uh *UserHome) refreshBundleStatuses() {
 	}
 
 	type itemCheck struct {
-		item *bundleItemRow
-		path string
+		item  *bundleItemRow
+		paths []string
 	}
 	checks := make([]itemCheck, 0, len(uh.bundleItems))
 	for _, item := range uh.bundleItems {
-		checks = append(checks, itemCheck{item: item, path: item.bundle.Path})
+		paths := item.memberPaths
+		if len(paths) == 0 {
+			paths = []string{item.bundle.Path}
+		}
+		checks = append(checks, itemCheck{item: item, paths: paths})
 	}
-	sort.Slice(checks, func(i, j int) bool {
-		return checks[i].path < checks[j].path
-	})
 
 	generation := uh.bundleStatusRefresh.Begin()
 
@@ -55,19 +56,34 @@ func (uh *UserHome) refreshBundleStatuses() {
 			if !uh.bundleStatusRefresh.IsCurrent(generation) {
 				return
 			}
-			status, err := homebrew.BundleCheck(c.path)
-			if err != nil {
-				log.Printf("Could not check whether app collection %q is installed: %v", c.path, err)
+			allInstalled := true
+			anyKnown := false
+			for _, path := range c.paths {
+				status, err := homebrew.BundleCheck(path)
+				if err != nil {
+					log.Printf("Could not check whether app collection %q is installed: %v", path, err)
+				}
+				installed, known := bundleview.ObservedInstalled(status)
+				if known {
+					anyKnown = true
+					if !installed {
+						allInstalled = false
+						break
+					}
+				} else {
+					allInstalled = false
+					break
+				}
 			}
-			installed, known := bundleview.ObservedInstalled(status)
-			if !known {
+			if !anyKnown {
 				continue
 			}
+			installed := allInstalled
 			sgtk.RunOnMainThread(func() {
 				if !uh.bundleStatusRefresh.IsCurrent(generation) {
 					return
 				}
-				desc := bundleview.DescribeInstalled(c.item.bundle.Name, c.item.bundle.Description, c.item.bundle.ItemCount, installed)
+				desc := bundleview.DescribeInstalled(c.item.bundle.Name, c.item.bundle.Description, c.item.total, installed)
 				c.item.row.SetSubtitle(desc.Subtitle)
 				if installed {
 					c.item.choice.SetActive(true)
