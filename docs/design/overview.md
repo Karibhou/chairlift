@@ -1581,6 +1581,6 @@ existing widgets and `Window.navigateToPage`; bookends use the setup stack.
 Missing pages are skipped; an empty inventory opens no flow.
 
 Back and Next mutate no settings. **Finish** saves completed
-and version and returns to Control Center. A failed save leaves the conclusion
-retryable with an error toast. Intentional dismissal records a skip without
+and version and returns to Control Center; a save failure reports an
+error toast. Intentional dismissal records a skip without
 demoting prior completion. Dry-run previews persistence. `0-setup.png` captures Welcome.

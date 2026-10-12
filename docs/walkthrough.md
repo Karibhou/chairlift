@@ -22,8 +22,8 @@ walk **Features**, **Apps**, **Agents**, and **Livery**. Welcome presents the
 Bluefin wordmark, introduction and Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform every action. **Back** and **Next** only
 navigate. The matching conclusion quotes Edith Wharton. **Finish** saves
-completion and returns to Control Center. A save failure leaves the conclusion
-available to retry. **Dismiss setup**
+completion and returns to Control Center; a save failure reports an
+error toast. **Dismiss setup**
 (or Escape) records a skip without undoing previous completion.
 
 ---

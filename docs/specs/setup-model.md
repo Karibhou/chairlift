@@ -38,13 +38,10 @@ while keeping the current page. Each selection step opens at the top of its page
 
 Moving Back or Next changes only navigation. It never installs software,
 changes configuration, or writes disposition. Next from Livery opens the
-conclusion. Its final action saves completion and returns to Control Center.
-Save errors show a toast and restore the retryable final action.
-While finishing, duplicate actions, dismissal and window close cannot interrupt
-the save/launch boundary. Escape, Dismiss and intentional window close otherwise
+conclusion. Its final action saves completion and returns to Control Center;
+save errors show a toast. Escape, Dismiss and intentional window close
 dismiss setup without closing the application.
-`Ctrl+Q` quits in one press, setup included; only a running update or the
-final save/launch boundary refuses it.
+`Ctrl+Q` quits in one press, setup included.
 
 ## Disposition and dry run
 

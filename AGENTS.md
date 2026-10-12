@@ -587,8 +587,8 @@ An agent must not break these:
   bookends use the setup stack, not sidebar routes. Next and Back mutate no
   configuration. Repeated requests preserve progress; an empty inventory opens
   no flow. **Finish** records completion and version, then returns to Control
-  Center. Save failures leave a retryable conclusion. Dismiss records skip
-  without demoting completed; a crash records nothing. Dry-run previews writes.
+  Center; a save failure reports a toast. Dismiss records skip without
+  demoting completed; a crash records nothing. Dry-run previews writes.
   `test/e2e/features/setup.feature` covers both explicit flags, normal launch,
   navigation, and dismissal; `firstrun.Keys` remain held to the shipped schema.
 - **The Homebrew executable has one resolution.** `internal/homebrew.ExecutablePath`
