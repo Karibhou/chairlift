@@ -29,7 +29,7 @@ Preferences step.
 The main window keeps the same built page controls, widgets, and action owners.
 Setup does not reparent pages, create duplicate feature/install/model/livery
 controls, or add a settings actor. A footer built once offers Dismiss setup,
-Back and Next, with **Launch Bazaar App Store** on the conclusion. Back is
+Back and Next, with **Finish** on the conclusion. Back is
 insensitive on Welcome and returns there from the first selection page.
 Selection navigation passes through `Window.navigateToPage`; bookends use the
 setup stack. Other routes cannot leave the current step. The sidebar is
@@ -38,14 +38,10 @@ while keeping the current page. Each selection step opens at the top of its page
 
 Moving Back or Next changes only navigation. It never installs software,
 changes configuration, or writes disposition. Next from Livery opens the
-conclusion. Its final action saves completion, then runs
-`gtk-launch io.github.kolunmi.Bazaar` off the GTK thread and quits on success.
-Save or launch errors show a toast and restore the retryable final action.
-While finishing, duplicate actions, dismissal and window close cannot interrupt
-the save/launch boundary. Escape, Dismiss and intentional window close otherwise
+conclusion. Its final action saves completion and returns to Control Center;
+save errors show a toast. Escape, Dismiss and intentional window close
 dismiss setup without closing the application.
-`Ctrl+Q` quits in one press, setup included; only a running update or the
-final save/launch boundary refuses it.
+`Ctrl+Q` quits in one press, setup included.
 
 ## Disposition and dry run
 
@@ -54,8 +50,8 @@ including when the disposition is empty or its schema is absent. Finish records
 `completed` and the application version through the existing GSettings store.
 Dismiss uses `firstrun.RecordSkip`, preserving an existing completion. A crash
 records nothing. Persistence runs off the GTK main thread and errors return as
-a toast on the main thread. Under `--dry-run`, writes and Bazaar launch are
-previews; the final application exit still runs after the preview completes.
+a toast on the main thread. Under `--dry-run`, writes are
+previews.
 
 ## Verification
 
@@ -63,8 +59,8 @@ previews; the final application exit still runs after the preview completes.
 an empty floor, and the explicit-only presentation decision. Store regression
 tests cover persistence, dry-run suppression, and completion-preserving skips.
 `test/e2e/features/setup.feature` covers both bookend Back transitions, all
-selection pages, final exit, persistence preview, Bazaar suppression, both
-launch options, menu presentation and dismissal on Dakota.
+selection pages, completion persistence preview,
+both launch options, menu presentation and dismissal on Dakota.
 
 ## Source authority
 
