@@ -127,7 +127,7 @@ never asks for a reboot.
 Control Center is distributed through Homebrew:
 
 ```bash
-brew install --cask ublue-os/tap/chairlift
+brew install --cask projectbluefin/tap/chairlift
 ```
 
 The cask installs the GUI, its desktop entry and icons, and compiles the
