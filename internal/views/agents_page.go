@@ -215,11 +215,10 @@ func (uh *UserHome) onAgentModelSelected() {
 	if !uh.agentModeGate.TryStart() {
 		return
 	}
-	uh.agentModelActive = targetModel
-	uh.agentRefresh.Begin()
+	setActivitySpinner(uh.agentModelSpinner, true)
 	uh.agentModeToggle.widget.SetSensitive(false)
 	uh.agentModelRow.SetSensitive(false)
-	setActivitySpinner(uh.agentModelSpinner, true)
+	uh.agentRefresh.Begin()
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
@@ -241,6 +240,7 @@ func (uh *UserHome) onAgentModelSelected() {
 			} else if dryrun.Enabled() {
 				uh.toastAdder.ShowToast(fmt.Sprintf("[DRY-RUN] Would switch to %s", targetModel))
 			} else {
+				uh.agentModelActive = targetModel
 				uh.toastAdder.ShowToast(fmt.Sprintf("Selected %s.", targetModel))
 			}
 			uh.showAgentModeState(uh.agentModeState)
