@@ -21,9 +21,9 @@ the menu, `chairlift --setup`, or its `--first-run` alias to open Welcome, then
 walk **Features**, **Apps**, **Agents**, and **Livery**. Welcome presents the
 Bluefin wordmark, introduction and Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform every action. **Back** and **Next** only
-navigate. The matching conclusion quotes Edith Wharton. **Launch Bazaar App
-Store** saves completion, opens Bazaar, and closes Control Center. A save or
-launch failure leaves the conclusion available to retry. **Dismiss setup**
+navigate. The matching conclusion quotes Edith Wharton. **Finish** saves
+completion and returns to Control Center. A save failure leaves the conclusion
+available to retry. **Dismiss setup**
 (or Escape) records a skip without undoing previous completion.
 
 ---

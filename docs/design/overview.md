@@ -1580,9 +1580,7 @@ conclusion has the website's Edith Wharton quote. Selection steps use their
 existing widgets and `Window.navigateToPage`; bookends use the setup stack.
 Missing pages are skipped; an empty inventory opens no flow.
 
-Back and Next mutate no settings. **Launch Bazaar App Store** saves completed
-and version, runs `gtk-launch io.github.kolunmi.Bazaar` off the GTK thread, and
-quits only after success. A failed save or launch leaves the conclusion
+Back and Next mutate no settings. **Finish** saves completed
+and version and returns to Control Center. A failed save leaves the conclusion
 retryable with an error toast. Intentional dismissal records a skip without
-demoting prior completion. Dry-run previews persistence and suppresses Bazaar
-but still exits on the final action. `0-setup.png` captures Welcome.
+demoting prior completion. Dry-run previews persistence. `0-setup.png` captures Welcome.

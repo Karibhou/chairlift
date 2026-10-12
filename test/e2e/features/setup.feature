@@ -17,7 +17,7 @@ Feature: Explicit first-run software setup
     And the setup "Back" button is insensitive
     And the action journal is empty
 
-  @args.--first-run @stub.livery-tools @stub.setup-launch-recorder
+  @args.--first-run @stub.livery-tools
   Scenario: First-run walks existing pages in order with Back and Finish
     Given ChairLift is running
     Then the setup wizard shows "Welcome"
@@ -42,17 +42,16 @@ Feature: Explicit first-run software setup
     And the setup "Next" button is sensitive
     When I use the setup "Next" button
     Then the setup wizard shows "Conclusion"
-    And the setup "Launch Bazaar App Store" button is sensitive
+    And the setup "Finish" button is sensitive
     And the setup dry run would record no disposition
     When I use the setup "Back" button
     Then the setup wizard shows "Livery"
     When I use the setup "Next" button
     Then the setup wizard shows "Conclusion"
-    When I use the setup "Launch Bazaar App Store" button
-    Then Control Center exits after setup
+    When I use the setup "Finish" button
+    Then the setup wizard is not shown
     And the setup dry run would record disposition completed
     And the setup dry run would record the completed version
-    And the setup dry run would launch Bazaar
     And the action journal is empty
 
   @args.--setup

@@ -106,7 +106,6 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "Command"},             // llmman launch goose-desktop
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "ReopenCommand"},       // goose-desktop (handed to the running session)
 	{File: "internal/views/help_page.go", Func: "UserHome.openURL"},              // xdg-open
-	{File: "internal/window/window.go", Func: "Window.finishFirstRun"},           // gtk-launch io.github.kolunmi.Bazaar
 }
 
 func TestEveryPrivilegedExecutorJournals(t *testing.T) {
