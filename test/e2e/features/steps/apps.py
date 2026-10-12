@@ -198,6 +198,11 @@ def step_collection_checked(context, title, state):
     assert atspi.poll(lambda: bool(atspi.checked(cb)) == want), \
         f"collection {title!r} is not {state}"
 
+@then('the "{row}" row does not say "{text}"')
+def step_row_does_not_say(context, row, text):
+    target = atspi.row_containing(content(context), row)
+    assert not text_present(target, text), f"row {row!r} says {text!r}"
+
 @step('I toggle the "{title}" collection checkbox')
 def step_toggle_collection_checkbox(context, title):
     cb = _collection_checkbox(context, title)

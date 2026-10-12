@@ -456,7 +456,7 @@ func TestSchemaGroupFieldsMatchesGroupConfigTags(t *testing.T) {
 		}
 	}
 
-	wantOrder := []string{"enabled", "app_id", "actions", "website", "issues", "chat", "bundles_paths", "install_pulp", "stage_feeds", "wsl_backend"}
+	wantOrder := []string{"enabled", "app_id", "actions", "website", "issues", "chat", "bundles_paths", "install_pulp", "stage_feeds", "install_dev_apps", "wsl_backend"}
 	if len(got) != len(wantOrder) {
 		t.Fatalf("SchemaGroupFields() has %d fields, want %d: got %v, want %v", len(got), len(wantOrder), got, wantOrder)
 	}

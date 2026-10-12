@@ -47,45 +47,6 @@ func TestBundleDump(t *testing.T) {
 	}
 }
 
-func TestBundleInstallDecision(t *testing.T) {
-	tests := []struct {
-		name         string
-		dryRun       bool
-		wantComplete bool
-		wantExact    string
-		wantContains []string
-	}{
-		{
-			name:         "live install completes the row",
-			wantComplete: true,
-			wantExact:    "Command line tools installed",
-		},
-		{
-			name:         "dry-run resets the row after a preview",
-			dryRun:       true,
-			wantComplete: false,
-			wantContains: []string{"[DRY-RUN]", "Command line tools", "no changes made"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := BundleInstall(tt.dryRun, "Command line tools")
-			if got.Complete != tt.wantComplete {
-				t.Errorf("BundleInstall(%v, …).Complete = %v, want %v", tt.dryRun, got.Complete, tt.wantComplete)
-			}
-			if tt.wantExact != "" && got.Toast != tt.wantExact {
-				t.Errorf("BundleInstall(%v, …).Toast = %q, want %q", tt.dryRun, got.Toast, tt.wantExact)
-			}
-			for _, want := range tt.wantContains {
-				if !strings.Contains(got.Toast, want) {
-					t.Errorf("BundleInstall(%v, …).Toast = %q, want it to contain %q", tt.dryRun, got.Toast, want)
-				}
-			}
-		})
-	}
-}
-
 // TestUninstall covers both dry-run states for Homebrew uninstall toast text.
 func TestUninstall(t *testing.T) {
 	tests := []struct {

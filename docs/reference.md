@@ -164,6 +164,7 @@ failed helper call, or a `--dry-run` preview:
 
 - `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. No `pkexec`: like gaming mode, the `flatpak` CLI authorizes it through Flatpak's own PolicyKit
 - `stage_feeds` — writes the curated catalog to `~/.local/share/chairlift/developer-feeds.opml` and says so in a toast that names the path. Importing it is the user's own action inside Pulp; ChairLift never writes to Pulp's sandboxed store and never claims a subscription was imported
+- `install_dev_apps` — installs the `dakota-dev-flatpaks` app collection with `brew bundle install`. Skipped when `applications_page.brew_bundles_group` is disabled or Homebrew is unavailable (the same floor that hides App collections), so a host without Homebrew never attempts it
 
 The two outcomes are reported separately from developer access. The privileged
 enable has already succeeded by the time these run, so a failed Flatpak install

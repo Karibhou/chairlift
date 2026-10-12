@@ -304,7 +304,7 @@ sidebar row and page title.
 
 - **Browse Installed**: Navigate to Apps → Brew Packages to see all installed formulae and casks
 - **Search**: Use the search box to find packages by name or keyword
-- **Install**: Click the install button next to search results or collection rows
+- **Install**: Check the app collections you want and click the collection group's Install button
 - **Pin/Unpin**: Use the formula row's Pin or Unpin action and confirm the change
 - **Remove**: Use an installed formula or cask row's Uninstall action and
   confirm the removal
@@ -319,16 +319,22 @@ manager configured by
 
 The Apps page discovers curated `*.Brewfile` collections from every directory
 configured in `applications_page.brew_bundles_group.bundles_paths`
-(`/usr/share/ublue-os/homebrew` by default). Each row is named and described
-from a curated table rather than from the file, because the shipped
-collections are identified on disk by tooling names such as `cli` and
-`system-flatpaks`; a collection that table does not know gets a readable form
-of its identifier, and its leading `#` comment only when that comment reads
-as a human sentence. Every row states how many apps and tools it installs.
+(`/usr/share/ublue-os/homebrew` by default). Each collection is a checkbox
+row, and one Install action installs every checked collection that is not
+already installed. Curated collections start checked except Full Desktop
+Suite; a collection already on the system reads Installed and its checkbox
+is locked. Each row is named and described from a curated table rather than
+from the file, because the shipped collections are identified on disk by
+tooling names such as `cli` and `fonts-dev`; some rows also cover a sibling
+Brewfile (Extra Wallpapers includes `wallpaper-slideshow`, Fonts includes
+`dakota-fonts`) and count its items too. Retired Bluefin collections are not
+offered. A collection that table does not know gets a readable form of its
+identifier, and its leading `#` comment only when that comment reads as a
+human sentence. Every row states how many apps and tools it installs.
 Missing directories are harmless, while unreadable configured paths are
 logged without hiding collections found elsewhere. Repeated clicks cannot
-start overlapping installs, and `--dry-run` shows a preview without leaving
-the row marked as installed.
+start overlapping installs, and `--dry-run` shows a preview without marking
+any collection installed.
 
 ---
 

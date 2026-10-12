@@ -23,11 +23,10 @@
 // precisely so the gated decision — not just the wording of the toast that
 // follows it — is what a table-driven test in actionmsg_test.go asserts.
 // MaintenanceScript decides whether a configured custom script executes at
-// all. BundleInstall decides whether its row becomes permanently installed
-// or resets after a dry-run preview. TapTrust decides whether the Untrusted
+// all. TapTrust decides whether the Untrusted
 // Homebrew Taps view removes a row, changes group visibility, and refreshes.
 // FeatureToggle decides whether a feature switch confirms its new visual
-// state. Those latter three UI-side decisions have no wrapper-package
+// state. Those latter two UI-side decisions have no wrapper-package
 // equivalent even though the wrappers already gate their underlying
 // command.
 package actionmsg
@@ -51,32 +50,6 @@ func BundleDump(dryRun bool) string {
 		return "[DRY-RUN] Preview: your app list would be saved to your home folder — no changes made"
 	}
 	return "Saved your app list to your home folder."
-}
-
-// BundleInstallDecision is the result of installing one app collection.
-// Complete is false under dry-run because homebrew.BundleInstall skipped the
-// command; the row must become clickable again instead of claiming the
-// collection is installed.
-type BundleInstallDecision struct {
-	Complete bool
-	Toast    string
-}
-
-// BundleInstall decides whether a successful wrapper return represents a real
-// completed install and supplies the corresponding toast. The caller must use
-// Complete for both its InstallGate transition and button state. name is the
-// collection's display title, never its identifier on disk.
-func BundleInstall(dryRun bool, name string) BundleInstallDecision {
-	if dryRun {
-		return BundleInstallDecision{
-			Complete: false,
-			Toast:    fmt.Sprintf("[DRY-RUN] Preview: %s would be installed — no changes made", name),
-		}
-	}
-	return BundleInstallDecision{
-		Complete: true,
-		Toast:    fmt.Sprintf("%s installed", name),
-	}
 }
 
 // Uninstall returns toast text for a Homebrew package uninstall.

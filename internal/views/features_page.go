@@ -664,10 +664,18 @@ func (uh *UserHome) startDeveloperFeedSetup(enabled, succeeded bool) {
 	}()
 }
 
-// startDeveloperAppsSetup installs extra developer apps (dakota-dev-flatpaks)
-// when Developer Mode is successfully enabled.
+// startDeveloperAppsSetup installs the developer app collection
+// (dakota-dev-flatpaks) after a confirmed live Developer Mode enable, only
+// when `dx_group` opts in with install_dev_apps and the App collections group
+// is available — the same config and Homebrew capability floor the Apps page
+// uses, so a host without Homebrew never attempts the install.
 func (uh *UserHome) startDeveloperAppsSetup(enabled, succeeded bool) {
-	if !actionmsg.DeveloperAppsSetupPlan(dryrun.Enabled(), enabled, succeeded) {
+	var installDevApps bool
+	if group := uh.config.GetGroupConfig("features_page", "dx_group"); group != nil {
+		installDevApps = group.InstallDevApps
+	}
+	collectionsAvailable := uh.groupEnabled("applications_page", "brew_bundles_group")
+	if !actionmsg.DeveloperAppsSetupPlan(dryrun.Enabled(), enabled, succeeded, installDevApps, collectionsAvailable) {
 		return
 	}
 

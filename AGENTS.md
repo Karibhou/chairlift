@@ -778,14 +778,19 @@ An agent must not break these:
   `UpdateShell.notifyUpdateComplete`), because it is the one action long enough a user may
   have stepped away. A toggle or switch completes in view and already has a
   toast; do not add a second notification for the same instant event.
-- **Developer-mode feed and app onboarding follows the enable, and never
-  reverses it.** `dx_group`'s `install_pulp` and `stage_feeds` both default to
-  `false`, and Developer Mode also automatically installs `dakota-dev-flatpaks`
-  for development desktop apps (`startDeveloperAppsSetup`).
+- **Developer-mode feed and app onboarding is opt-in, follows the enable, and
+  never reverses it.** `dx_group`'s `install_pulp`, `stage_feeds`, and
+  `install_dev_apps` all default to `false`, and they are the only optional
+  work the Developer Mode switch does beyond the privileged group promotion.
+  `install_dev_apps` installs the `dakota-dev-flatpaks` collection
+  (`startDeveloperAppsSetup`) and additionally requires
+  `applications_page.brew_bundles_group` to pass `groupEnabled` (its config
+  and Homebrew capability floor), so a host without Homebrew never attempts it.
   `startDeveloperFeedSetup` and `startDeveloperAppsSetup`
   (`internal/views/features_page.go`) run from the same success branch
   `openDeveloperOnboarding` uses, behind confirmed live promotions only:
-  `actionmsg.DeveloperFeedSetupPlan(dryRun, enabled, succeeded, …)`: a
+  `actionmsg.DeveloperFeedSetupPlan(dryRun, enabled, succeeded, …)` and
+  `actionmsg.DeveloperAppsSetupPlan(dryRun, enabled, succeeded, …)`: a
   `--dry-run` preview, a disable, a page restore, and a failed helper call all
   produce an empty plan and start no worker. Pulp is a system-scope Flatpak
   from the system Flathub remote (already present in either scope means no

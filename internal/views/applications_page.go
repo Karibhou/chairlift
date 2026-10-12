@@ -152,16 +152,11 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 
 		memberPaths := []string{bundle.Path}
 		// Include items from sibling member bundles (e.g. wallpaper-slideshow for artwork)
-		for _, memberName := range bundleview.Members(bundle.Name) {
-			if memberName == bundle.Name {
-				continue
-			}
-			if memberBundle, ok := bundlesByName[memberName]; ok {
-				memberPaths = append(memberPaths, memberBundle.Path)
-				if mItems, mErr := homebrew.BundleContents(memberBundle.Path); mErr == nil {
-					items = append(items, mItems...)
-					total += memberBundle.ItemCount
-				}
+		for _, member := range bundleview.MemberBundles(bundle.Name, bundlesByName) {
+			memberPaths = append(memberPaths, member.Path)
+			if mItems, mErr := homebrew.BundleContents(member.Path); mErr == nil {
+				items = append(items, mItems...)
+				total += member.ItemCount
 			}
 		}
 
@@ -228,8 +223,10 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 }
 
 // newBundleRow builds one collection expander row with a CheckButton prefix.
+// total is the merged item count across the row's super-bundle members, the
+// same count refreshBundleStatuses describes the row with.
 func newBundleRow(bundle homebrew.Bundle, items []homebrew.BundleItem, total int) (*adw.ExpanderRow, *gtk.CheckButton) {
-	collection := bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount)
+	collection := bundleview.Describe(bundle.Name, bundle.Description, total)
 	row := adw.NewExpanderRow()
 	// Collection titles and descriptions may carry free-form text from a
 	// shipped Brewfile (comment lines, the humanize() fallback for unknown

@@ -56,29 +56,18 @@ func (uh *UserHome) refreshBundleStatuses() {
 			if !uh.bundleStatusRefresh.IsCurrent(generation) {
 				return
 			}
-			allInstalled := true
-			anyKnown := false
+			statuses := make([]homebrew.BundleStatus, 0, len(c.paths))
 			for _, path := range c.paths {
 				status, err := homebrew.BundleCheck(path)
 				if err != nil {
 					log.Printf("Could not check whether app collection %q is installed: %v", path, err)
 				}
-				installed, known := bundleview.ObservedInstalled(status)
-				if known {
-					anyKnown = true
-					if !installed {
-						allInstalled = false
-						break
-					}
-				} else {
-					allInstalled = false
-					break
-				}
+				statuses = append(statuses, status)
 			}
-			if !anyKnown {
+			installed, known := bundleview.AggregateInstalled(statuses)
+			if !known {
 				continue
 			}
-			installed := allInstalled
 			sgtk.RunOnMainThread(func() {
 				if !uh.bundleStatusRefresh.IsCurrent(generation) {
 					return
@@ -126,7 +115,7 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 
 		for _, item := range toInstall {
 			b := item.bundle
-			collection := bundleview.Describe(b.Name, b.Description, b.ItemCount)
+			collection := bundleview.Describe(b.Name, b.Description, item.total)
 			var itemFailed bool
 
 			// Install primary and any configured member Brewfiles

@@ -3,7 +3,6 @@ package bundleview
 import (
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/homebrew"
@@ -212,118 +211,6 @@ func TestNoCollectionRowLeaksToolingIdentity(t *testing.T) {
 	}
 }
 
-func TestGateAllowsOnlyOneConcurrentAction(t *testing.T) {
-	var gate InstallGate
-	const callers = 64
-
-	start := make(chan struct{})
-	results := make(chan bool, callers)
-	var wg sync.WaitGroup
-	for range callers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			results <- gate.TryStart()
-		}()
-	}
-	close(start)
-	wg.Wait()
-	close(results)
-
-	acquired := 0
-	for result := range results {
-		if result {
-			acquired++
-		}
-	}
-	if acquired != 1 {
-		t.Fatalf("concurrent TryStart acquisitions = %d, want exactly 1", acquired)
-	}
-}
-
-func TestGateResetAndCompletion(t *testing.T) {
-	var gate InstallGate
-	if !gate.TryStart() {
-		t.Fatal("zero-value gate did not start")
-	}
-	gate.Reset()
-	if !gate.TryStart() {
-		t.Fatal("reset gate did not restart")
-	}
-	gate.Complete()
-	if gate.TryStart() {
-		t.Fatal("completed gate restarted")
-	}
-	gate.Reset()
-	if gate.TryStart() {
-		t.Fatal("reset reopened a completed gate")
-	}
-}
-
-// TestGateInstallPhaseFollowsTheLifecycle covers what a late-connected
-// button reads to join at the phase every other button for the collection
-// shows: a button built after a run started must read "Installing…" and be
-// insensitive, one built after a live success "Installed" and insensitive,
-// and one built after a failed or dry run "Install" and sensitive — never a
-// sensitive "Install" over a completed gate, which does nothing when clicked.
-func TestGateInstallPhaseFollowsTheLifecycle(t *testing.T) {
-	var gate InstallGate
-	steps := []struct {
-		name          string
-		transition    func()
-		wantLabel     string
-		wantSensitive bool
-	}{
-		{"ready", func() {}, InstallLabelReady, true},
-		{"running", func() { gate.TryStart() }, InstallLabelRunning, false},
-		{"reset after a failure or dry run", func() { gate.Reset() }, InstallLabelReady, true},
-		{"running again", func() { gate.TryStart() }, InstallLabelRunning, false},
-		{"completed", func() { gate.Complete() }, InstallLabelCompleted, false},
-		{"reset cannot reopen a completion", func() { gate.Reset() }, InstallLabelCompleted, false},
-	}
-	for _, step := range steps {
-		step.transition()
-		label, sensitive := gate.InstallPhase()
-		if label != step.wantLabel || sensitive != step.wantSensitive {
-			t.Fatalf("%s: InstallPhase = (%q, %v), want (%q, %v)", step.name, label, sensitive, step.wantLabel, step.wantSensitive)
-		}
-	}
-}
-
-// TestGateObserveReflectsTheSystem covers W3-09: a collection installed
-// before this session must read "Installed" on load, an observation must
-// never overwrite a running install, and a collection observed missing
-// again (one of its items was uninstalled) must offer Install again.
-func TestGateObserveReflectsTheSystem(t *testing.T) {
-	var gate InstallGate
-	steps := []struct {
-		name          string
-		transition    func() bool
-		wantChanged   bool
-		wantLabel     string
-		wantSensitive bool
-	}{
-		{"not installed on load leaves Install", func() bool { return gate.Observe(false) }, false, InstallLabelReady, true},
-		{"installed on load reads Installed", func() bool { return gate.Observe(true) }, true, InstallLabelCompleted, false},
-		{"installed again changes nothing", func() bool { return gate.Observe(true) }, false, InstallLabelCompleted, false},
-		{"a completed gate cannot start", func() bool { return gate.TryStart() }, false, InstallLabelCompleted, false},
-		{"observed missing reopens Install", func() bool { return gate.Observe(false) }, true, InstallLabelReady, true},
-		{"an install starts", func() bool { return gate.TryStart() }, true, InstallLabelRunning, false},
-		{"installed never overwrites a run", func() bool { return gate.Observe(true) }, false, InstallLabelRunning, false},
-		{"missing never overwrites a run", func() bool { return gate.Observe(false) }, false, InstallLabelRunning, false},
-	}
-	for _, step := range steps {
-		if changed := step.transition(); changed != step.wantChanged {
-			t.Fatalf("%s: changed = %v, want %v", step.name, changed, step.wantChanged)
-		}
-		label, sensitive := gate.InstallPhase()
-		if label != step.wantLabel || sensitive != step.wantSensitive {
-			t.Fatalf("%s: InstallPhase = (%q, %v), want (%q, %v)", step.name, label, sensitive, step.wantLabel, step.wantSensitive)
-		}
-	}
-}
-
 func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
 	for _, tc := range []struct {
 		status        homebrew.BundleStatus
@@ -343,16 +230,72 @@ func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
 	}
 }
 
-// Every collection row shows the same Install label, so the accessible name
-// carries the collection's title in each phase (W2-APPS-5).
-func TestCollectionButtonNameCarriesTheTitle(t *testing.T) {
-	for label, want := range map[string]string{
-		InstallLabelReady:     "Install Team tools",
-		InstallLabelRunning:   "Installing Team tools",
-		InstallLabelCompleted: "Installed Team tools",
+// Super-bundle siblings come from the catalog, never include the row
+// itself, and resolve only against collections actually discovered.
+func TestMemberBundlesResolvesDiscoveredSiblings(t *testing.T) {
+	discovered := map[string]homebrew.Bundle{
+		"artwork":             {Name: "artwork", Path: "/b/artwork.Brewfile", ItemCount: 2},
+		"wallpaper-slideshow": {Name: "wallpaper-slideshow", Path: "/b/wallpaper-slideshow.Brewfile", ItemCount: 1},
+		"fonts":               {Name: "fonts", Path: "/b/fonts.Brewfile", ItemCount: 5},
+	}
+
+	got := MemberBundles("artwork", discovered)
+	if len(got) != 1 || got[0].Path != "/b/wallpaper-slideshow.Brewfile" {
+		t.Errorf("MemberBundles(artwork) = %v, want only wallpaper-slideshow", got)
+	}
+	if got := MemberBundles("fonts", discovered); len(got) != 0 {
+		t.Errorf("MemberBundles(fonts) = %v, want none when dakota-fonts was not discovered", got)
+	}
+	if got := MemberBundles("cli", discovered); len(got) != 0 {
+		t.Errorf("MemberBundles(cli) = %v, want none", got)
+	}
+	if got := MemberBundles("team-tools", discovered); len(got) != 0 {
+		t.Errorf("MemberBundles(team-tools) = %v, want none for a custom collection", got)
+	}
+}
+
+// Every super-bundle sibling is retired, so it never gets its own row.
+func TestMembersAreNeverOfferedAsRows(t *testing.T) {
+	for id := range catalog {
+		for _, member := range Members(id) {
+			if member == id {
+				t.Errorf("Members(%q) includes itself", id)
+			}
+			if Visible(member) {
+				t.Errorf("Members(%q) includes %q, which is still offered as its own row", id, member)
+			}
+		}
+	}
+}
+
+// The row is installed only when every member is observed installed; one
+// member observed missing makes it not installed; an undecided member with
+// no observed-missing sibling changes nothing.
+func TestAggregateInstalled(t *testing.T) {
+	const (
+		in  = homebrew.BundleInstalled
+		up  = homebrew.BundleUpdateAvailable
+		out = homebrew.BundleNotInstalled
+		ind = homebrew.BundleIndeterminate
+	)
+	for _, tc := range []struct {
+		name          string
+		statuses      []homebrew.BundleStatus
+		wantInstalled bool
+		wantKnown     bool
+	}{
+		{"no members", nil, false, false},
+		{"single installed", []homebrew.BundleStatus{in}, true, true},
+		{"all installed or upgradable", []homebrew.BundleStatus{in, up}, true, true},
+		{"one missing", []homebrew.BundleStatus{in, out}, false, true},
+		{"installed then undecided", []homebrew.BundleStatus{in, ind}, false, false},
+		{"undecided then installed", []homebrew.BundleStatus{ind, in}, false, false},
+		{"undecided then missing", []homebrew.BundleStatus{ind, out}, false, true},
+		{"all undecided", []homebrew.BundleStatus{ind, ind}, false, false},
 	} {
-		if got := InstallButtonName(label, "Team tools"); got != want {
-			t.Errorf("InstallButtonName(%q) = %q, want %q", label, got, want)
+		installed, known := AggregateInstalled(tc.statuses)
+		if installed != tc.wantInstalled || known != tc.wantKnown {
+			t.Errorf("%s: AggregateInstalled(%v) = (%v, %v), want (%v, %v)", tc.name, tc.statuses, installed, known, tc.wantInstalled, tc.wantKnown)
 		}
 	}
 }
