@@ -4,6 +4,7 @@ import (
 	"log"
 	"slices"
 
+	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/developerfeeds"
 	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -574,6 +575,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 			uh.openDeveloperOnboarding(enabled, succeeded)
 			uh.startDeveloperFeedSetup(enabled, succeeded)
 			uh.startDeveloperAppsSetup(enabled, succeeded)
+			uh.startDeveloperDevcontainerSetup(enabled, succeeded)
 		})
 	}()
 }
@@ -720,6 +722,43 @@ func (uh *UserHome) startDeveloperAppsSetup(enabled, succeeded bool) {
 				uh.toastAdder.ShowToast("Developer apps installed")
 			}
 			uh.homebrewInventoryChanged()
+		})
+	}()
+}
+
+// startDeveloperDevcontainerSetup automatically installs the Dev Container CLI
+// (devcontainer) after a confirmed Developer Mode enable. Like
+// startDeveloperFeedSetup, it is called from the one branch of
+// onDeveloperToggled that reached a successful promotion, so a page restore,
+// a failed helper call, and a disable spawn nothing. A dry-run enable reaches
+// homebrew.Install, whose own dry-run gate logs the brew command it would run
+// instead of executing it. An install error reports its own failure and rolls
+// nothing back.
+func (uh *UserHome) startDeveloperDevcontainerSetup(enabled, succeeded bool) {
+	if !uh.capabilities[capability.Homebrew] || !enabled || !succeeded {
+		return
+	}
+
+	if !uh.developerDevcontainerGate.TryStart() {
+		return
+	}
+
+	go func() {
+		err := homebrew.Install("devcontainer", false)
+		sgtk.RunOnMainThread(func() {
+			defer uh.developerDevcontainerGate.Reset()
+
+			if err != nil {
+				log.Printf("views: developer devcontainer setup failed: %v", err)
+				if uh.toastAdder != nil {
+					uh.toastAdder.ShowErrorToast("Couldn't install Dev Container CLI.")
+				}
+				return
+			}
+
+			if !dryrun.Enabled() {
+				uh.homebrewInventoryChanged()
+			}
 		})
 	}()
 }

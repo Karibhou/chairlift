@@ -21,9 +21,9 @@ the menu, `chairlift --setup`, or its `--first-run` alias to open Welcome, then
 walk **Features**, **Apps**, **Agents**, and **Livery**. Welcome presents the
 Bluefin wordmark, introduction and Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform every action. **Back** and **Next** only
-navigate. The matching conclusion quotes Edith Wharton. **Launch Bazaar App
-Store** saves completion, opens Bazaar, and closes Control Center. A save or
-launch failure leaves the conclusion available to retry. **Dismiss setup**
+navigate. The matching conclusion quotes Edith Wharton. **Finish** saves
+completion and returns to Control Center; a save failure reports an
+error toast. **Dismiss setup**
 (or Escape) records a skip without undoing previous completion.
 
 ---
@@ -185,17 +185,16 @@ leaves GNOME preferences unchanged.
 **Developer tools** lets you run containers and virtual machines, and use USB
 and serial hardware, without being asked for permission each time. It needs
 your administrator password, and takes effect after you log out and back in.
+Switching it on also installs the Dev Container CLI (`devcontainer`) when
+Homebrew is available; if that install fails you are told, and developer access
+stays on.
 A distribution may also configure it to install the Pulp feed reader and stage
 a curated list of developer feeds in your home folder once you switch it on —
 both are off by default, and turning Developer tools back off never removes the
 reader, the file, or anything you imported from it.
 Developer options also offer **WSL Mode** (nsl persistent Linux machines by
-default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64),
-**Enable Docker**, and individually selected IDEs and terminal editors, including
-one JetBrains Toolbox entry. Each editor row says what the tool is, and its
-Install button names the tool for screen readers. Installed state is read again
-whenever the page is shown, so a tool removed on Apps or in a terminal is
-offered again. WSL needs hardware virtualization and access to
+default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64)
+and **Enable Docker**. WSL needs hardware virtualization and access to
 `/dev/kvm`; permission grants require a new login. Docker needs the base
 image's daemon and a socket this session can actually access; installing CLI
 tools is not readiness. Missing installed helper actions leave the affected

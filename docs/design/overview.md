@@ -602,8 +602,10 @@ image's `/usr/lib/group` defines (nss-altfiles, as rpm-ostree composes ship
 them) into `/etc/group`, GID unchanged, because `usermod -aG` edits
 `/etc/group` alone and otherwise refuses the group
 (`internal/ubluehelper.EnsureLocalGroup`).
-Docker reports ready only with an accessible live daemon socket. IDE/editor
-installs are selective and contain one JetBrains Toolbox entry.
+Docker reports ready only with an accessible live daemon socket. A confirmed
+Developer Mode enable installs the Dev Container CLI (`devcontainer`) through
+Homebrew when available; installation failure does not reverse developer access.
+IDEs and editors are not offered here (Bazaar or the Apps page).
 
 **Why the helper paths must be absolute, and why `PREFIX=/usr`:** `pkexec`
 resolves the program it's asked to run to an absolute path and compares it
@@ -1153,6 +1155,12 @@ privileged writes are `auto-updates-enable` / `auto-updates-disable` on
 `chairlift-helper`. Disabling also masks and stops `uupd-resume.timer`, the
 image's second trigger of the same `uupd.service` (20 minutes after every
 resume), and enabling unmasks it, so "off" stops every unattended run.
+Because the GUI (Homebrew) and the helper (image) ship separately, after a
+successful disable the GUI re-probes `uupd-resume.timer` unprivileged via
+`autoupdate.DetectResume`; if it is still enabled — an older helper that
+predates the mask — a follow-up warning toast asks the user to re-pull the
+image. The post-check is skipped on enable, on helper failure or PolicyKit
+cancel, and in dry-run mode, since the helper did not run in those cases.
 
 The package exists because ChairLift presents this as **one switch** where
 bluefinctl presents a strategy enum, a schedule picker, per-layer switches,
@@ -1580,9 +1588,7 @@ conclusion has the website's Edith Wharton quote. Selection steps use their
 existing widgets and `Window.navigateToPage`; bookends use the setup stack.
 Missing pages are skipped; an empty inventory opens no flow.
 
-Back and Next mutate no settings. **Launch Bazaar App Store** saves completed
-and version, runs `gtk-launch io.github.kolunmi.Bazaar` off the GTK thread, and
-quits only after success. A failed save or launch leaves the conclusion
-retryable with an error toast. Intentional dismissal records a skip without
-demoting prior completion. Dry-run previews persistence and suppresses Bazaar
-but still exits on the final action. `0-setup.png` captures Welcome.
+Back and Next mutate no settings. **Finish** saves completed
+and version and returns to Control Center; a save failure reports an
+error toast. Intentional dismissal records a skip without
+demoting prior completion. Dry-run previews persistence. `0-setup.png` captures Welcome.

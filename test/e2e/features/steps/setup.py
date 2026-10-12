@@ -28,7 +28,7 @@ def wizard_page(context, title):
                 "You are ready" in texts
                 and "Edith Wharton" in " ".join(texts)
                 and "You have become legend." in " ".join(texts)
-                and atspi.find_all(root, lambda n: atspi.is_button(n, "Launch Bazaar App Store"))
+                and atspi.find_all(root, lambda n: atspi.is_button(n, "Finish"))
             )
         return (
             title in texts
@@ -74,17 +74,3 @@ def step_would_record_nothing(context):
 @then("the setup dry run would record the completed version")
 def step_would_record_version(context):
     assert atspi.poll(lambda: f"[DRY-RUN] would set {FIRSTRUN_SCHEMA} completed-version=" in read_log(context))
-
-
-@then("the setup dry run would launch Bazaar")
-def step_would_launch_bazaar(context):
-    assert atspi.poll(lambda: "[DRY-RUN] would launch bazaar" in read_log(context))
-    with open(os.path.join(context.scenario_dir, "setup-launch-calls.log"), encoding="utf-8") as calls:
-        assert calls.read() == "", "dry-run executed gtk-launch"
-
-
-@then("Control Center exits after setup")
-def step_setup_exits(context):
-    assert atspi.poll(lambda: context.app_process.poll() is not None)
-    assert context.app_process.returncode == 0
-    assert "main: application exited" in read_log(context)

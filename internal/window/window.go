@@ -5,14 +5,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os/exec"
 	"time"
 	"unsafe"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
-	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/navigation"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
@@ -66,7 +64,6 @@ type Window struct {
 	firstRunSteps     []string
 	firstRunIndex     int
 	firstRunActive    bool
-	firstRunFinishing bool
 	firstRunCollapsed bool
 	firstRunContent   *gtk.Stack
 	firstRunFooter    *gtk.Box
@@ -840,9 +837,6 @@ func (w *Window) buildFirstRunFooter(root *gtk.Box) {
 	}
 	dismiss := func(gtk.Button) { w.finishFirstRun(false) }
 	closeRequest := func(gtk.Window) bool {
-		if w.firstRunFinishing {
-			return true
-		}
 		if w.firstRunActive {
 			w.finishFirstRun(false)
 			return true
@@ -880,58 +874,31 @@ func (w *Window) showFirstRunStep() {
 	}
 	w.firstRunBack.SetSensitive(w.firstRunIndex >= 0)
 	if w.firstRunIndex == len(w.firstRunSteps) {
-		w.firstRunNext.SetLabel("Launch Bazaar App Store")
+		w.firstRunNext.SetLabel("Finish")
 	} else {
 		w.firstRunNext.SetLabel("Next")
 	}
 }
 
 func (w *Window) finishFirstRun(completed bool) {
-	if !w.firstRunActive || w.firstRunFinishing {
+	if !w.firstRunActive {
 		return
 	}
 	if completed {
-		if w.RefuseCloseWhileUpdating() {
-			// The busy banner lives on the Updates page, behind the conclusion.
-			w.firstRunContent.SetVisibleChildName("pages")
-			w.ShowErrorToast("Wait for updates to finish before launching Bazaar")
-			return
-		}
-		w.firstRunFinishing = true
-		w.firstRunNext.SetSensitive(false)
-		w.firstRunBack.SetSensitive(false)
-		quit := w.GetApplication().LookupAction("quit")
-		if quit != nil {
-			gio.SimpleActionNewFromInternalPtr(quit.GoPointer()).SetEnabled(false)
-		}
+		w.firstRunActive = false
+		w.firstRunFooter.SetVisible(false)
+		w.firstRunContent.SetVisibleChildName("pages")
+		w.sidebarList.SetSensitive(true)
+		w.contentPage.SetCanPop(true)
+		w.splitView.SetCollapsed(w.firstRunCollapsed)
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
 			defer cancel()
-			failure := ""
-			err := firstrun.NewGSettingsStore().SetDisposition(ctx, firstrun.DispositionCompleted)
-			if err != nil {
+			store := firstrun.NewGSettingsStore()
+			if err := store.SetDisposition(ctx, firstrun.DispositionCompleted); err != nil {
 				log.Printf("window: recording setup completion failed: %v", err)
-				failure = "Couldn't save your setup progress. Try again."
-			} else if dryrun.Enabled() {
-				log.Print("[DRY-RUN] would launch bazaar")
-			} else if err = exec.Command("gtk-launch", "io.github.kolunmi.Bazaar").Run(); err != nil {
-				log.Printf("window: launching Bazaar failed: %v", err)
-				failure = "Couldn't open Bazaar App Store. Try again."
+				sgtk.RunOnMainThread(func() { w.ShowErrorToast("Couldn't save your setup progress.") })
 			}
-			sgtk.RunOnMainThread(func() {
-				w.firstRunFinishing = false
-				if quit != nil {
-					gio.SimpleActionNewFromInternalPtr(quit.GoPointer()).SetEnabled(true)
-				}
-				if failure != "" {
-					w.firstRunNext.SetSensitive(true)
-					w.showFirstRunStep()
-					w.ShowErrorToast(failure)
-					return
-				}
-				w.firstRunActive = false
-				w.GetApplication().Quit()
-			})
 		}()
 		return
 	}

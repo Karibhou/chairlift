@@ -144,8 +144,10 @@ Developer options include WSL Mode (an Ubuntu machine in systemd-vmspawn via
 nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
 Lima supports amd64 and arm64. Both require hardware virtualization and
 `/dev/kvm` access. The group also offers the base image's
-Docker daemon, and individually chosen IDEs/editors with one JetBrains Toolbox
-entry. Missing fixed helper actions keep affected switches discoverable but
+Docker daemon. A confirmed Developer Mode enable also installs the Dev Container
+CLI (`devcontainer`) when Homebrew is available; an install failure does not
+reverse developer access. IDEs and editors are installed from Bazaar
+or the Apps page, not from this group. Missing fixed helper actions keep affected switches discoverable but
 insensitive. KVM permission requires a new login; Docker readiness requires
 the real daemon socket to be accessible, not just installed CLI tools. These
 privileged operations use only `kvm-enable`, `docker-enable`, and

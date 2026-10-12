@@ -351,6 +351,7 @@ func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
 		{"bundle_install.go", "func (uh *UserHome) runSelectedBundlesInstall()", 1},
 		{"features_page.go", "func (uh *UserHome) startDeveloperAppsSetup(", 1},
 		{"developer_tools.go", "func (uh *UserHome) onDeveloperOption(", 1},
+		{"features_page.go", "func (uh *UserHome) startDeveloperDevcontainerSetup(", 1},
 	} {
 		if got := strings.Count(body(c.file, c.signature), refresh); got != c.calls {
 			t.Errorf("%s %s calls %s %d times, want %d", c.file, c.signature, refresh, got, c.calls)
@@ -363,5 +364,36 @@ func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
 	agent := body("agents_page.go", "func (uh *UserHome) onAgentModeToggled(")
 	if strings.Index(agent, refresh) > strings.Index(agent, "if err != nil {\n\t\t\t\tlog.Printf(\"views: agent mode toggle") {
 		t.Error("Agent Mode refreshes the inventory only after success; a failed enable may already have installed llmman")
+	}
+	devcontainer := body("features_page.go", "func (uh *UserHome) startDeveloperDevcontainerSetup(")
+	for _, guard := range []string{
+		"!uh.capabilities[capability.Homebrew] || !enabled || !succeeded",
+		"!uh.developerDevcontainerGate.TryStart()",
+		"defer uh.developerDevcontainerGate.Reset()",
+		"if uh.toastAdder != nil {",
+	} {
+		if !strings.Contains(devcontainer, guard) {
+			t.Errorf("Dev Container setup is missing %q", guard)
+		}
+	}
+	install := strings.Index(devcontainer, `homebrew.Install("devcontainer", false)`)
+	worker := strings.Index(devcontainer, "go func() {")
+	mainThread := strings.Index(devcontainer, "sgtk.RunOnMainThread(func() {")
+	if worker < 0 || install < worker || mainThread < install {
+		t.Error("Dev Container install must run in a worker before GTK completion")
+	}
+	if strings.Contains(devcontainer[:max(0, install)], "dryrun.Enabled()") {
+		t.Error("Dev Container preview bypasses Homebrew's existing dry-run boundary")
+	}
+	if !strings.Contains(devcontainer, "if !dryrun.Enabled() {\n\t\t\t\t"+refresh) {
+		t.Error("Dev Container preview refreshes inventories despite changing nothing")
+	}
+	if strings.Contains(devcontainer, "toggle.set(") || strings.Contains(devcontainer, "ublue.SetDeveloperMode(") {
+		t.Error("Dev Container install outcome must not reverse developer access")
+	}
+	toggle := body("features_page.go", "func (uh *UserHome) onDeveloperToggled(")
+	if !strings.Contains(toggle, "uh.startDeveloperDevcontainerSetup(enabled, succeeded)") ||
+		strings.Index(toggle, "uh.startDeveloperDevcontainerSetup(") < strings.Index(toggle, "if err != nil {") {
+		t.Error("Dev Container setup must follow successful developer promotion")
 	}
 }
