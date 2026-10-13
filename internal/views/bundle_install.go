@@ -27,6 +27,12 @@ type bundleItemRow struct {
 	choice      *gtk.CheckButton
 }
 
+// collectionsAvailable reports whether the App collections group is available
+// (brew_bundles_group enabled and its Homebrew capability floor met).
+func (uh *UserHome) collectionsAvailable() bool {
+	return uh.groupEnabled("applications_page", "brew_bundles_group")
+}
+
 // refreshBundleStatuses observes, off the GTK thread, whether each collection
 // is already installed. If installed, the checkbox is checked, insensitive,
 // and the subtitle indicates installed status. If not installed, it restores

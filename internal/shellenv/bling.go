@@ -67,6 +67,11 @@ func CurrentShellTarget() (ShellTarget, bool) {
 
 // IsBlingInstalled reports whether the bling source line is already present in the config file.
 func IsBlingInstalled(target ShellTarget) bool {
+	return IsBlingInstalledDir(target, defaultBlingDir)
+}
+
+// IsBlingInstalledDir reports whether the bling source line from blingDir is already present.
+func IsBlingInstalledDir(target ShellTarget, blingDir string) bool {
 	if target.ConfigFile == "" {
 		return false
 	}
@@ -74,7 +79,7 @@ func IsBlingInstalled(target ShellTarget) bool {
 	if err != nil {
 		return false
 	}
-	needle := fmt.Sprintf("source %s/%s", defaultBlingDir, target.Script)
+	needle := fmt.Sprintf("source %s/%s", blingDir, target.Script)
 	return strings.Contains(string(content), needle)
 }
 
@@ -91,7 +96,7 @@ func EnableBling() error {
 
 // EnableBlingTarget idempotently writes the bling snippet to target's config file.
 func EnableBlingTarget(target ShellTarget, blingDir string) error {
-	if IsBlingInstalled(target) {
+	if IsBlingInstalledDir(target, blingDir) {
 		return nil
 	}
 	if dryrun.Enabled() {

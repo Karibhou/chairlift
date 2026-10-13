@@ -676,7 +676,7 @@ func (uh *UserHome) startDeveloperAppsSetup(enabled, succeeded bool) {
 	if group := uh.config.GetGroupConfig("features_page", "dx_group"); group != nil {
 		installDevApps = group.InstallDevApps
 	}
-	collectionsAvailable := uh.groupEnabled("applications_page", "brew_bundles_group")
+	collectionsAvailable := uh.collectionsAvailable()
 	if !actionmsg.DeveloperAppsSetupPlan(dryrun.Enabled(), enabled, succeeded, installDevApps, collectionsAvailable) {
 		return
 	}
