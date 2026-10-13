@@ -143,8 +143,10 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	generation := uh.agentRefresh.Begin()
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeSubtitle(state))
 	ready := state == aistack.StateReady
+	uh.agentModelSuppress = true
 	uh.agentModelRow.SetSensitive(ready)
 	uh.agentModelRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
+	uh.agentModelSuppress = false
 	if uh.agentManageRow != nil {
 		uh.agentManageRow.SetVisible(ready)
 	}
@@ -153,7 +155,9 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	if !ready {
 		return
 	}
+	uh.agentModelSuppress = true
 	uh.agentModelRow.SetSubtitle("Checking…")
+	uh.agentModelSuppress = false
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
@@ -165,8 +169,10 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 			}
 			if errNode != nil || errAlias != nil {
 				log.Printf("views: read active model failed: node=%v alias=%v", errNode, errAlias)
+				uh.agentModelSuppress = true
 				uh.agentModelRow.SetSensitive(false)
 				uh.agentModelRow.SetSubtitle("Couldn't check the model. Use Manage Models to pick one.")
+				uh.agentModelSuppress = false
 				return
 			}
 			models := node.Models()
@@ -201,7 +207,7 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 }
 
 func (uh *UserHome) onAgentModelSelected() {
-	if uh.agentModelSuppress || uh.agentModeState != aistack.StateReady {
+	if uh.agentModelSuppress || uh.agentModeState != aistack.StateReady || uh.agentModelActive == "" {
 		return
 	}
 	pos := uh.agentModelRow.GetSelected()
