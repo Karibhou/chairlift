@@ -802,12 +802,13 @@ failure preserves the unstamped unit and best-effort stops the old daemon.
 Live startup waits up to ten seconds for health after reconciliation; preview
 performs one bounded probe and writes nothing.
 
-ChairLift does not choose, pull, or alias models. `ActiveModelAlias`
-(`bluefin-active`) in [`aistack.go`](../../internal/aistack/aistack.go) is
-read-only: `ReadActiveModel` runs `llmman config get aliases.bluefin-active`
-and returns the mapped reference. A missing alias is the ordinary
-no-selected-model state, not an error or an invented default. Users map the
-alias in llmman's own models page; refresh generations reject stale
+The Active Model row lists models downloaded in llmman, queried live from
+`/llmman/node`. `ConfigureActiveModel` sets `aliases.bluefin-active` via `llmman
+config set` and restarts the daemon so the active model takes effect.
+`ReadActiveModel` runs `llmman config get aliases.bluefin-active` and returns the
+mapped reference. A missing alias is the ordinary no-selected-model state, not
+an error or an invented default. Users can also manage and pull models in
+llmman's own models page; refresh generations reject stale
 health/alias reads.
 
 ### Goose, Linux MCP and Ask Bluefin

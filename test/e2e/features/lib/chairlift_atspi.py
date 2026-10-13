@@ -54,7 +54,7 @@ APPLICATION_NAMES = ("chairlift", "Control Center", "io.projectbluefin.chairlift
 # GTK 4 maps GtkListBox to "list box" and each row to "list item"; older
 # bridges report "list" and "table cell".
 LIST_ROLES = ("list box", "list")
-ROW_ROLES = ("list item", "table cell")
+ROW_ROLES = ("list item", "table cell", "combo box")
 LABEL_ROLES = ("label", "heading", "static")
 BUTTON_ROLES = ("push button", "toggle button", "menu button", "button")
 TOGGLE_ROLES = ("toggle button", "switch", "check box")

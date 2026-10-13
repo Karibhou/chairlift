@@ -69,6 +69,10 @@ func AgentModeModelUnavailable(s aistack.State) string {
 	return "Turn on Agent Mode to see the current model."
 }
 
+func AgentModeNoModelsStoredSubtitle() string {
+	return "No models downloaded — use Manage Models to pull models."
+}
+
 func GooseRowTitle() string {
 	return "Goose"
 }

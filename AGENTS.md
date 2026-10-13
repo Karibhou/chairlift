@@ -927,13 +927,12 @@ An agent must not break these:
   route for reads: a prompt on every launch is the failure this removes, and
   staging keeps its existing fixed `bootc-update-stage` path.
 - **Agent Mode is local, unprivileged, and reports observed readiness.**
-  `agents_page` has one Agent Mode switch, a visible Active Model row that
-  reads the `bluefin-active` alias back from llmman, and a "Manage Models"
-  row that opens llmman's own models page (`aistack.WebUIURL`) while Agent
-  Mode is ready, plus the local API address; the Troubleshooting group below
-  it is the invariant above. Unready model and launch controls stay visible
-  and insensitive instead of disappearing. Model selection itself happens in
-  llmman's own UI (#568).
+  `agents_page` has one Agent Mode switch, an Active Model combo row that
+  lists downloaded models and maps the selected one to `bluefin-active`,
+  and a "Manage Models" row that opens llmman's own models page
+  (`aistack.WebUIURL`) while Agent Mode is ready, plus the local API address;
+  the Troubleshooting group below it is the invariant above. Unready model
+  and launch controls stay visible and insensitive instead of disappearing.
   Peer/offload controls and their backend are removed; this surface manages
   this computer only.
   `internal/aistack` owns three artifacts: the generated installation Brewfile,
@@ -952,13 +951,11 @@ An agent must not break these:
   override any legacy aggregation settings. Wildcard CORS is forbidden.
   Enable fetches the engine before writing the unit and readiness requires a
   bounded successful JSON-object response from `/llmman/node`, never unit
-  presence or `systemctl is-active` alone. Toggle and readiness reads share
+  presence or `systemctl is-active` alone. Toggle and model mutations share
   one action gate; generation checks reject stale readiness and alias reads.
-  Model selection happens in llmman's own UI, which ChairLift only links to
-  via the Manage Models row at `http://127.0.0.1:17434/#/models` (#568).
-  ChairLift reads the `bluefin-active` alias back via `llmman config get`,
-  never writes it, so the Agents page is a viewer of the user's llmman
-  configuration rather than a second writer to it. A missing alias means no
+  Selecting a model from the Active Model dropdown sets
+  `aliases.bluefin-active` in llmman and restarts the loopback daemon,
+  keeping the active model synchronized with Goose. A missing alias means no
   selected model, not an error or an invented default.
   Startup reconciles only an existing owned unit against `RenderUnit` plus the
   exact live systemd `InvocationID`, committed as a unit comment only after
