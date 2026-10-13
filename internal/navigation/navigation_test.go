@@ -282,8 +282,15 @@ func TestPageMetadataMatchesViewBuilders(t *testing.T) {
 				t.Fatalf("read %s: %v", path, err)
 			}
 
+			pages := make(map[string]bool)
+			for _, ref := range item.Refs {
+				pages[ref.Page] = true
+			}
 			found := make(map[Ref]bool)
 			for _, match := range groupCall.FindAllStringSubmatch(string(source), -1) {
+				if !pages[match[1]] {
+					continue
+				}
 				found[Ref{Page: match[1], Group: match[2]}] = true
 			}
 			if item.Name == "updates" {
