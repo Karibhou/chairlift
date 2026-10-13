@@ -1,4 +1,5 @@
-// Package ubluehelper holds the argv-parsing logic for
+// Package ubluehelper holds the argv-parsing logic and the post-execution
+// decisions (see SwitchImage and ApplyDevGroups) for
 // cmd/chairlift-helper, the privileged helper binary invoked via
 // pkexec to perform the Bluefin-family write operations: switching the bootc
 // release channel and toggling developer-mode group membership.

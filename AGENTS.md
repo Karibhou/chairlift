@@ -374,10 +374,17 @@ An agent must not break these:
   calendar); the commands and their PolicyKit actions stay for a later
   surface.
   Channel switch, driver switch, pin, and unpin all run through the helper's
-  `switchImage`, which falls back to the fixed `bootc rollback` when a
-  composefs `bootc switch` refuses a target that is the rollback deployment
-  (unpin's usual case); `internal/installcheck`'s
-  `TestHelperImageSwitchesGoThroughSwitchImage` holds that wiring.
+  `switchImage`, which delegates to `ubluehelper.SwitchImage`: it falls back
+  to the fixed `bootc rollback` when a composefs `bootc switch` refuses a
+  target that is the rollback deployment (unpin's usual case);
+  `internal/installcheck`'s `TestHelperImageSwitchesGoThroughSwitchImage`
+  holds that wiring. The helper's post-execution decisions —
+  `ubluehelper.SwitchImage` and `ubluehelper.ApplyDevGroups` (skip a group
+  the image lacks, fail only when none applied) — live in
+  `internal/ubluehelper` behind an injected `Runner`, so their live-path
+  outcomes are unit tested; `cmd/chairlift-helper/main.go` only wires the
+  real command runner, `bootc status`, and `/etc/group` preparation into
+  them.
   `internal/ubluehelper`'s tests assert the argv validation
   per command, and the e2e boundary test asserts the installed binary
   rejects each shape. `cmd/chairlift-helper`'s dispatch carries a
