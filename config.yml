@@ -79,16 +79,18 @@ features_page:
   # /usr/share/ublue-os/image-info.json, so leaving them enabled is safe on
   # every other system.
   #
-  # install_pulp and stage_feeds are optional follow-on steps for a confirmed
-  # Developer Mode enable, and both ship off. Turning the switch on grants
-  # developer access either way; these only add a system-wide Pulp Flatpak and
-  # a staged feed list the user imports themselves. Switching Developer Mode
+  # install_pulp, stage_feeds, and install_dev_apps are optional follow-on
+  # steps for a confirmed Developer Mode enable, and all ship off. Turning the
+  # switch on grants developer access either way; these only add a system-wide
+  # Pulp Flatpak, a staged feed list the user imports themselves, and the
+  # dakota-dev-flatpaks app collection (needs Homebrew and brew_bundles_group). Switching Developer Mode
   # back off removes neither, and never touches feeds already imported.
   dx_group:
     enabled: true
     # wsl_backend: nsl
     # install_pulp: true
     # stage_feeds: true
+    # install_dev_apps: true
   gaming_group:
     enabled: true
   # Printer applications: one rootless Podman quadlet per driver family

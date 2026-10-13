@@ -42,6 +42,11 @@ type GroupConfig struct {
 	// it.
 	InstallPulp bool `yaml:"install_pulp,omitempty"`
 	StageFeeds  bool `yaml:"stage_feeds,omitempty"`
+	// InstallDevApps is `dx_group`'s optional follow-on that installs the
+	// dakota-dev-flatpaks app collection after a confirmed Developer Mode
+	// enable. Defaults to false for the same reason as InstallPulp: it is a
+	// separate install, not what the switch itself says it does.
+	InstallDevApps bool `yaml:"install_dev_apps,omitempty"`
 
 	// WSLBackend is the virtual-machine backend for WSL Mode ("nsl" or "lima").
 	// Defaults to "nsl".
@@ -79,16 +84,17 @@ type rawPageConfig map[string]rawGroupConfig
 // string/slice, means the file set that field explicitly and it replaces the
 // default outright.
 type rawGroupConfig struct {
-	Enabled      *bool           `yaml:"enabled"`
-	AppID        *string         `yaml:"app_id"`
-	Actions      *[]ActionConfig `yaml:"actions"`
-	Website      *string         `yaml:"website"`
-	Issues       *string         `yaml:"issues"`
-	Chat         *string         `yaml:"chat"`
-	BundlesPaths *[]string       `yaml:"bundles_paths"`
-	InstallPulp  *bool           `yaml:"install_pulp"`
-	StageFeeds   *bool           `yaml:"stage_feeds"`
-	WSLBackend   *string         `yaml:"wsl_backend"`
+	Enabled        *bool           `yaml:"enabled"`
+	AppID          *string         `yaml:"app_id"`
+	Actions        *[]ActionConfig `yaml:"actions"`
+	Website        *string         `yaml:"website"`
+	Issues         *string         `yaml:"issues"`
+	Chat           *string         `yaml:"chat"`
+	BundlesPaths   *[]string       `yaml:"bundles_paths"`
+	InstallPulp    *bool           `yaml:"install_pulp"`
+	StageFeeds     *bool           `yaml:"stage_feeds"`
+	InstallDevApps *bool           `yaml:"install_dev_apps"`
+	WSLBackend     *string         `yaml:"wsl_backend"`
 }
 
 // trustedConfigPaths are the fixed administrator- and package-owned candidates
@@ -307,6 +313,9 @@ func mergeGroup(def GroupConfig, raw rawGroupConfig) GroupConfig {
 	if raw.StageFeeds != nil {
 		result.StageFeeds = *raw.StageFeeds
 	}
+	if raw.InstallDevApps != nil {
+		result.InstallDevApps = *raw.InstallDevApps
+	}
 	if raw.WSLBackend != nil {
 		result.WSLBackend = *raw.WSLBackend
 	}
@@ -379,8 +388,8 @@ func defaultConfig() *Config {
 			// internal/ublue reports no /usr/share/ublue-os/image-info.json,
 			// which is every non-Bluefin host.
 			//
-			// dx_group's optional feed onboarding (InstallPulp, StageFeeds)
-			// is left at its zero value here on purpose: enabling developer
+			// dx_group's optional onboarding (InstallPulp, StageFeeds,
+			// InstallDevApps) is left at its zero value here on purpose: enabling developer
 			// access and installing a feed reader for the account are
 			// separate decisions, and only the first one is what the switch
 			// says it does. WSLBackend defaults to "nsl".

@@ -52,6 +52,26 @@ func TestDeveloperFeedSetupPlanNeedsAConfirmedLiveEnable(t *testing.T) {
 	}
 }
 
+func TestDeveloperAppsSetupPlan(t *testing.T) {
+	if !DeveloperAppsSetupPlan(false, true, true, true, true) {
+		t.Fatal("DeveloperAppsSetupPlan(false, true, true, true, true) = false, want true")
+	}
+	for _, tc := range []struct {
+		name                                                    string
+		dryRun, enabled, succeeded, installDevApps, collections bool
+	}{
+		{"dry run", true, true, true, true, true},
+		{"disable", false, false, true, true, true},
+		{"failed promotion", false, true, false, true, true},
+		{"not opted in", false, true, true, false, true},
+		{"no Homebrew or collections group disabled", false, true, true, true, false},
+	} {
+		if DeveloperAppsSetupPlan(tc.dryRun, tc.enabled, tc.succeeded, tc.installDevApps, tc.collections) {
+			t.Errorf("%s: DeveloperAppsSetupPlan = true, want false", tc.name)
+		}
+	}
+}
+
 // The plan mirrors the configuration rather than defaulting either step on:
 // each key is independent, and an administrator who set neither gets neither.
 func TestDeveloperFeedSetupPlanCarriesEachConfiguredStep(t *testing.T) {

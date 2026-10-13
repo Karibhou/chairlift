@@ -16,6 +16,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updex"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/bundleview"
 	"github.com/projectbluefin/chairlift/internal/views/featurestatus"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -573,6 +574,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 
 			uh.openDeveloperOnboarding(enabled, succeeded)
 			uh.startDeveloperFeedSetup(enabled, succeeded)
+			uh.startDeveloperAppsSetup(enabled, succeeded)
 			uh.startDeveloperDevcontainerSetup(enabled, succeeded)
 		})
 	}()
@@ -660,6 +662,66 @@ func (uh *UserHome) startDeveloperFeedSetup(enabled, succeeded bool) {
 				return
 			}
 			uh.toastAdder.ShowToast(result.Message)
+		})
+	}()
+}
+
+// startDeveloperAppsSetup installs the developer app collection
+// (dakota-dev-flatpaks) after a confirmed live Developer Mode enable, only
+// when `dx_group` opts in with install_dev_apps and the App collections group
+// is available — the same config and Homebrew capability floor the Apps page
+// uses, so a host without Homebrew never attempts the install.
+func (uh *UserHome) startDeveloperAppsSetup(enabled, succeeded bool) {
+	var installDevApps bool
+	if group := uh.config.GetGroupConfig("features_page", "dx_group"); group != nil {
+		installDevApps = group.InstallDevApps
+	}
+	collectionsAvailable := uh.collectionsAvailable()
+	if !actionmsg.DeveloperAppsSetupPlan(dryrun.Enabled(), enabled, succeeded, installDevApps, collectionsAvailable) {
+		return
+	}
+
+	var bundlePaths []string
+	if groupCfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group"); groupCfg != nil {
+		bundlePaths = append(bundlePaths, groupCfg.BundlesPaths...)
+	}
+
+	if !uh.developerAppsGate.TryStart() {
+		return
+	}
+
+	go func() {
+		defer uh.developerAppsGate.Reset()
+		bundles, err := homebrew.AvailableBundles(bundlePaths)
+		if err != nil {
+			log.Printf("views: developer apps setup could not discover bundles: %v", err)
+			return
+		}
+		var devAppsBrewfile string
+		for _, b := range bundles {
+			if b.Name == bundleview.DeveloperAppsCollection {
+				devAppsBrewfile = b.Path
+				break
+			}
+		}
+		if devAppsBrewfile == "" {
+			return
+		}
+
+		if err := homebrew.BundleInstall(devAppsBrewfile); err != nil {
+			log.Printf("views: developer apps setup could not install %s: %v", devAppsBrewfile, err)
+			sgtk.RunOnMainThread(func() {
+				if uh.toastAdder != nil {
+					uh.toastAdder.ShowErrorToast("Couldn't install developer apps.")
+				}
+			})
+			return
+		}
+		sgtk.RunOnMainThread(func() {
+			if uh.toastAdder != nil {
+				uh.toastAdder.ShowToast("Developer apps installed")
+			}
+			uh.homebrewInventoryChanged()
 		})
 	}()
 }

@@ -185,6 +185,32 @@ def step_expander_rows_exact(context, title):
         f"the {title!r} list shows {expander_rows(header)}, want {want}"
 
 
+def _collection_checkbox(context, title):
+    row = atspi.row_containing(content(context), title)
+    return atspi.find(row, lambda n: atspi.role(n) == "check box", "collection checkbox for " + title)
+
+@step('the "{title}" collection is {state:w}')
+def step_collection_checked(context, title, state):
+    if state not in ("checked", "unchecked"):
+        raise NotImplementedError(f"unknown checkbox state {state!r}")
+    want = state == "checked"
+    cb = _collection_checkbox(context, title)
+    assert atspi.poll(lambda: bool(atspi.checked(cb)) == want), \
+        f"collection {title!r} is not {state}"
+
+@then('the "{row}" row does not say "{text}"')
+def step_row_does_not_say(context, row, text):
+    target = atspi.row_containing(content(context), row)
+    assert not text_present(target, text), f"row {row!r} says {text!r}"
+
+@step('I toggle the "{title}" collection checkbox')
+def step_toggle_collection_checkbox(context, title):
+    cb = _collection_checkbox(context, title)
+    before = bool(atspi.checked(cb))
+    focus_by_tab(context, cb, f"the {title!r} collection checkbox")
+    atspi.press("space")
+    assert atspi.poll(lambda: bool(atspi.checked(_collection_checkbox(context, title))) != before), \
+        f"collection checkbox for {title!r} did not toggle"
 # ---------------------------------------------------------------- toasts
 
 

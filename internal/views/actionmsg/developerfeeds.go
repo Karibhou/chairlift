@@ -61,6 +61,15 @@ func DeveloperFeedSetupPlan(dryRun, enabled, succeeded, installPulp, stageFeeds 
 	return DeveloperFeedSetup{InstallPulp: installPulp, StageFeeds: stageFeeds}
 }
 
+// DeveloperAppsSetupPlan returns whether the developer app collection should
+// be installed after a Developer Mode toggle. It needs a confirmed live
+// enable, `dx_group`'s opt-in install_dev_apps, and an available App
+// collections group (brew_bundles_group enabled and its Homebrew capability
+// floor met), so a host without Homebrew never attempts the install.
+func DeveloperAppsSetupPlan(dryRun, enabled, succeeded, installDevApps, collectionsAvailable bool) bool {
+	return !dryRun && enabled && succeeded && installDevApps && collectionsAvailable
+}
+
 // DeveloperFeedOutcome is what the optional work actually did. The view fills
 // it in from the two return values, and it is the only thing
 // DeveloperFeedFeedback is allowed to describe: an outcome word is never set

@@ -76,9 +76,14 @@ type UserHome struct {
 	brewTrustGroup     *adw.PreferencesGroup
 	brewTrustTaps      map[string]*untrustedTapEntry // tap name -> its expander and remaining packages
 	brewTrustError     *adw.ActionRow                // failed discovery row, nil otherwise
-	// Apps collections share one install gate per collection.
-	bundleInstalls map[string]*bundleInstall
-	bundleButtons  buttonRoute
+	bundleButtons      buttonRoute
+	// Bundle collection checkboxes and unified install controls.
+	bundleItems          []*bundleItemRow
+	bundleInstallButton  *gtk.Button
+	bundleInstallSpinner *gtk.Spinner
+	bundleInstallBar     *gtk.ProgressBar
+	bundleInstallGate    actionstate.Gate
+	developerAppsGate    actionstate.Gate
 	// bundleStatusRefresh lets only the newest installed-state check of the
 	// collections publish; see refreshBundleStatuses.
 	bundleStatusRefresh actionstate.RefreshGate

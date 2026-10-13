@@ -14,18 +14,15 @@ package bundleview
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
-const (
-	gateIdle uint32 = iota
-	gateRunning
-	gateComplete
-)
+// DeveloperAppsCollection is the collection Developer Mode installs when it
+// is turned on. It is never offered as an App collection row.
+const DeveloperAppsCollection = "dakota-dev-flatpaks"
 
 // Presentation describes the group-level text after collection discovery.
 // Placeholder fields are non-empty only when there are no collection rows.
@@ -66,33 +63,171 @@ type Collection struct {
 }
 
 type catalogEntry struct {
-	title   string
-	summary string
+	title    string
+	summary  string
+	curated  bool
+	order    int
+	defaults bool
+	// members are sibling collections installed and checked together with
+	// this one (a super-bundle). A member gets no row of its own while its
+	// parent is discovered; see Visible.
+	members []string
 }
 
-// catalog names the collections Bluefin publishes. Their on-disk identifiers
-// are tooling names ("cli", "cncf", "system-flatpaks") and their leading
-// comments are headings or provenance notes, so both the name and the
-// description a person reads are written here.
 var catalog = map[string]catalogEntry{
-	"ai-tools":            {"AI tools", "AI assistants and model runners for the terminal."},
-	"artwork":             {"Wallpapers", "Wallpapers and artwork for your desktop."},
-	"cli":                 {"Command line tools", "A modern set of everyday terminal utilities."},
-	"cncf":                {"Cloud native tools", "Tools for building and running cloud native software."},
-	"dakota-dev-flatpaks": {"Extra developer apps", "Optional desktop apps for development work."},
-	"dakota-fonts":        {"Extra fonts", "An additional font selection for design and development."},
-	"experimental-ide":    {"Experimental code editors", "Early builds of code editors, still being tested."},
-	"fonts":               {"Fonts", "A broad selection of fonts for documents and design."},
-	"fonts-dev":           {"Coding fonts", "Fixed-width fonts made for reading code."},
-	"full-desktop":        {"Full desktop", "A complete set of desktop apps for everyday use."},
-	"ide":                 {"Code editors", "Popular code editors and development environments."},
-	"k8s-tools":           {"Kubernetes tools", "Command line tools for working with Kubernetes clusters."},
-	"nsl":                 {"Linux machines", "Run persistent Linux virtual machines from your account."},
-	"swift":               {"Swift development", "Everything needed to build Swift projects."},
-	"system-dx-flatpaks":  {"Developer apps", "Desktop apps for development work."},
-	"system-flatpaks":     {"Everyday apps", "The desktop apps recommended for everyday use."},
-	"video-wallpaper":     {"Video wallpaper", "Use a video as your desktop background."},
-	"wallpaper-slideshow": {"Wallpaper slideshow", "Change your desktop background on a schedule."},
+	"artwork": {
+		title:    "Extra Wallpapers",
+		summary:  "Extra wallpapers, artwork, and wallpaper cycling for your desktop.",
+		curated:  true,
+		order:    1,
+		defaults: true,
+		members:  []string{"wallpaper-slideshow"},
+	},
+	"cli": {
+		title:    "Bluefin CLI",
+		summary:  "A modern terminal environment with everyday utilities, Starship prompt, and shell bling.",
+		curated:  true,
+		order:    2,
+		defaults: true,
+	},
+	"fonts": {
+		title:    "Fonts",
+		summary:  "A broad selection of everyday, design, office, and accessibility fonts.",
+		curated:  true,
+		order:    3,
+		defaults: true,
+		members:  []string{"dakota-fonts"},
+	},
+	"fonts-dev": {
+		title:    "Coding fonts",
+		summary:  "Fixed-width fonts made for reading code.",
+		curated:  true,
+		order:    4,
+		defaults: true,
+	},
+	"ai-tools": {
+		title:    "AI tools",
+		summary:  "AI assistants and model runners for the terminal.",
+		curated:  true,
+		order:    5,
+		defaults: true,
+	},
+	"full-desktop": {
+		title:    "Full Desktop Suite",
+		summary:  "A complete set of desktop apps for everyday productivity.",
+		curated:  true,
+		order:    6,
+		defaults: false,
+	},
+}
+
+// retired collections are Bluefin-shipped bundles that have been explicitly
+// removed from the UI. They are filtered out so they do not fall back to
+// raw humanized names ("Cncf", "Nsl", etc.).
+var retired = map[string]struct{}{
+	"cncf":                {},
+	"k8s-tools":           {},
+	"swift":               {},
+	"ide":                 {},
+	"experimental-ide":    {},
+	"nsl":                 {},
+	"system-dx-flatpaks":  {},
+	"system-flatpaks":     {},
+	"video-wallpaper":     {},
+	"dakota-dev-flatpaks": {}, // installed automatically with devmode
+}
+
+// Visible reports whether an on-disk collection should be offered as a row.
+// Retired Bluefin bundles are excluded; user-added collections remain visible.
+// A super-bundle member (e.g. wallpaper-slideshow) is folded into its parent's
+// row when that parent was discovered, and keeps its own row otherwise so it
+// stays installable.
+func Visible(id string, discovered map[string]homebrew.Bundle) bool {
+	if _, isRetired := retired[id]; isRetired {
+		return false
+	}
+	for parent, entry := range catalog {
+		if _, ok := discovered[parent]; !ok {
+			continue
+		}
+		for _, member := range entry.members {
+			if member == id {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// Curated reports whether id is one of the curated app collections shown in the UI.
+func Curated(id string) bool {
+	entry, ok := catalog[id]
+	return ok && entry.curated
+}
+
+// DefaultSelected reports whether id defaults to checked.
+// All collections default to checked except Full Desktop Suite.
+func DefaultSelected(id string) bool {
+	if entry, ok := catalog[id]; ok {
+		return entry.defaults
+	}
+	return true
+}
+
+// Order returns the sort order for a collection.
+func Order(id string) int {
+	if entry, ok := catalog[id]; ok && entry.curated {
+		return entry.order
+	}
+	return 100
+}
+
+// Members returns the sibling collection identifiers installed together with
+// id as a super-bundle, excluding id itself. Most collections have none.
+func Members(id string) []string {
+	entry, ok := catalog[id]
+	if !ok || len(entry.members) == 0 {
+		return nil
+	}
+	return append([]string(nil), entry.members...)
+}
+
+// MemberBundles resolves id's super-bundle siblings against the collections
+// discovered on disk, in catalog order. A sibling that was not discovered is
+// skipped: the row then covers only what this computer actually ships.
+func MemberBundles(id string, discovered map[string]homebrew.Bundle) []homebrew.Bundle {
+	var result []homebrew.Bundle
+	for _, name := range Members(id) {
+		if b, ok := discovered[name]; ok {
+			result = append(result, b)
+		}
+	}
+	return result
+}
+
+// AggregateInstalled combines the observed states of every Brewfile a row
+// covers. Any member observed not installed makes the row not installed;
+// otherwise an undecided member leaves the row as it was (known is false),
+// and only when every member is observed installed is the row installed.
+func AggregateInstalled(statuses []homebrew.BundleStatus) (installed, known bool) {
+	if len(statuses) == 0 {
+		return false, false
+	}
+	undecided := false
+	for _, status := range statuses {
+		got, ok := ObservedInstalled(status)
+		if !ok {
+			undecided = true
+			continue
+		}
+		if !got {
+			return false, true
+		}
+	}
+	if undecided {
+		return false, false
+	}
+	return true, true
 }
 
 const fallbackSummary = "A set of apps and tools put together for this computer."
@@ -114,13 +249,25 @@ func Describe(id, comment string, itemCount int) Collection {
 	if !known {
 		entry = catalogEntry{title: humanize(id), summary: fallbackSummary}
 	}
-
 	summary := entry.summary
-	if usable := usableSummary(id, comment); usable != "" {
-		summary = usable
+	if !entry.curated {
+		if usable := usableSummary(id, comment); usable != "" {
+			summary = usable
+		}
 	}
 
-	return Collection{Title: entry.title, Subtitle: joinSentences(summary, itemPhrase(itemCount))}
+	sub := joinSentences(summary, itemPhrase(itemCount))
+	return Collection{Title: entry.title, Subtitle: sub}
+}
+
+// DescribeInstalled returns the row text for one app collection, appending
+// "(Installed)" when installed is true.
+func DescribeInstalled(id, comment string, itemCount int, installed bool) Collection {
+	c := Describe(id, comment, itemCount)
+	if installed {
+		c.Subtitle += " (Installed)"
+	}
+	return c
 }
 
 // usableSummary returns the collection's own comment when it reads as a
@@ -219,40 +366,6 @@ func endSentence(text string) string {
 	return text + "."
 }
 
-// InstallGate prevents overlapping invocations of one collection row's
-// install action. Its zero value is ready for use.
-type InstallGate struct {
-	state atomic.Uint32
-}
-
-// TryStart starts an idle action and reports whether this caller acquired it.
-func (g *InstallGate) TryStart() bool {
-	return g.state.CompareAndSwap(gateIdle, gateRunning)
-}
-
-// Reset makes a failed or dry-run action available again.
-func (g *InstallGate) Reset() {
-	g.state.CompareAndSwap(gateRunning, gateIdle)
-}
-
-// Complete closes a successfully installed collection action. Only an
-// observation that the collection is no longer installed reopens it.
-func (g *InstallGate) Complete() {
-	g.state.CompareAndSwap(gateRunning, gateComplete)
-}
-
-// Observe applies an observed installed state to an action that is not
-// running: installed closes an idle action as Installed, and not installed
-// reopens a closed one, so the row shows what the system holds rather than
-// only what this session did. A running install is never touched; its own
-// outcome decides the row. It reports whether the state changed.
-func (g *InstallGate) Observe(installed bool) bool {
-	if installed {
-		return g.state.CompareAndSwap(gateIdle, gateComplete)
-	}
-	return g.state.CompareAndSwap(gateComplete, gateIdle)
-}
-
 // ObservedInstalled maps a `brew bundle check` status onto a collection's
 // installed state. known is false when the check could not decide, which
 // must leave the row as it was. Update Available counts as installed: every
@@ -266,46 +379,6 @@ func ObservedInstalled(status homebrew.BundleStatus) (installed, known bool) {
 		return false, true
 	default:
 		return false, false
-	}
-}
-
-// Running reports whether an install is in progress behind the gate.
-func (g *InstallGate) Running() bool {
-	return g.state.Load() == gateRunning
-}
-
-// Completed reports whether a live install succeeded and closed the gate.
-func (g *InstallGate) Completed() bool {
-	return g.state.Load() == gateComplete
-}
-
-// The three phases every Install button for a collection can show.
-const (
-	InstallLabelReady     = "Install"
-	InstallLabelRunning   = "Installing…"
-	InstallLabelCompleted = "Installed"
-)
-
-// InstallButtonName is the accessible name of a collection's button: its
-// label, without a progress ellipsis, followed by the collection's title, so
-// a screen reader announces "Install Team tools" rather than an "Install"
-// every row shares.
-func InstallButtonName(label, title string) string {
-	return strings.TrimSuffix(label, "…") + " " + title
-}
-
-// InstallPhase is the label and sensitivity every button bound to a
-// collection shows for the gate's current state. A button connected while a
-// run is in progress, or after one completed, joins at this phase rather
-// than at a fresh "Install" that would do nothing when clicked.
-func (g *InstallGate) InstallPhase() (label string, sensitive bool) {
-	switch {
-	case g.Completed():
-		return InstallLabelCompleted, false
-	case g.Running():
-		return InstallLabelRunning, false
-	default:
-		return InstallLabelReady, true
 	}
 }
 

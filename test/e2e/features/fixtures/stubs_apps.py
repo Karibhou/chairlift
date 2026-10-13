@@ -42,6 +42,18 @@ APP_COLLECTIONS = {
         'cask "font-jetbrains-mono"\n'
         'cask "font-hack"\n'
     ),
+    # Extra Wallpapers super-bundle: artwork plus its retired
+    # wallpaper-slideshow sibling, merged into one row by bundleview.Members.
+    "artwork.Brewfile": (
+        'cask "bluefin-wallpapers"\n'
+    ),
+    "wallpaper-slideshow.Brewfile": (
+        'brew "wallpaper-slideshow"\n'
+    ),
+    # Full Desktop Suite (defaults unchecked)
+    "full-desktop.Brewfile": (
+        'flatpak "org.gnome.Calculator"\n'
+    ),
     # An administrator's own collection: humanized id, readable comment.
     "team-tools.Brewfile": (
         "# tools our team relies on every day\n"
@@ -117,6 +129,22 @@ def apps_brew(context):
 def apps_brew_team_tools_installed(context):
     """Homebrew on which the Team tools collection is already installed."""
     _brew(context, installed_collections=("team-tools.Brewfile",))
+
+
+@stub("apps-brew-wallpapers-installed")
+def apps_brew_wallpapers_installed(context):
+    """Homebrew on which both Extra Wallpapers member Brewfiles are installed."""
+    _brew(context, installed_collections=("artwork.Brewfile", "wallpaper-slideshow.Brewfile"))
+
+
+@stub("apps-brew-wallpapers-partly-installed")
+def apps_brew_wallpapers_partly_installed(context):
+    """Homebrew holding artwork but not its wallpaper-slideshow sibling.
+
+    Team tools is installed too, so its later "(Installed)" subtitle proves
+    the Extra Wallpapers check already ran.
+    """
+    _brew(context, installed_collections=("artwork.Brewfile", "team-tools.Brewfile"))
 
 
 @stub("apps-brew-unreadable")

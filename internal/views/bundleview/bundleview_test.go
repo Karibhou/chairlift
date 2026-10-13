@@ -3,7 +3,6 @@ package bundleview
 import (
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/homebrew"
@@ -58,58 +57,33 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 		wantSubtitle string
 	}{
 		{
-			name:         "known collection with no comment",
+			name:         "curated collection Bluefin CLI",
 			id:           "cli",
 			itemCount:    16,
-			wantTitle:    "Command line tools",
-			wantSubtitle: "A modern set of everyday terminal utilities. Includes 16 apps and tools.",
+			wantTitle:    "Bluefin CLI",
+			wantSubtitle: "A modern terminal environment with everyday utilities, Starship prompt, and shell bling. Includes 16 apps and tools.",
 		},
 		{
-			name:         "known collection with a jargon comment",
-			id:           "cncf",
-			comment:      "CNCF Projects Brewfile",
-			itemCount:    80,
-			wantTitle:    "Cloud native tools",
-			wantSubtitle: "Tools for building and running cloud native software. Includes 80 apps and tools.",
+			name:         "curated collection Extra Wallpapers",
+			id:           "artwork",
+			itemCount:    4,
+			wantTitle:    "Extra Wallpapers",
+			wantSubtitle: "Extra wallpapers, artwork, and wallpaper cycling for your desktop. Includes 4 apps and tools.",
 		},
 		{
-			name:         "known collection whose comment is its own file name",
+			name:         "curated collection Fonts",
+			id:           "fonts",
+			itemCount:    21,
+			wantTitle:    "Fonts",
+			wantSubtitle: "A broad selection of everyday, design, office, and accessibility fonts. Includes 21 apps and tools.",
+		},
+		{
+			name:         "curated collection Full Desktop Suite",
 			id:           "full-desktop",
 			comment:      "full-desktop.Brewfile",
 			itemCount:    58,
-			wantTitle:    "Full desktop",
-			wantSubtitle: "A complete set of desktop apps for everyday use. Includes 58 apps and tools.",
-		},
-		{
-			name:         "known collection whose comment names packaging",
-			id:           "system-flatpaks",
-			comment:      "Default system-wide flatpaks for Bluefin",
-			itemCount:    39,
-			wantTitle:    "Everyday apps",
-			wantSubtitle: "The desktop apps recommended for everyday use. Includes 39 apps and tools.",
-		},
-		{
-			name:         "known collection whose comment names a tool the person never runs",
-			id:           "dakota-fonts",
-			comment:      "Dakota's optional font selection, installed by ujust install-dev-fonts.",
-			itemCount:    15,
-			wantTitle:    "Extra fonts",
-			wantSubtitle: "An additional font selection for design and development. Includes 15 apps and tools.",
-		},
-		{
-			name:         "known collection whose comment is a heading",
-			id:           "swift",
-			comment:      "Swift Development Environment",
-			itemCount:    3,
-			wantTitle:    "Swift development",
-			wantSubtitle: "Everything needed to build Swift projects. Includes 3 apps and tools.",
-		},
-		{
-			name:         "known collection with a single entry",
-			id:           "ide",
-			itemCount:    1,
-			wantTitle:    "Code editors",
-			wantSubtitle: "Popular code editors and development environments. Includes 1 app or tool.",
+			wantTitle:    "Full Desktop Suite",
+			wantSubtitle: "A complete set of desktop apps for everyday productivity. Includes 58 apps and tools.",
 		},
 		{
 			name:         "unknown collection with a human comment",
@@ -148,19 +122,71 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 	}
 }
 
-// Dakota ships these collections in /usr/share/ublue-os/homebrew (observed on
-// dakota:testing, 2026-10-07). An unnamed one falls back to its title-cased
-// file name and a generic summary, which is how "Nsl" reached the Apps page.
-func TestDakotaCollectionsAreAllNamed(t *testing.T) {
+// Dakota collections are curated, a curated super-bundle member, or explicitly retired.
+func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	for _, id := range []string{
 		"ai-tools", "artwork", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
 		"experimental-ide", "fonts", "fonts-dev", "full-desktop", "ide", "k8s-tools",
 		"nsl", "swift", "system-dx-flatpaks", "system-flatpaks", "video-wallpaper",
 		"wallpaper-slideshow",
 	} {
-		if _, ok := catalog[id]; !ok {
-			t.Errorf("collection %q has no catalog entry", id)
+		_, inCatalog := catalog[id]
+		_, inRetired := retired[id]
+		isMember := false
+		for parent := range catalog {
+			for _, m := range Members(parent) {
+				if m == id {
+					isMember = true
+				}
+			}
 		}
+		if !inCatalog && !inRetired && !isMember {
+			t.Errorf("collection %q is neither in catalog, a member, nor retired", id)
+		}
+		if isMember && (inCatalog || inRetired) {
+			t.Errorf("member collection %q must not also be in catalog or retired", id)
+		}
+		if inCatalog && inRetired {
+			t.Errorf("collection %q is in both catalog and retired", id)
+		}
+	}
+}
+
+func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
+	curatedIDs := []string{"artwork", "cli", "fonts", "fonts-dev", "ai-tools", "full-desktop"}
+	for _, id := range curatedIDs {
+		if !Curated(id) {
+			t.Errorf("Curated(%q) = false, want true", id)
+		}
+		if !Visible(id, nil) {
+			t.Errorf("Visible(%q) = false, want true", id)
+		}
+	}
+	if DefaultSelected("full-desktop") {
+		t.Errorf("DefaultSelected(full-desktop) = true, want false")
+	}
+	for _, id := range []string{"artwork", "cli", "fonts", "fonts-dev", "ai-tools"} {
+		if !DefaultSelected(id) {
+			t.Errorf("DefaultSelected(%q) = false, want true", id)
+		}
+	}
+	if !DefaultSelected("custom-admin-pack") {
+		t.Errorf("DefaultSelected(custom-admin-pack) = false, want true")
+	}
+}
+
+func TestRetiredCollectionsAreNotVisible(t *testing.T) {
+	for id := range retired {
+		if Visible(id, nil) {
+			t.Errorf("Visible(%q) = true, want false for retired collection", id)
+		}
+		if Curated(id) {
+			t.Errorf("Curated(%q) = true, want false for retired collection", id)
+		}
+	}
+	// Unknown user-added collections remain visible.
+	if !Visible("team-tools", nil) {
+		t.Errorf("Visible(team-tools) = false, want true for custom user collection")
 	}
 }
 
@@ -196,118 +222,6 @@ func TestNoCollectionRowLeaksToolingIdentity(t *testing.T) {
 	}
 }
 
-func TestGateAllowsOnlyOneConcurrentAction(t *testing.T) {
-	var gate InstallGate
-	const callers = 64
-
-	start := make(chan struct{})
-	results := make(chan bool, callers)
-	var wg sync.WaitGroup
-	for range callers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			results <- gate.TryStart()
-		}()
-	}
-	close(start)
-	wg.Wait()
-	close(results)
-
-	acquired := 0
-	for result := range results {
-		if result {
-			acquired++
-		}
-	}
-	if acquired != 1 {
-		t.Fatalf("concurrent TryStart acquisitions = %d, want exactly 1", acquired)
-	}
-}
-
-func TestGateResetAndCompletion(t *testing.T) {
-	var gate InstallGate
-	if !gate.TryStart() {
-		t.Fatal("zero-value gate did not start")
-	}
-	gate.Reset()
-	if !gate.TryStart() {
-		t.Fatal("reset gate did not restart")
-	}
-	gate.Complete()
-	if gate.TryStart() {
-		t.Fatal("completed gate restarted")
-	}
-	gate.Reset()
-	if gate.TryStart() {
-		t.Fatal("reset reopened a completed gate")
-	}
-}
-
-// TestGateInstallPhaseFollowsTheLifecycle covers what a late-connected
-// button reads to join at the phase every other button for the collection
-// shows: a button built after a run started must read "Installing…" and be
-// insensitive, one built after a live success "Installed" and insensitive,
-// and one built after a failed or dry run "Install" and sensitive — never a
-// sensitive "Install" over a completed gate, which does nothing when clicked.
-func TestGateInstallPhaseFollowsTheLifecycle(t *testing.T) {
-	var gate InstallGate
-	steps := []struct {
-		name          string
-		transition    func()
-		wantLabel     string
-		wantSensitive bool
-	}{
-		{"ready", func() {}, InstallLabelReady, true},
-		{"running", func() { gate.TryStart() }, InstallLabelRunning, false},
-		{"reset after a failure or dry run", func() { gate.Reset() }, InstallLabelReady, true},
-		{"running again", func() { gate.TryStart() }, InstallLabelRunning, false},
-		{"completed", func() { gate.Complete() }, InstallLabelCompleted, false},
-		{"reset cannot reopen a completion", func() { gate.Reset() }, InstallLabelCompleted, false},
-	}
-	for _, step := range steps {
-		step.transition()
-		label, sensitive := gate.InstallPhase()
-		if label != step.wantLabel || sensitive != step.wantSensitive {
-			t.Fatalf("%s: InstallPhase = (%q, %v), want (%q, %v)", step.name, label, sensitive, step.wantLabel, step.wantSensitive)
-		}
-	}
-}
-
-// TestGateObserveReflectsTheSystem covers W3-09: a collection installed
-// before this session must read "Installed" on load, an observation must
-// never overwrite a running install, and a collection observed missing
-// again (one of its items was uninstalled) must offer Install again.
-func TestGateObserveReflectsTheSystem(t *testing.T) {
-	var gate InstallGate
-	steps := []struct {
-		name          string
-		transition    func() bool
-		wantChanged   bool
-		wantLabel     string
-		wantSensitive bool
-	}{
-		{"not installed on load leaves Install", func() bool { return gate.Observe(false) }, false, InstallLabelReady, true},
-		{"installed on load reads Installed", func() bool { return gate.Observe(true) }, true, InstallLabelCompleted, false},
-		{"installed again changes nothing", func() bool { return gate.Observe(true) }, false, InstallLabelCompleted, false},
-		{"a completed gate cannot start", func() bool { return gate.TryStart() }, false, InstallLabelCompleted, false},
-		{"observed missing reopens Install", func() bool { return gate.Observe(false) }, true, InstallLabelReady, true},
-		{"an install starts", func() bool { return gate.TryStart() }, true, InstallLabelRunning, false},
-		{"installed never overwrites a run", func() bool { return gate.Observe(true) }, false, InstallLabelRunning, false},
-		{"missing never overwrites a run", func() bool { return gate.Observe(false) }, false, InstallLabelRunning, false},
-	}
-	for _, step := range steps {
-		if changed := step.transition(); changed != step.wantChanged {
-			t.Fatalf("%s: changed = %v, want %v", step.name, changed, step.wantChanged)
-		}
-		label, sensitive := gate.InstallPhase()
-		if label != step.wantLabel || sensitive != step.wantSensitive {
-			t.Fatalf("%s: InstallPhase = (%q, %v), want (%q, %v)", step.name, label, sensitive, step.wantLabel, step.wantSensitive)
-		}
-	}
-}
-
 func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
 	for _, tc := range []struct {
 		status        homebrew.BundleStatus
@@ -327,16 +241,81 @@ func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
 	}
 }
 
-// Every collection row shows the same Install label, so the accessible name
-// carries the collection's title in each phase (W2-APPS-5).
-func TestCollectionButtonNameCarriesTheTitle(t *testing.T) {
-	for label, want := range map[string]string{
-		InstallLabelReady:     "Install Team tools",
-		InstallLabelRunning:   "Installing Team tools",
-		InstallLabelCompleted: "Installed Team tools",
+// Super-bundle siblings come from the catalog, never include the row
+// itself, and resolve only against collections actually discovered.
+func TestMemberBundlesResolvesDiscoveredSiblings(t *testing.T) {
+	discovered := map[string]homebrew.Bundle{
+		"artwork":             {Name: "artwork", Path: "/b/artwork.Brewfile", ItemCount: 2},
+		"wallpaper-slideshow": {Name: "wallpaper-slideshow", Path: "/b/wallpaper-slideshow.Brewfile", ItemCount: 1},
+		"fonts":               {Name: "fonts", Path: "/b/fonts.Brewfile", ItemCount: 5},
+	}
+
+	got := MemberBundles("artwork", discovered)
+	if len(got) != 1 || got[0].Path != "/b/wallpaper-slideshow.Brewfile" {
+		t.Errorf("MemberBundles(artwork) = %v, want only wallpaper-slideshow", got)
+	}
+	if got := MemberBundles("fonts", discovered); len(got) != 0 {
+		t.Errorf("MemberBundles(fonts) = %v, want none when dakota-fonts was not discovered", got)
+	}
+	if got := MemberBundles("cli", discovered); len(got) != 0 {
+		t.Errorf("MemberBundles(cli) = %v, want none", got)
+	}
+	if got := MemberBundles("team-tools", discovered); len(got) != 0 {
+		t.Errorf("MemberBundles(team-tools) = %v, want none for a custom collection", got)
+	}
+}
+
+// A super-bundle sibling is folded into its parent's row when the parent was
+// discovered, and keeps its own row when it was not, so it stays installable.
+func TestMembersFoldIntoDiscoveredParentOnly(t *testing.T) {
+	for id := range catalog {
+		for _, member := range Members(id) {
+			if member == id {
+				t.Errorf("Members(%q) includes itself", id)
+			}
+			withParent := map[string]homebrew.Bundle{
+				id:     {Name: id},
+				member: {Name: member},
+			}
+			if Visible(member, withParent) {
+				t.Errorf("Visible(%q) = true with parent %q discovered, want folded into parent row", member, id)
+			}
+			alone := map[string]homebrew.Bundle{member: {Name: member}}
+			if !Visible(member, alone) {
+				t.Errorf("Visible(%q) = false without parent %q, want its own row", member, id)
+			}
+		}
+	}
+}
+
+// The row is installed only when every member is observed installed; one
+// member observed missing makes it not installed; an undecided member with
+// no observed-missing sibling changes nothing.
+func TestAggregateInstalled(t *testing.T) {
+	const (
+		in  = homebrew.BundleInstalled
+		up  = homebrew.BundleUpdateAvailable
+		out = homebrew.BundleNotInstalled
+		ind = homebrew.BundleIndeterminate
+	)
+	for _, tc := range []struct {
+		name          string
+		statuses      []homebrew.BundleStatus
+		wantInstalled bool
+		wantKnown     bool
+	}{
+		{"no members", nil, false, false},
+		{"single installed", []homebrew.BundleStatus{in}, true, true},
+		{"all installed or upgradable", []homebrew.BundleStatus{in, up}, true, true},
+		{"one missing", []homebrew.BundleStatus{in, out}, false, true},
+		{"installed then undecided", []homebrew.BundleStatus{in, ind}, false, false},
+		{"undecided then installed", []homebrew.BundleStatus{ind, in}, false, false},
+		{"undecided then missing", []homebrew.BundleStatus{ind, out}, false, true},
+		{"all undecided", []homebrew.BundleStatus{ind, ind}, false, false},
 	} {
-		if got := InstallButtonName(label, "Team tools"); got != want {
-			t.Errorf("InstallButtonName(%q) = %q, want %q", label, got, want)
+		installed, known := AggregateInstalled(tc.statuses)
+		if installed != tc.wantInstalled || known != tc.wantKnown {
+			t.Errorf("%s: AggregateInstalled(%v) = (%v, %v), want (%v, %v)", tc.name, tc.statuses, installed, known, tc.wantInstalled, tc.wantKnown)
 		}
 	}
 }
