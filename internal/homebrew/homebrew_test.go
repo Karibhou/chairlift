@@ -85,6 +85,27 @@ func TestBundleSubcommandsStateClassification(t *testing.T) {
 	}
 }
 
+// TestTrustListingIsReadOnly pins that only the bare `brew trust --json=v1`
+// listing escapes the dry-run gate; anything that names a target still
+// trusts and must stay state-changing.
+func TestTrustListingIsReadOnly(t *testing.T) {
+	cases := []struct {
+		args  []string
+		state bool
+	}{
+		{[]string{"trust", "--json=v1"}, false},
+		{[]string{"trust", "--json=v1", "vendor/tap"}, true},
+		{[]string{"trust", "--formula", "vendor/tap/a"}, true},
+		{[]string{"trust", "vendor/tap"}, true},
+		{[]string{"trust"}, true},
+	}
+	for _, tc := range cases {
+		if got := isStateChanging(tc.args); got != tc.state {
+			t.Errorf("isStateChanging(%v) = %v, want %v", tc.args, got, tc.state)
+		}
+	}
+}
+
 func TestTimeoutConstants(t *testing.T) {
 	if readTimeout != 30*time.Second {
 		t.Errorf("readTimeout = %v, want 30s", readTimeout)

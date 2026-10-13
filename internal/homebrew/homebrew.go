@@ -148,7 +148,17 @@ func isStateChanging(args []string) bool {
 		// state-changing.
 		return !isReadOnlyBundle(args)
 	}
+	if isTrustListing(args) {
+		return false
+	}
 	return stateChangingCommands[cmd]
+}
+
+// isTrustListing reports whether args is exactly `brew trust --json=v1`,
+// which prints the trust store and changes nothing. Any other `brew trust`
+// argv, including one naming a target, stays state-changing.
+func isTrustListing(args []string) bool {
+	return len(args) == 2 && args[0] == "trust" && args[1] == "--json=v1"
 }
 
 // isReadOnlyBundle reports whether args is a read-only `brew bundle`

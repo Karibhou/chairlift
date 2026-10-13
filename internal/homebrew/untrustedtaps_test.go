@@ -7,14 +7,24 @@ import (
 	"testing"
 )
 
-// brewTrustStub builds a fake-brew body that answers the two commands
-// ListUntrustedTaps issues — `tap-info --installed --json` and `--prefix` —
-// and fails loudly on anything else, so an unexpected third invocation
-// surfaces as a test failure rather than as empty output.
+// noTrustedPackages is `brew trust --json=v1` with no per-package entries.
+const noTrustedPackages = `{"taps":[],"formulae":[],"casks":[],"commands":[]}`
+
+// brewTrustStub builds a fake-brew body that answers the commands
+// ListUntrustedTaps issues — `tap-info --installed --json`, `--prefix` and
+// `trust --json=v1` — and fails loudly on anything else, so an unexpected
+// invocation surfaces as a test failure rather than as empty output.
 func brewTrustStub(tapInfo, prefix string) string {
-	return "case \"$1\" in\n" +
-		"tap-info) printf '%s' '" + tapInfo + "' ;;\n" +
-		"--prefix) printf '%s\\n' '" + prefix + "' ;;\n" +
+	return brewTrustStubWithTrust(tapInfo, prefix, noTrustedPackages)
+}
+
+// brewTrustStubWithTrust is brewTrustStub with the per-package trust store
+// `brew trust --json=v1` prints.
+func brewTrustStubWithTrust(tapInfo, prefix, trustJSON string) string {
+	return "case \"$1 $2\" in\n" +
+		"tap-info*) printf '%s' '" + tapInfo + "' ;;\n" +
+		"--prefix*) printf '%s\\n' '" + prefix + "' ;;\n" +
+		"'trust --json=v1') printf '%s' '" + trustJSON + "' ;;\n" +
 		"*) echo \"unexpected: $*\" >&2; exit 1 ;;\n" +
 		"esac"
 }
@@ -74,7 +84,61 @@ func TestListUntrustedTapsReportsInstalledPackages(t *testing.T) {
 		t.Errorf("ListUntrustedTaps() = %#v, want %#v", taps, want)
 	}
 
-	assertArgv(t, argvLog, []string{"tap-info --installed --json", "--prefix"})
+	assertArgv(t, argvLog, []string{"tap-info --installed --json", "--prefix", "trust --json=v1"})
+}
+
+// TestListUntrustedTapsOmitsPackagesTrustedOnTheirOwn covers issue #537's
+// reload symptom: `brew trust --formula` leaves the tap itself untrusted in
+// tap-info, so the per-package trust store must be read or the trusted
+// program is listed as paused again on the next load. A tap whose every
+// installed package is trusted drops out entirely. brew stores entries
+// lowercased, so the match ignores case.
+func TestListUntrustedTapsOmitsPackagesTrustedOnTheirOwn(t *testing.T) {
+	prefix := brewTrustPrefix(t,
+		map[string]string{
+			"multica": "multica-ai/tap",
+			"zx":      "multica-ai/tap",
+		},
+		map[string]string{
+			"somecask": "ublue-os/tap",
+		})
+	trustJSON := `{"taps":[],"formulae":["multica-ai/tap/multica"],"casks":["ublue-os/tap/SomeCask"],"commands":[]}`
+	fakeBrewOnPath(t, brewTrustStubWithTrust(tapInfoJSON, prefix, trustJSON))
+
+	taps, err := ListUntrustedTaps()
+	if err != nil {
+		t.Fatalf("ListUntrustedTaps: %v", err)
+	}
+	want := []UntrustedTap{{
+		Name:     "multica-ai/tap",
+		Formulae: []string{"multica-ai/tap/zx"},
+	}}
+	if !reflect.DeepEqual(taps, want) {
+		t.Errorf("ListUntrustedTaps() = %#v, want %#v", taps, want)
+	}
+}
+
+// TestListUntrustedTapsWithoutTrustListingKeepsEveryPackage covers a
+// Homebrew without `brew trust --json=v1`: the listing fails, and every
+// installed package of an untrusted tap is listed rather than the whole
+// check failing.
+func TestListUntrustedTapsWithoutTrustListingKeepsEveryPackage(t *testing.T) {
+	prefix := brewTrustPrefix(t, map[string]string{"multica": "multica-ai/tap"}, nil)
+	body := "case \"$1\" in\n" +
+		"tap-info) printf '%s' '" + tapInfoJSON + "' ;;\n" +
+		"--prefix) printf '%s\\n' '" + prefix + "' ;;\n" +
+		"*) echo 'Error: invalid option: --json=v1' >&2; exit 1 ;;\n" +
+		"esac"
+	fakeBrewOnPath(t, body)
+
+	taps, err := ListUntrustedTaps()
+	if err != nil {
+		t.Fatalf("ListUntrustedTaps: %v", err)
+	}
+	want := []UntrustedTap{{Name: "multica-ai/tap", Formulae: []string{"multica-ai/tap/multica"}}}
+	if !reflect.DeepEqual(taps, want) {
+		t.Errorf("ListUntrustedTaps() = %#v, want %#v", taps, want)
+	}
 }
 
 // TestListUntrustedTapsSkipsTapsWithNothingInstalled pins the "not
