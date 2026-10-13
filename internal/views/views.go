@@ -265,12 +265,18 @@ type UserHome struct {
 	bootcRollbackOffered bool
 
 	// Agent Mode (agents_page agents_group)
-	agentModeRow    *adw.ActionRow
-	agentModelRow   *adw.ActionRow
-	agentModeToggle *guardedSwitch
-	agentModeState  aistack.State
-	agentModeGate   actionstate.Gate
-	agentRefresh    actionstate.RefreshGate
+	agentModeRow       *adw.ActionRow
+	agentModelRow      *adw.ComboRow
+	agentModelSpinner  *gtk.Spinner
+	agentModelSuppress bool
+	agentModelList     []string
+	agentModelActive   string
+	agentModelSelected uint32
+	agentModelNotify   func(gobject.Object, uintptr)
+	agentModeToggle    *guardedSwitch
+	agentModeState     aistack.State
+	agentModeGate      actionstate.Gate
+	agentRefresh       actionstate.RefreshGate
 	// agentManageRow opens llmman's models page, where users pick a model.
 	agentManageRow *adw.ActionRow
 

@@ -998,11 +998,11 @@ plus a JSON answer from `/llmman/node`), degraded (unit, no answer), and
 disabled (llmman installed, no unit). On page build the non-blocking facts
 render immediately and the health probe runs off the main thread.
 
-Model selection happens in llmman's own models page
+Active Model presents downloaded models in a combo row queried live from
+`/llmman/node`. Selecting an entry sets `aliases.bluefin-active` and restarts
+the owned daemon. Further model management happens in llmman's own models page
 (`http://127.0.0.1:17434/#/models`), opened from the Manage Models row.
-ChairLift only reads `bluefin-active` back (`ReadActiveModel`); it never
-writes the alias or restarts the unit for a model change. A missing alias
-renders no selection.
+A missing alias renders no selection.
 The owned unit also sets empty `LLMMAN_PEERS=` to override existing aggregation
 configuration. Removing the remote-machine controls therefore cannot leave
 hidden offload enabled; unrelated llmman configuration is not rewritten.

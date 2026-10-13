@@ -464,10 +464,8 @@ func DefaultContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), commandTimeout)
 }
 
-// ActiveModelAlias is the llmman alias users configure through llmman's
-// own models page; ChairLift only reads it back, never writes it (#568).
-// The Goose launch uses the alias verbatim, so whatever model the user
-// mapped to it is what Goose starts on.
+// ActiveModelAlias is the llmman alias configured for the selected model.
+// Goose launches on this alias verbatim, starting on the active model.
 const ActiveModelAlias = "bluefin-active"
 
 // ReadActiveModel returns the model ref currently mapped to ActiveModelAlias

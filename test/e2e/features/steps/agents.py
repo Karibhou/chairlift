@@ -99,6 +99,45 @@ def step_switch_settles(context, state):
         f"sensitive={atspi.sensitive(agent_mode_switch(context))})"
     )
 
+@then("the model chooser is {state:w}")
+def step_model_chooser_state(context, state):
+    if state not in ("sensitive", "insensitive"):
+        raise NotImplementedError(f"unknown chooser state {state!r}")
+    want = state == "sensitive"
+
+    def settled():
+        row = atspi.row_containing(content(context), "Active Model", timeout=1)
+        node = row
+        while node is not None and atspi.role(node) != "application":
+            if not atspi.sensitive(node):
+                return not want
+            node = node.parent
+        return want
+
+    assert atspi.poll(settled), f"the model chooser never became {state}"
+
+
+@step('I select "{model}" in the model selector')
+def step_select_model(context, model):
+    row = atspi.row_containing(content(context), "Active Model", timeout=2)
+    atspi.focus_by_tab(context.app, lambda n: atspi.same_node(n, row), "the Active Model row")
+    atspi.press("space")
+    popover_list = atspi.poll(
+        lambda: next((l for l in atspi.find_all(row, lambda n: atspi.role(n) in ("list", "list box"))
+                      if len([c for c in atspi.children(l) if atspi.role(c) == "list item"]) > 1), None),
+        timeout=3,
+    )
+    assert popover_list is not None, "popover list not found"
+    items = [c for c in atspi.children(popover_list) if atspi.role(c) == "list item"]
+    target_idx = None
+    for idx, item in enumerate(items):
+        if any(atspi.role(c) == "label" and atspi.label_text(c) == model for c in atspi.descendants(item)):
+            target_idx = idx
+            break
+    assert target_idx is not None, f"model {model!r} not found in popover items"
+    popover_list.select_child(target_idx)
+    atspi.press("Return")
+
 @then('the application log shows Agent Mode would {verb:w} its unit and fragment')
 def step_log_would(context, verb):
     unit = stubs_agents.unit_path(context)
