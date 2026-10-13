@@ -3,6 +3,7 @@ package homebrew
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -41,6 +42,31 @@ type UntrustedTap struct {
 	Formulae []string
 	Casks    []string
 }
+
+// Without returns the tap with one package dropped from the namespace kind
+// names, after that package was trusted on its own. The receiver is left
+// untouched, so a copy handed to a running trust keeps its own list.
+func (t UntrustedTap) Without(kind PackageKind, name string) UntrustedTap {
+	drop := func(names []string) []string {
+		kept := make([]string, 0, len(names))
+		for _, n := range names {
+			if n != name {
+				kept = append(kept, n)
+			}
+		}
+		return kept
+	}
+	switch kind {
+	case Formula:
+		t.Formulae = drop(t.Formulae)
+	case Cask:
+		t.Casks = drop(t.Casks)
+	}
+	return t
+}
+
+// Count is how many installed packages from the tap are still untrusted.
+func (t UntrustedTap) Count() int { return len(t.Formulae) + len(t.Casks) }
 
 // parseUntrustedTapNames extracts names of untrusted taps from
 // `brew tap-info --installed --json` output. The "trusted" key was added in
@@ -152,8 +178,70 @@ func brewPrefix() (string, error) {
 	return strings.TrimSpace(output), nil
 }
 
+// trustedPackageSet holds the formulae and casks trusted one by one with
+// `brew trust --formula|--cask`, keyed by lowercased qualified name (brew
+// lowercases every entry it stores).
+type trustedPackageSet struct {
+	formulae map[string]bool
+	casks    map[string]bool
+}
+
+// parseTrustedPackages reads `brew trust --json=v1` output:
+// {"taps": [...], "formulae": [...], "casks": [...], "commands": [...]}.
+func parseTrustedPackages(data []byte) (trustedPackageSet, error) {
+	var entries struct {
+		Formulae []string `json:"formulae"`
+		Casks    []string `json:"casks"`
+	}
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return trustedPackageSet{}, &Error{Message: fmt.Sprintf("failed to parse trust JSON: %v", err)}
+	}
+	set := func(names []string) map[string]bool {
+		m := make(map[string]bool, len(names))
+		for _, n := range names {
+			m[strings.ToLower(n)] = true
+		}
+		return m
+	}
+	return trustedPackageSet{formulae: set(entries.Formulae), casks: set(entries.Casks)}, nil
+}
+
+// trustedPackages returns the per-package trust entries. A tap trusted only
+// package by package still reports trusted: false in tap-info, so without
+// this its trusted programs would be relisted as paused on every load.
+// Homebrew releases without `brew trust --json=v1` yield an empty set: every
+// installed package of an untrusted tap is then listed, as before.
+func trustedPackages() trustedPackageSet {
+	output, err := runBrewCommand("trust", "--json=v1")
+	if err != nil {
+		log.Printf("reading per-package brew trust failed: %v", err)
+		return trustedPackageSet{}
+	}
+	set, err := parseTrustedPackages([]byte(output))
+	if err != nil {
+		log.Printf("reading per-package brew trust failed: %v", err)
+		return trustedPackageSet{}
+	}
+	return set
+}
+
+// withoutTrusted drops the qualified names already in trusted.
+func withoutTrusted(names []string, trusted map[string]bool) []string {
+	if len(trusted) == 0 {
+		return names
+	}
+	var kept []string
+	for _, n := range names {
+		if !trusted[strings.ToLower(n)] {
+			kept = append(kept, n)
+		}
+	}
+	return kept
+}
+
 // ListUntrustedTaps returns untrusted taps that have at least one package
-// installed, with qualified package names ready for `brew trust`.
+// installed and not yet trusted on its own, with qualified package names
+// ready for `brew trust`.
 func ListUntrustedTaps() ([]UntrustedTap, error) {
 	output, err := runBrewCommand("tap-info", "--installed", "--json")
 	if err != nil {
@@ -173,13 +261,14 @@ func ListUntrustedTaps() ([]UntrustedTap, error) {
 	}
 	formulaeByTap := installedFormulaeByTap(filepath.Join(prefix, "Cellar"))
 	casksByTap := installedCasksByTap(filepath.Join(prefix, "Caskroom"))
+	trusted := trustedPackages()
 
 	var result []UntrustedTap
 	for _, name := range names {
 		tap := UntrustedTap{
 			Name:     name,
-			Formulae: formulaeByTap[name],
-			Casks:    casksByTap[name],
+			Formulae: withoutTrusted(formulaeByTap[name], trusted.formulae),
+			Casks:    withoutTrusted(casksByTap[name], trusted.casks),
 		}
 		if len(tap.Formulae) == 0 && len(tap.Casks) == 0 {
 			continue // nothing installed from this tap; not actionable

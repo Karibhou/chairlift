@@ -171,9 +171,19 @@ def step_flatpak_reachable(context):
 
 @then('the {program:w} tool was never asked to "{subcommand}"')
 def step_tool_never_ran(context, program, subcommand):
-    ran = [call for call in _calls(context, program) if call.split(" ", 1)[0] == subcommand]
-    assert not ran, f"{program} received {ran}"
+    def _counts(call):
+        parts = call.split()
+        if not parts or parts[0] != subcommand:
+            return False
+        # Read-only trust store discovery (`brew trust --json=v1`) changes
+        # nothing and is expected during untrusted-tap checks; state-changing
+        # trust mutations still fail.
+        if program == "brew" and subcommand == "trust" and parts == ["trust", "--json=v1"]:
+            return False
+        return True
 
+    ran = [call for call in _calls(context, program) if _counts(call)]
+    assert not ran, f"{program} received {ran}"
 
 # ---------------------------------------------------------------- switches
 

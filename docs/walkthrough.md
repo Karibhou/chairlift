@@ -79,8 +79,10 @@ Each other source keeps its own group for when you want to update just one
 thing: **Apps** lists the Flatpak updates waiting, and **Developer tools**
 lists the command-line tools you installed with Homebrew, with a button to
 check for new versions. If a Homebrew package came from an unofficial source,
-**Unverified sources** asks you to trust that source before it will keep
-updating it.
+**Manage source trust** asks you to trust that source before it will keep
+updating it, with one row per source that opens to show each program with
+its own Trust button, and a Trust Tap button that trusts every program you
+installed from that source.
 
 **Advanced** sits last and holds the two choices that replace the operating
 system itself, because both land through an update and both need a restart.
@@ -247,12 +249,12 @@ Rotation changes the real login schedule with its preferences, and a failed
 save restores confirmed state.
 
 **Profile Picture** is the picture on your login and lock screens. Pick one of
-Project Bluefin's dinosaurs and Control Center downloads that one illustration
-to preview it; nothing changes until you press Apply. If the download or the
-change fails, the chooser says so and your old picture stays put. Where
-AccountsService is unavailable the picture is saved to your home folder
-instead and appears after you log out and back in, and the confirmation says which of
-the two happened.
+Project Bluefin's dinosaurs and Control Center shows its picture from the copy
+bundled with the app; nothing changes until you press Apply. If the picture
+cannot be shown or the change fails, the chooser says so and your old picture
+stays put. Where AccountsService is unavailable the picture is saved to your
+home folder instead and appears after you log out and back in, and the
+confirmation says which of the two happened.
 
 **App Launcher Icon** is your own mark on the Show Applications button on
 GNOME. On KDE Plasma, the same chooser updates each configured Kickoff applet;

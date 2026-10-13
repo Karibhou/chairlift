@@ -14,12 +14,21 @@ import (
 )
 
 // AvatarSize is the edge length, in pixels, of the square canvas every
-// transcoded avatar PNG is scaled to.
+// *applied* avatar PNG is scaled to. AccountsService and the display manager
+// read that file, so it stays large enough for the login screen and HiDPI.
 const AvatarSize = 512
 
-// MaxPNGBytes is the byte ceiling on one encoded avatar PNG: 1 MiB
+// PreviewSize is the edge length, in pixels, of the square canvas the picker's
+// on-screen preview is scaled to. The AdwAvatar it feeds is 128 logical pixels,
+// so AvatarSize would encode detail the screen cannot show.
+const PreviewSize = 256
+
+// MaxPNGBytes is the byte ceiling on one encoded applied-avatar PNG: 1 MiB
 // (1,048,576 bytes).
 const MaxPNGBytes = 1 << 20
+
+// MaxPreviewPNGBytes is the byte ceiling on one encoded preview PNG: 512 KiB.
+const MaxPreviewPNGBytes = 512 << 10
 
 // MaxWebPBytes is the byte ceiling on the encoded WebP handed to
 // TranscodeWebPToPNG: 4 MiB. The catalog's own artwork is two orders of
@@ -62,22 +71,24 @@ var ErrSourceTooLarge = errors.New("avatar: source WebP exceeds the input bounds
 // again, so the artwork's visible content (its non-transparent bounding box)
 // is scaled, without stretching, until its diagonal fits the circle.
 func TranscodeWebPToPNG(r io.Reader) ([]byte, error) {
-	return transcodeWebPToPNG(r, MaxPNGBytes)
+	return transcodeWebPToPNG(r, AvatarSize, MaxPNGBytes)
 }
 
-// transcodeWebPToPNG is the testable core of TranscodeWebPToPNG: ceiling is
-// the byte budget every attempt must fit, the seam through which tests reach
-// the ErrAvatarTooLarge path with a budget no PNG can meet.
+// TranscodePreviewWebPToPNG is TranscodeWebPToPNG at PreviewSize.
+func TranscodePreviewWebPToPNG(r io.Reader) ([]byte, error) {
+	return transcodeWebPToPNG(r, PreviewSize, MaxPreviewPNGBytes)
+}
+
+// transcodeWebPToPNG is the core of TranscodeWebPToPNG and
+// TranscodePreviewWebPToPNG: size is the canvas edge every attempt is scaled to
+// and ceiling the byte budget each attempt must fit.
 //
-// The reduction ladder is load-bearing, not defensive. A 512x512 RGBA scanline
-// stream is 512*(2048+1) = 1,049,088 bytes of PNG-filtered data before deflate
-// even runs — already above the 1,048,576-byte ceiling — so content that does
-// not compress can never fit at full size. Each rung below the first scales
-// the decoded image to the next edge length and re-encodes; at AvatarSize/2
-// the raw stream is 256*(1024+1) = 262,400 bytes, a quarter of the ceiling, so
-// reduction essentially always succeeds, and ErrAvatarTooLarge stays as the
-// explicit contract for an injected ceiling or a future ladder change.
-func transcodeWebPToPNG(r io.Reader, ceiling int) ([]byte, error) {
+// The reduction ladder is load-bearing, not defensive: a 512x512 RGBA scanline
+// stream already exceeds MaxPNGBytes before deflate runs, so content that does
+// not compress cannot fit at full size. At the last rung (size/2) the raw
+// stream is a quarter of the first rung's, which is what makes an
+// incompressible frame fit.
+func transcodeWebPToPNG(r io.Reader, size, ceiling int) ([]byte, error) {
 	encoded, err := readBoundedWebP(r)
 	if err != nil {
 		return nil, err
@@ -95,9 +106,9 @@ func transcodeWebPToPNG(r io.Reader, ceiling int) ([]byte, error) {
 	}
 	content := visibleBounds(src)
 	enc := png.Encoder{CompressionLevel: png.BestCompression}
-	for _, edge := range [3]int{AvatarSize, AvatarSize * 3 / 4, AvatarSize / 2} {
-		dst := image.NewNRGBA(image.Rect(0, 0, edge, edge))
-		draw.CatmullRom.Scale(dst, fitInCircle(content, edge), src, content, draw.Src, nil)
+	for _, rung := range [3]int{size, size * 3 / 4, size / 2} {
+		dst := image.NewNRGBA(image.Rect(0, 0, rung, rung))
+		draw.CatmullRom.Scale(dst, fitInCircle(content, rung), src, content, draw.Src, nil)
 		var buf bytes.Buffer
 		if err := enc.Encode(&buf, dst); err != nil {
 			return nil, fmt.Errorf("avatar: encoding PNG: %w", err)
@@ -129,8 +140,30 @@ func readBoundedWebP(r io.Reader) ([]byte, error) {
 // visibleBounds is the bounding box of src's non-transparent pixels, so
 // transparent margins in the artwork do not shrink the character. A fully
 // transparent frame keeps its whole bounds.
+//
+// The per-pixel At() scan dominates the transcode on large artwork, so the
+// concrete types golang.org/x/image/webp returns are read through their own
+// alpha storage instead; any other type falls back to the generic scan.
 func visibleBounds(src image.Image) image.Rectangle {
 	b := src.Bounds()
+	switch img := src.(type) {
+	case *image.YCbCr:
+		// No alpha channel: every pixel is visible.
+		return b
+	case *image.NYCbCrA:
+		if box, ok := alphaBounds(img.A, img.AStride, 1, b); ok {
+			return box
+		}
+	case *image.NRGBA:
+		if box, ok := alphaBounds(img.Pix, img.Stride, 4, b); ok {
+			return box
+		}
+	case *image.RGBA:
+		if box, ok := alphaBounds(img.Pix, img.Stride, 4, b); ok {
+			return box
+		}
+	}
+
 	box := image.Rectangle{}
 	for y := b.Min.Y; y < b.Max.Y; y++ {
 		for x := b.Min.X; x < b.Max.X; x++ {
@@ -143,6 +176,40 @@ func visibleBounds(src image.Image) image.Rectangle {
 		return b
 	}
 	return box
+}
+
+// alphaBounds returns the bounding box of the non-zero entries in a row-major
+// alpha plane: one entry per pixel, step bytes apart, stride bytes per row. It
+// reports false when no pixel is visible, leaving the caller's whole-bounds
+// fallback to apply.
+func alphaBounds(plane []byte, stride, step int, b image.Rectangle) (image.Rectangle, bool) {
+	minX, minY := b.Max.X, b.Max.Y
+	maxX, maxY := b.Min.X, b.Min.Y
+	found := false
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		row := plane[(y-b.Min.Y)*stride:]
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if row[(x-b.Min.X)*step+step-1] != 0 {
+				found = true
+				if x < minX {
+					minX = x
+				}
+				if x+1 > maxX {
+					maxX = x + 1
+				}
+				if y < minY {
+					minY = y
+				}
+				if y+1 > maxY {
+					maxY = y + 1
+				}
+			}
+		}
+	}
+	if !found {
+		return image.Rectangle{}, false
+	}
+	return image.Rect(minX, minY, maxX, maxY), true
 }
 
 // fitInCircle returns the destination rectangle, centred on an edge x edge

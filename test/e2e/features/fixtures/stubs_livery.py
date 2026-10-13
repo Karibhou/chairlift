@@ -189,8 +189,8 @@ def livery_offline(context):
     """No artwork service is reachable: every HTTPS fetch is refused.
 
     Go's default transport honours the proxy variables, so pointing them at
-    a closed loopback port makes simpleicons.org, cncf/artwork, and the
-    avatar artwork fail fast and identically on every runner.
+    a closed loopback port makes simpleicons.org and cncf/artwork fail fast
+    and identically on every runner.
     """
     for key in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
         context.launch_env[key] = "http://127.0.0.1:9"

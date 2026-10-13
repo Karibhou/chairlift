@@ -74,7 +74,8 @@ type UserHome struct {
 	brewBundlesGroup   *adw.PreferencesGroup
 	appInstallProgress installProgress
 	brewTrustGroup     *adw.PreferencesGroup
-	brewTrustRows      map[string]*adw.ActionRow
+	brewTrustTaps      map[string]*untrustedTapEntry // tap name -> its expander and remaining packages
+	brewTrustError     *adw.ActionRow                // failed discovery row, nil otherwise
 	bundleButtons      buttonRoute
 	// Bundle collection checkboxes and unified install controls.
 	bundleItems          []*bundleItemRow

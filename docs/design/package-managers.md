@@ -295,7 +295,11 @@ checked and made insensitive, and its subtitle indicates installed status.
 `brew tap-info --installed --json` with on-disk installation receipts:
 `<prefix>/Cellar/<formula>/<version>/INSTALL_RECEIPT.json` and
 `<prefix>/Caskroom/<token>/.metadata/INSTALL_RECEIPT.json`, reading `source.tap`.
-Only untrusted taps with installed packages are actionable. A missing `trusted`
+Packages already trusted on their own are dropped using `brew trust --json=v1`
+(the only `brew trust` argv classified read-only), because per-package trust
+leaves the tap itself untrusted in `tap-info`; Homebrew without that flag lists
+every installed package. Only untrusted taps with installed, not yet trusted
+packages are actionable. A missing `trusted`
 field on older Homebrew is treated as trusted, not false.
 Every `tap-info` call runs with `HOMEBREW_NO_GITHUB_API=1`: its JSON also
 reports whether each tap is private, which brew asks the GitHub API, and on
@@ -303,12 +307,24 @@ Linux that credential probe intermittently kills the command with
 `Error: Broken pipe`. Trust is local, so nothing ChairLift reads is lost.
 
 `TrustPackages` runs `brew trust --formula ...` and/or `--cask ...` with
-qualified installed package names. Trust is per-user, never pkexec.
+qualified installed package names. `TrustFormula`/`TrustCask` are the
+per-package path that issue #537 asks for: each installed package inside a
+tap's row carries a Trust button, and Homebrew 6's `brew trust --formula <name>`
+adds only that one package to `~/.homebrew/trust.json`. The tap-level
+**Trust Tap** button runs `TrustPackages`, trusting every *installed* package
+from the tap at once; it does not run `brew trust --tap`. Rows are tracked by
+package kind as well as name, because a tap may ship a formula and a cask with
+the same name. A failed discovery row is a direct child of the group, never
+inside a collapsed expander. Trust is per-user, never pkexec.
 [`updates_page.go`](../../internal/views/updates_page.go) confirms source trust
 before running it. Failed discovery retains a visible Retry action. Live
-success removes only the trusted source row and starts the coordinator's
-shared check; preview restores Trust without removing a row. The
-configuration-gated **Unverified sources** group may not exist, so
+success removes only the trusted source row (and, for per-package trust, the
+trusted package's row inside the parent expander) and starts the coordinator's
+shared check. A per-package success also drops the package from the tap's
+remaining `UntrustedTap` (`Without`), so the expander's count, the
+**Trust Tap** dialog (`pageview.TapTrustConfirmation`), and a later tap-wide
+trust cover only what is left. Preview restores Trust without removing a row. The
+configuration-gated **Manage source trust** group may not exist, so
 `trustmsg.UpgradeMessage(name, trustGroupAvailable)` must not direct the user
 to a hidden control. Bundle failures use `trustmsg.BundleMessage` instead.
 

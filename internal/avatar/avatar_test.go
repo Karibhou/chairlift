@@ -1,22 +1,21 @@
 package avatar
 
 import (
-	"context"
+	"bytes"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"path"
 	"strings"
 	"testing"
 )
 
-// swapFetch points the network seam at fn for one test and restores the real
-// one afterwards, so no test leaves production behavior replaced.
-func swapFetch(t *testing.T, fn FetchFunc) {
+// swapLocalArtwork points the bundled-artwork seam at fn for one test and
+// restores the real one afterwards, so a test can reach the missing-artwork
+// path without the embedded copy answering first.
+func swapLocalArtwork(t *testing.T, fn ArtworkFunc) {
 	t.Helper()
-	original := Fetch
-	Fetch = fn
-	t.Cleanup(func() { Fetch = original })
+	original := LocalArtwork
+	LocalArtwork = fn
+	t.Cleanup(func() { LocalArtwork = original })
 }
 
 func TestCatalogParsesEveryManifestLine(t *testing.T) {
@@ -67,6 +66,21 @@ func TestCatalogIdentifiersAndPathsAreUnique(t *testing.T) {
 // TestCatalogSpeciesAreUnique keeps the chooser from offering one dinosaur
 // twice under two names (#536: "Torosaurus" and "Bob" were both
 // Torosaurus latus).
+// TestCatalogArtworkBaseNamesAreUnique keeps the flat bundle addressable per
+// entry. The repository's tree is not flat, so the bundled copy is keyed by
+// base name; two paths sharing one would silently serve a single file for
+// both entries and every other coverage test would still pass.
+func TestCatalogArtworkBaseNamesAreUnique(t *testing.T) {
+	seen := map[string]string{}
+	for _, entry := range Catalog() {
+		base := path.Base(entry.Path)
+		if previous, ok := seen[base]; ok {
+			t.Errorf("base name %q belongs to both %q and %q", base, previous, entry.ID)
+		}
+		seen[base] = entry.ID
+	}
+}
+
 func TestCatalogSpeciesAreUnique(t *testing.T) {
 	seen := make(map[string]string)
 	for _, entry := range Catalog() {
@@ -167,136 +181,54 @@ func TestLookupPathRejectsPathsNoColumnCarries(t *testing.T) {
 	}
 }
 
-func TestArtworkURLIsDerivedFromPathAtThePinnedCommit(t *testing.T) {
-	const wantPrefix = "https://raw.githubusercontent.com/projectbluefin/website/" + PinnedCommit + "/"
-
-	if !strings.Contains(SourceRepository, "projectbluefin/website") {
-		t.Errorf("SourceRepository = %q, want the artwork's own repository", SourceRepository)
-	}
-	for _, entry := range Catalog() {
-		got := ArtworkURL(entry)
-		if got != wantPrefix+entry.Path {
-			t.Errorf("ArtworkURL(%s) = %q, want %q", entry.ID, got, wantPrefix+entry.Path)
-		}
-	}
-}
-
-func TestFetchAvatarRequestsTheLiteralPathForEveryID(t *testing.T) {
-	var requested []string
-	swapFetch(t, func(_ context.Context, url string) ([]byte, error) {
-		requested = append(requested, url)
-		return []byte("webp"), nil
-	})
-
-	for _, entry := range Catalog() {
-		if _, err := FetchAvatar(context.Background(), entry.ID); err != nil {
-			t.Fatalf("FetchAvatar(%q): %v", entry.ID, err)
-		}
-	}
-
-	if len(requested) != len(Catalog()) {
-		t.Fatalf("made %d requests for %d catalog entries", len(requested), len(Catalog()))
-	}
-	for i, entry := range Catalog() {
-		want := dinoArtworkRaw + entry.Path
-		if requested[i] != want {
-			t.Errorf("request %d was %q, want %q (literal Path column, not a derived filename)",
-				i, requested[i], want)
-		}
-	}
-}
-
-func TestFetchAvatarRejectsAnUnknownIDBeforeAnyRequest(t *testing.T) {
-	called := false
-	swapFetch(t, func(_ context.Context, _ string) ([]byte, error) {
-		called = true
-		return nil, nil
-	})
-
-	if _, err := FetchAvatar(context.Background(), "stegosaurus"); !errors.Is(err, ErrAvatarNotFound) {
+func TestFetchAvatarRejectsAnUnknownID(t *testing.T) {
+	if _, err := FetchAvatar("stegosaurus"); !errors.Is(err, ErrAvatarNotFound) {
 		t.Errorf("FetchAvatar(unknown) error = %v, want ErrAvatarNotFound", err)
 	}
-	if called {
-		t.Error("an unknown id reached the network; the catalog must answer first")
+}
+
+// TestFetchAvatarReportsAMissingBundledArtwork keeps a manifest row added
+// without its illustration a named failure. Without the bundle the entry
+// would otherwise render as an empty preview the chooser cannot explain.
+func TestFetchAvatarReportsAMissingBundledArtwork(t *testing.T) {
+	swapLocalArtwork(t, func(string) ([]byte, bool) { return nil, false })
+
+	if _, err := FetchAvatar("karl"); !errors.Is(err, ErrArtworkNotFound) {
+		t.Errorf("FetchAvatar without a bundled copy error = %v, want ErrArtworkNotFound", err)
 	}
 }
 
-func TestFetchAvatarPropagatesTheSeamError(t *testing.T) {
-	want := errors.New("boom")
-	swapFetch(t, func(_ context.Context, _ string) ([]byte, error) { return nil, want })
-
-	if _, err := FetchAvatar(context.Background(), "karl"); !errors.Is(err, want) {
-		t.Errorf("FetchAvatar error = %v, want %v", err, want)
-	}
-}
-
-func TestHTTPFetchReportsMissingArtwork(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.NotFound(w, nil)
-	}))
-	defer server.Close()
-
-	if _, err := httpFetch(context.Background(), server.URL+"/public/characters/gone.webp"); !errors.Is(err, ErrArtworkNotFound) {
-		t.Errorf("httpFetch(404) error = %v, want ErrArtworkNotFound", err)
-	}
-}
-
-func TestHTTPFetchReportsOtherFailures(t *testing.T) {
-	for _, status := range []int{http.StatusForbidden, http.StatusInternalServerError, http.StatusBadGateway} {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(status)
-		}))
-
-		_, err := httpFetch(context.Background(), server.URL)
-		server.Close()
-
-		if err == nil {
-			t.Errorf("httpFetch(%d) returned no error", status)
+// TestEmbeddedArtworkCoversEveryCatalogEntry guards the bundled set against
+// drift: a manifest row whose illustration was never committed is
+// ErrArtworkNotFound the moment a pick lands, so this catches it before a
+// user does.
+func TestEmbeddedArtworkCoversEveryCatalogEntry(t *testing.T) {
+	for _, entry := range Catalog() {
+		data, ok := embeddedArtwork(entry.Path)
+		if !ok {
+			t.Errorf("no embedded artwork for %s (%s)", entry.ID, entry.Path)
 			continue
 		}
-		if errors.Is(err, ErrArtworkNotFound) {
-			t.Errorf("httpFetch(%d) reported a missing file: %v", status, err)
+		if len(data) < 12 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WEBP" {
+			t.Errorf("%s: embedded artwork is not a WebP container (%d bytes)", entry.ID, len(data))
 		}
 	}
 }
 
-func TestHTTPFetchReturnsTheBodyAndReadsNothingPastTheLimit(t *testing.T) {
-	const want = "RIFF....WEBP"
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(want))
-	}))
-	defer server.Close()
-
-	got, err := httpFetch(context.Background(), server.URL)
-	if err != nil {
-		t.Fatalf("httpFetch: %v", err)
-	}
-	if string(got) != want {
-		t.Errorf("httpFetch body = %q, want %q", got, want)
-	}
-}
-
-func TestHTTPFetchRejectsArtworkPastTheLimit(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write(make([]byte, maxArtworkBytes+1))
-	}))
-	defer server.Close()
-
-	if _, err := httpFetch(context.Background(), server.URL); err == nil {
-		t.Fatal("httpFetch accepted a body past the size limit")
-	}
-}
-
-func TestHTTPFetchHonorsContextCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("late"))
-	}))
-	defer server.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	if _, err := httpFetch(ctx, server.URL); err == nil {
-		t.Error("httpFetch returned no error for a cancelled context")
+// TestFetchAvatarReturnsTheBundledArtwork pins where every catalog entry is
+// read from: the copy in the binary, not a service the chooser has to reach.
+func TestFetchAvatarReturnsTheBundledArtwork(t *testing.T) {
+	for _, entry := range Catalog() {
+		got, err := FetchAvatar(entry.ID)
+		if err != nil {
+			t.Fatalf("FetchAvatar(%q): %v", entry.ID, err)
+		}
+		want, ok := embeddedArtwork(entry.Path)
+		if !ok {
+			t.Fatalf("no bundled artwork for %s", entry.ID)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("FetchAvatar(%q) did not return the bundled artwork", entry.ID)
+		}
 	}
 }
