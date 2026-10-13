@@ -58,7 +58,7 @@ Feature: Agents page
     Given ChairLift is running
     When I open the "Agents" page
     Then the "Agent Mode" row says "Ready."
-    And the "Active Model" row says "No model selected. Use Manage Models to pick one."
+    And the "Active Model" row says "No model selected. Pick a downloaded model."
 
   @stub.agents.llmman @stub.agents.unit
   Scenario: An installed unit whose daemon does not answer stays visibly unavailable

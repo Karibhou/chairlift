@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -22,6 +24,18 @@ type NodeStatus struct {
 func (n NodeStatus) Models() []string {
 	return slices.Sorted(maps.Keys(n.Stored))
 }
+
+// SameModelRef reports whether two model references name the same model,
+// treating the hf.co/ registry prefix as optional: llmman may store a model
+// with or without it while the alias carries the other form.
+func SameModelRef(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return strings.TrimPrefix(a, hfPrefix) == strings.TrimPrefix(b, hfPrefix)
+}
+
+const hfPrefix = "hf.co/"
 
 // FetchNodeStatus queries /llmman/node for available models and memory.
 func FetchNodeStatus(ctx context.Context) (NodeStatus, error) {
@@ -50,6 +64,7 @@ func FetchNodeStatus(ctx context.Context) (NodeStatus, error) {
 // the local model daemon so it serves the new selection.
 func ConfigureActiveModel(ctx context.Context, modelRef string) error {
 	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would set llmman alias %s to %s and restart %s", ActiveModelAlias, modelRef, ServiceName)
 		return nil
 	}
 	exe := Executable()

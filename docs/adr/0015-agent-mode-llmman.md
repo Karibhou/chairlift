@@ -2,6 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-24
+- **Amended:** 2026-10-11 — ChairLift now writes the `bluefin-active` alias
+  when the user picks a downloaded model on the Active Model row
+  ([ADR-0021](0021-active-model-selection-from-downloaded-models.md))
 
 ## Context
 
@@ -72,10 +75,12 @@ insensitive until ready, with the unmet prerequisite shown. An empty alias
 means no model is selected, never an invented Qwen default. Readiness and
 model reads are generation-guarded. A failed operation re-observes the unit
 and endpoint rather than assuming nothing changed.
-The model alias lives in llmman's configuration: ChairLift only reads it
-back via `llmman config get`, never writes it (#568). Selection happens in
-llmman's own models page, which the Agents page's **Manage Models** row
-opens. llmman reads aliases at startup: a saved alias alone does not prove
+The model alias lives in llmman's configuration: ChairLift reads it back via
+`llmman config get` and, since
+[ADR-0021](0021-active-model-selection-from-downloaded-models.md), writes it
+only when the user picks a downloaded model on the Active Model row.
+Downloads stay in llmman's own models page, which the Agents page's
+**Manage Models** row opens. llmman reads aliases at startup: a saved alias alone does not prove
 that the running daemon can serve it. A missing alias is the ordinary
 no-selection state.
 

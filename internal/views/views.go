@@ -268,7 +268,7 @@ type UserHome struct {
 	agentModeRow       *adw.ActionRow
 	agentModelRow      *adw.ComboRow
 	agentModelSpinner  *gtk.Spinner
-	agentModelSuppress bool
+	agentModelSuppress int
 	agentModelList     []string
 	agentModelActive   string
 	agentModelSelected uint32
@@ -277,7 +277,8 @@ type UserHome struct {
 	agentModeState     aistack.State
 	agentModeGate      actionstate.Gate
 	agentRefresh       actionstate.RefreshGate
-	// agentManageRow opens llmman's models page, where users pick a model.
+	// agentManageRow opens llmman's models page, where users pull and remove
+	// models; agentModelRow picks among the downloaded ones.
 	agentManageRow *adw.ActionRow
 
 	// Troubleshooting (agents_page troubleshooting_group): the Goose row, which

@@ -3,6 +3,7 @@ package aistack
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -68,15 +69,50 @@ func TestConfigureActiveModel(t *testing.T) {
 		t.Fatalf("ConfigureActiveModel failed: %v", err)
 	}
 
-	wantCall := "llmman config set aliases.bluefin-active hf.co/unsloth/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"
-	var foundConfig bool
-	for _, call := range h.calls {
-		if call == wantCall {
-			foundConfig = true
-			break
-		}
+	setCall := "llmman config set aliases.bluefin-active hf.co/unsloth/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"
+	restartCall := "systemctl --user restart " + ServiceName
+	setAt, restartAt := slices.Index(h.calls, setCall), slices.Index(h.calls, restartCall)
+	if setAt < 0 {
+		t.Fatalf("expected call %q in %v", setCall, h.calls)
 	}
-	if !foundConfig {
-		t.Errorf("expected call %q in %v", wantCall, h.calls)
+	if restartAt < setAt {
+		t.Errorf("restart did not follow the alias write: %v", h.calls)
+	}
+}
+
+func TestConfigureActiveModelSetFailureSkipsRestart(t *testing.T) {
+	h := newHost(t)
+	unit, _ := RenderUnit(h.exe)
+	path, _ := UnitPath()
+	if err := writeAtomic(path, unit); err != nil {
+		t.Fatal(err)
+	}
+	ref := "hf.co/unsloth/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"
+	h.fail["llmman config set aliases.bluefin-active "+ref] = errors.New("config locked")
+
+	if err := ConfigureActiveModel(context.Background(), ref); err == nil {
+		t.Fatal("ConfigureActiveModel succeeded with a failed alias write")
+	}
+	if slices.Contains(h.calls, "systemctl --user restart "+ServiceName) {
+		t.Errorf("restarted after a failed alias write: %v", h.calls)
+	}
+}
+
+func TestSameModelRef(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"unsloth/Qwen:Q4", "unsloth/Qwen:Q4", true},
+		{"unsloth/Qwen:Q4", "hf.co/unsloth/Qwen:Q4", true},
+		{"hf.co/unsloth/Qwen:Q4", "unsloth/Qwen:Q4", true},
+		{"hf.co/unsloth/Qwen:Q4", "hf.co/unsloth/Qwen:Q4", true},
+		{"unsloth/Qwen:Q4", "unsloth/Qwen:Q8", false},
+		{"unsloth/Qwen:Q4", "", false},
+		{"", "", false},
+	} {
+		if got := SameModelRef(tc.a, tc.b); got != tc.want {
+			t.Errorf("SameModelRef(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
 	}
 }

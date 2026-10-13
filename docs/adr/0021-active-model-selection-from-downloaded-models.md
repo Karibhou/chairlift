@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-11
+- **Amends:** [ADR-0015](0015-agent-mode-llmman.md) — reverses its "ChairLift
+  only reads the alias, never writes it" rule; the rest of 0015 stands
 
 ## Context
 
@@ -29,9 +31,12 @@ over the loopback `/llmman/node` endpoint.
    restarts the loopback service so the selection immediately takes effect for
    Goose and local API clients.
 4. **Re-entry safety**: Programmatic updates to the ComboRow during state
-   restoration or refresh hold an explicit suppression flag (`agentModelSuppress`)
-   and maintain `agentModelActive` to prevent recursive event loops and
-   unintended service restarts.
+   restoration or refresh run inside a nesting suppression guard
+   (`withModelRowSuppressed`) and maintain `agentModelActive` to prevent
+   recursive event loops and unintended service restarts.
+5. **Failure re-observes**: A failed selection may leave the alias rewritten
+   and the daemon down, so, as ADR-0015 requires, the page re-observes the
+   unit and endpoint rather than restoring the cached state.
 
 ## Consequences
 

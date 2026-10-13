@@ -139,15 +139,24 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	}()
 }
 
+// withModelRowSuppressed runs fn while programmatic writes to the Active
+// Model row are hidden from onAgentModelSelected. It nests: an inner call
+// cannot clear the guard an outer caller still relies on.
+func (uh *UserHome) withModelRowSuppressed(fn func()) {
+	uh.agentModelSuppress++
+	defer func() { uh.agentModelSuppress-- }()
+	fn()
+}
+
 func (uh *UserHome) showAgentModeState(state aistack.State) {
 	uh.agentModeState = state
 	generation := uh.agentRefresh.Begin()
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeSubtitle(state))
 	ready := state == aistack.StateReady
-	uh.agentModelSuppress = true
-	uh.agentModelRow.SetSensitive(ready)
-	uh.agentModelRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
-	uh.agentModelSuppress = false
+	uh.withModelRowSuppressed(func() {
+		uh.agentModelRow.SetSensitive(ready)
+		uh.agentModelRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
+	})
 	if uh.agentManageRow != nil {
 		uh.agentManageRow.SetVisible(ready)
 	}
@@ -156,9 +165,9 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	if !ready {
 		return
 	}
-	uh.agentModelSuppress = true
-	uh.agentModelRow.SetSubtitle("Checking…")
-	uh.agentModelSuppress = false
+	uh.withModelRowSuppressed(func() {
+		uh.agentModelRow.SetSubtitle("Checking…")
+	})
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
@@ -168,48 +177,41 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 			if !uh.agentRefresh.IsCurrent(generation) {
 				return
 			}
-			if errNode != nil || errAlias != nil {
-				log.Printf("views: read active model failed: node=%v alias=%v", errNode, errAlias)
-				uh.agentModelSuppress = true
-				uh.agentModelRow.SetSensitive(false)
-				uh.agentModelRow.SetSubtitle("Couldn't check the model. Use Manage Models to pick one.")
-				uh.agentModelSuppress = false
-				return
-			}
-			models := node.Models()
-			uh.agentModelSuppress = true
-			uh.agentModelList = models
-			uh.agentModelActive = modelRef
-			uh.agentModelRow.SetModel(gtk.NewStringList(models))
-			if len(models) == 0 {
-				uh.agentModelRow.SetSensitive(false)
-				uh.agentModelRow.SetSubtitle(pageview.AgentModeNoModelsStoredSubtitle())
-			} else {
+			uh.withModelRowSuppressed(func() {
+				if errNode != nil || errAlias != nil {
+					log.Printf("views: read active model failed: node=%v alias=%v", errNode, errAlias)
+					uh.agentModelRow.SetSensitive(false)
+					uh.agentModelRow.SetSubtitle("Couldn't check the model.")
+					return
+				}
+				models := node.Models()
+				uh.agentModelList = models
+				uh.agentModelActive = modelRef
+				uh.agentModelRow.SetModel(gtk.NewStringList(models))
+				if len(models) == 0 {
+					uh.agentModelRow.SetSensitive(false)
+					uh.agentModelRow.SetSubtitle(pageview.AgentModeNoModelsStoredSubtitle())
+					return
+				}
 				uh.agentModelRow.SetSensitive(true)
-				selectedIndex := -1
+				selected := gtk.INVALID_LIST_POSITION
 				for i, m := range models {
-					if m == modelRef || "hf.co/"+m == modelRef || m == "hf.co/"+modelRef {
-						selectedIndex = i
+					if aistack.SameModelRef(m, modelRef) {
+						selected = uint32(i)
 						break
 					}
 				}
-				if selectedIndex >= 0 {
-					uh.agentModelRow.SetSelected(uint32(selectedIndex))
-					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-				} else {
-					uh.agentModelRow.SetSelected(gtk.INVALID_LIST_POSITION)
-					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-				}
+				uh.agentModelRow.SetSelected(selected)
+				uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
 				uh.agentModelSelected = uh.agentModelRow.GetSelected()
-			}
-			uh.agentModelSuppress = false
+			})
 		})
 	}()
 	uh.refreshGooseState()
 }
 
 func (uh *UserHome) onAgentModelSelected() {
-	if uh.agentModelSuppress || uh.agentModeState != aistack.StateReady {
+	if uh.agentModelSuppress > 0 || uh.agentModeState != aistack.StateReady {
 		return
 	}
 	pos := uh.agentModelRow.GetSelected()
@@ -217,7 +219,7 @@ func (uh *UserHome) onAgentModelSelected() {
 		return
 	}
 	targetModel := uh.agentModelList[pos]
-	if targetModel == uh.agentModelActive || "hf.co/"+targetModel == uh.agentModelActive || targetModel == "hf.co/"+uh.agentModelActive {
+	if aistack.SameModelRef(targetModel, uh.agentModelActive) {
 		return
 	}
 	if !uh.agentModeGate.TryStart() {
@@ -226,34 +228,50 @@ func (uh *UserHome) onAgentModelSelected() {
 	uh.agentModelSelected = pos
 	setActivitySpinner(uh.agentModelSpinner, true)
 	uh.agentModeToggle.widget.SetSensitive(false)
-	uh.agentModelRow.SetSensitive(false)
+	uh.withModelRowSuppressed(func() {
+		uh.agentModelRow.SetSensitive(false)
+	})
 	uh.agentRefresh.Begin()
+	dryRun := dryrun.Enabled()
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
 		var err error
-		if dryrun.Enabled() {
+		var facts aistack.Facts
+		if dryRun {
 			log.Printf("[DRY-RUN] would configure alias %s to %s", aistack.ActiveModelAlias, targetModel)
 		} else {
 			err = aistack.ConfigureActiveModel(ctx, targetModel)
 		}
+		if err != nil {
+			// The alias may already be rewritten and the daemon down:
+			// re-observe instead of trusting the pre-selection state.
+			facts = aistack.Observe(true)
+			if facts.UnitPresent {
+				facts.Checked = true
+				facts.Healthy = aistack.Healthy(context.Background())
+			}
+		}
 		sgtk.RunOnMainThread(func() {
-			uh.agentModelSuppress = true
 			uh.agentModeGate.Reset()
 			uh.agentModeToggle.widget.SetSensitive(true)
-			uh.agentModelRow.SetSensitive(true)
 			setActivitySpinner(uh.agentModelSpinner, false)
-			if err != nil {
+			state := uh.agentModeState
+			switch {
+			case err != nil:
 				log.Printf("views: configure active model failed: %v", err)
 				uh.toastAdder.ShowErrorToast("Could not select the model.")
-			} else if dryrun.Enabled() {
+				state = aistack.Resolve(facts)
+				uh.agentModeToggle.set(state.On())
+			case dryRun:
 				uh.toastAdder.ShowToast(fmt.Sprintf("[DRY-RUN] Would switch to %s", targetModel))
-			} else {
+			default:
 				uh.agentModelActive = targetModel
 				uh.toastAdder.ShowToast(fmt.Sprintf("Selected %s.", targetModel))
 			}
-			uh.showAgentModeState(uh.agentModeState)
-			uh.agentModelSuppress = false
+			uh.withModelRowSuppressed(func() {
+				uh.showAgentModeState(state)
+			})
 		})
 	}()
 }
@@ -266,9 +284,11 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 	previous := uh.agentModeState
 	uh.agentRefresh.Begin()
 	toggle.widget.SetSensitive(false)
-	uh.agentModelRow.SetSensitive(false)
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeWorkingSubtitle(enabled))
-	uh.agentModelRow.SetSubtitle("Waiting for Agent Mode…")
+	uh.withModelRowSuppressed(func() {
+		uh.agentModelRow.SetSensitive(false)
+		uh.agentModelRow.SetSubtitle("Waiting for Agent Mode…")
+	})
 	setActivitySpinner(uh.agentModeSpinner, true)
 	dryRun := dryrun.Enabled()
 	go func() {

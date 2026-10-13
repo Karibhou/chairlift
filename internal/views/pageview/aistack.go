@@ -54,7 +54,7 @@ func AgentModeActiveModelTitle() string {
 
 func AgentModeActiveModelSubtitle(modelRef string) string {
 	if modelRef == "" {
-		return "No model selected. Use Manage Models to pick one."
+		return "No model selected. Pick a downloaded model."
 	}
 	return modelRef
 }
