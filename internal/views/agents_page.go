@@ -66,6 +66,7 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	modelRow.SetTitle(pageview.AgentModeActiveModelTitle())
 	uh.agentModelRow = modelRow
 	uh.agentModelSpinner = newActivitySpinner()
+	uh.agentModelSelected = gtk.INVALID_LIST_POSITION
 	modelRow.AddSuffix(&uh.agentModelSpinner.Widget)
 	uh.agentModelNotify = func(_ gobject.Object, _ uintptr) {
 		uh.onAgentModelSelected()
@@ -197,8 +198,9 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
 				} else {
 					uh.agentModelRow.SetSelected(gtk.INVALID_LIST_POSITION)
-					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(""))
+					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
 				}
+				uh.agentModelSelected = uh.agentModelRow.GetSelected()
 			}
 			uh.agentModelSuppress = false
 		})
@@ -207,11 +209,11 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 }
 
 func (uh *UserHome) onAgentModelSelected() {
-	if uh.agentModelSuppress || uh.agentModeState != aistack.StateReady || uh.agentModelActive == "" {
+	if uh.agentModelSuppress || uh.agentModeState != aistack.StateReady {
 		return
 	}
 	pos := uh.agentModelRow.GetSelected()
-	if pos == gtk.INVALID_LIST_POSITION || int(pos) >= len(uh.agentModelList) {
+	if pos == gtk.INVALID_LIST_POSITION || int(pos) >= len(uh.agentModelList) || pos == uh.agentModelSelected {
 		return
 	}
 	targetModel := uh.agentModelList[pos]
@@ -221,6 +223,7 @@ func (uh *UserHome) onAgentModelSelected() {
 	if !uh.agentModeGate.TryStart() {
 		return
 	}
+	uh.agentModelSelected = pos
 	setActivitySpinner(uh.agentModelSpinner, true)
 	uh.agentModeToggle.widget.SetSensitive(false)
 	uh.agentModelRow.SetSensitive(false)

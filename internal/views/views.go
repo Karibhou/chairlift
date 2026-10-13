@@ -271,6 +271,7 @@ type UserHome struct {
 	agentModelSuppress bool
 	agentModelList     []string
 	agentModelActive   string
+	agentModelSelected uint32
 	agentModelNotify   func(gobject.Object, uintptr)
 	agentModeToggle    *guardedSwitch
 	agentModeState     aistack.State
