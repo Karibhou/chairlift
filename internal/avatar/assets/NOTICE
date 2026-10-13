@@ -1,0 +1,11 @@
+Project Bluefin Dinosaur Avatar Artwork Attribution & Licensing
+
+- `internal/avatar/assets/*.webp`
+  Source: https://github.com/projectbluefin/artwork/tree/main/assets/raster/dinos/jacob-schnurr
+  Illustrator: Jacob Schnurr
+  License: Apache License 2.0
+  Unmodified copies of `projectbluefin/website` at `public/characters/**`, revision `92b81281649c0795f16f266f712c9a2798af54c4`
+  The WebPs in the projectbluefin/website repository are derivatives of the originals in the projectbluefin/artwork repository, which publishes them under Apache-2.0. The website repository itself states no license.
+
+- `internal/avatar/assets/preview/*.png`
+  Derived from the illustrations above, scaled to 256x256 with `avatar.TranscodePreviewWebPToPNG` at `avatar.PreviewSize`

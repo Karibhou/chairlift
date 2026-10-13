@@ -182,7 +182,7 @@ Feature: Livery
     And a toast says "[DRY-RUN] Preview: rotating the top bar icon at login would be turned on — no changes made"
 
   @stub.livery-tools @stub.livery-offline
-  Scenario: A profile picture that cannot be downloaded is never offered for Apply
+  Scenario: A profile picture previews while the artwork services are unreachable
     Given ChairLift is running
     When I open the "Livery" page
     Then the "No picture set" row in the Livery "Profile Picture" section says "Choose a dinosaur from Project Bluefin's artwork"
@@ -190,8 +190,8 @@ Feature: Livery
     Then the Livery chooser titled "Choose a Profile Picture" is shown
     And the Livery "Apply" button is insensitive
     When I pick "Bluefin" in the Livery chooser
-    Then the Livery chooser says "Couldn't download Bluefin. Your picture was not changed"
-    And the Livery "Apply" button is insensitive
+    Then the Livery "Apply" button is sensitive
+    And the Livery chooser does not say "Couldn't"
     And no profile picture was staged under the home directory
     And the action journal is empty
 

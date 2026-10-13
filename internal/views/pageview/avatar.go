@@ -35,22 +35,22 @@ func AvatarEntryRow(entry avatar.Avatar) Row {
 }
 
 // AvatarApplyEnabled decides whether the chooser's Apply button is offered.
-// It needs downloaded artwork for the entry being previewed, and no apply
-// already in flight: an apply that finishes after the user picked another
-// entry, whose download has not landed, must not leave Apply sensitive with
-// nothing for it to set.
+// It needs the previewed entry's artwork loaded, and no apply already in
+// flight: an apply that finishes after the user picked another entry, whose
+// preview has not landed, must not leave Apply sensitive with nothing for it
+// to set.
 func AvatarApplyEnabled(applying, hasArtwork bool) bool {
 	return !applying && hasArtwork
 }
 
-// AvatarPreviewFailed is the chooser's banner when the artwork could not be
-// downloaded or decoded. Nothing was applied, so it says so.
+// AvatarPreviewFailed is the chooser's banner when the bundled preview could
+// not be loaded. Nothing was applied, so it says so.
 func AvatarPreviewFailed(entry avatar.Avatar) string {
-	return "Couldn't download " + entry.CommonName + ". Your picture was not changed."
+	return "Couldn't show " + entry.CommonName + ". Your picture was not changed."
 }
 
-// AvatarApplyFailed is the chooser's banner when the downloaded artwork
-// could not be set on the account.
+// AvatarApplyFailed is the chooser's banner when the artwork could not be set
+// on the account.
 func AvatarApplyFailed(entry avatar.Avatar) string {
 	return "Couldn't set " + entry.CommonName + " as your picture. Your picture was not changed."
 }

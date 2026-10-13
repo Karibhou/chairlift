@@ -94,7 +94,40 @@ func TestAvatarChooserDecidesApplyThroughOneRule(t *testing.T) {
 	if calls == 0 || calls != ruled {
 		t.Errorf("%d of %d Apply sensitivity changes bypass AvatarApplyEnabled", calls-ruled, calls)
 	}
-	if !strings.Contains(string(data), "pageview.AvatarApplyEnabled(false, p.png != nil)") {
-		t.Error("the apply completion no longer requires artwork before re-offering Apply")
+	if !strings.Contains(string(data), "pageview.AvatarApplyEnabled(false, p.loaded)") {
+		t.Error("the apply completion no longer requires a landed preview before re-offering Apply")
+	}
+}
+
+// TestAvatarPreviewFailureClearsTheStaleImage holds the chooser to the one
+// thing that keeps the failure banner honest. Selecting keeps the previous
+// picture up until the new one lands, so a preview that never lands leaves
+// another entry's dinosaur in the widget beside a banner naming this one;
+// the failure branch has to clear it.
+func TestAvatarPreviewFailureClearsTheStaleImage(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate avatar_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "profile_picture.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(data)
+
+	// AvatarPreviewFailed is named in exactly one place: the branch that
+	// the preview failure reaches. The clear has to be inside that same
+	// branch, ahead of the banner that explains it.
+	end := strings.Index(src, "pageview.AvatarPreviewFailed(entry)")
+	if end < 0 {
+		t.Fatal("the preview failure no longer names the entry it could not show")
+	}
+	start := strings.LastIndex(src[:end], "if err != nil {")
+	if start < 0 {
+		t.Fatal("the preview failure is no longer reached from an err check")
+	}
+	const clear = "p.preview.SetCustomImage((*gdk.PaintableBase)(nil))"
+	if !strings.Contains(src[start:end], clear) {
+		t.Error("a failed preview leaves the previous entry's picture in the chooser")
 	}
 }

@@ -246,12 +246,12 @@ Rotation changes the real login schedule with its preferences, and a failed
 save restores confirmed state.
 
 **Profile Picture** is the picture on your login and lock screens. Pick one of
-Project Bluefin's dinosaurs and Control Center downloads that one illustration
-to preview it; nothing changes until you press Apply. If the download or the
-change fails, the chooser says so and your old picture stays put. Where
-AccountsService is unavailable the picture is saved to your home folder
-instead and appears after you log out and back in, and the confirmation says which of
-the two happened.
+Project Bluefin's dinosaurs and Control Center shows its picture from the copy
+bundled with the app; nothing changes until you press Apply. If the picture
+cannot be shown or the change fails, the chooser says so and your old picture
+stays put. Where AccountsService is unavailable the picture is saved to your
+home folder instead and appears after you log out and back in, and the
+confirmation says which of the two happened.
 
 **App Launcher Icon** is your own mark on the Show Applications button on
 GNOME. On KDE Plasma, the same chooser updates each configured Kickoff applet;
