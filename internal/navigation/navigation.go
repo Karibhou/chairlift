@@ -144,7 +144,7 @@ var routes = []Item{
 	{
 		Name:  "applications",
 		Title: "Apps",
-		Icon:  "application-x-executable-symbolic",
+		Icon:  "system-software-install-symbolic",
 		Kind:  KindPrimary,
 		Refs: refsOn("applications_page",
 			"brew_group",
@@ -154,7 +154,7 @@ var routes = []Item{
 	{
 		Name:  "agents",
 		Title: "Agents",
-		Icon:  "starred-symbolic",
+		Icon:  "chat-message-new-symbolic",
 		Kind:  KindPrimary,
 		Refs:  refsOn("agents_page", "agents_group", "troubleshooting_group"),
 	},
@@ -186,7 +186,7 @@ var routes = []Item{
 	{
 		Name:  "maintenance",
 		Title: "Maintenance",
-		Icon:  "emblem-system-symbolic",
+		Icon:  "applications-utilities-symbolic",
 		Kind:  KindPrimary,
 		Refs: refsOn("maintenance_page",
 			"maintenance_cleanup_group",

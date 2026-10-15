@@ -65,7 +65,7 @@ func (uh *UserHome) buildMaintenancePage() {
 		recoveryRow.SetTitle("Powerwash")
 		uh.recoveryEntryRow = recoveryRow
 		recoveryRow.SetActivatable(true)
-		icon := gtk.NewImageFromIconName("pan-end-symbolic")
+		icon := gtk.NewImageFromIconName("go-next-symbolic")
 		recoveryRow.AddSuffix(&icon.Widget)
 		recoveryActivatedCb := func(row adw.ActionRow) {
 			if uh.openRecoveryDetail != nil {
@@ -93,7 +93,7 @@ func (uh *UserHome) buildFreeSpaceGroup(page *adw.PreferencesPage) {
 	row.SetTitle(cleanupview.RowTitle)
 	row.SetSubtitle(cleanupview.RowSubtitle)
 
-	icon := gtk.NewImageFromIconName("user-trash-symbolic")
+	icon := gtk.NewImageFromIconName("edit-clear-all-symbolic")
 	row.AddPrefix(&icon.Widget)
 
 	button := gtk.NewButtonWithLabel(cleanupview.ButtonLabel)

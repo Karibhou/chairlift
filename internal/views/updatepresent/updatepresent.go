@@ -151,15 +151,17 @@ func soleItemSubtitle(item updateflow.Item) string {
 	}
 }
 
-// SourceIcon returns the symbolic icon for a source row.
+// SourceIcon returns the symbolic icon for a source row. Each source has its
+// own, and Applications and System components match the sidebar's Apps and
+// Features, the pages that manage what they update.
 func SourceIcon(id updateflow.SourceID) string {
 	switch id {
 	case updateflow.Applications:
-		return "applications-system-symbolic"
+		return "system-software-install-symbolic"
 	case updateflow.DeveloperTools:
 		return "package-x-generic-symbolic"
 	case updateflow.SystemComponents:
-		return "applications-system-symbolic"
+		return "application-x-addon-symbolic"
 	case updateflow.OperatingSystem:
 		return "drive-harddisk-system-symbolic"
 	default:

@@ -99,7 +99,7 @@ func (uh *UserHome) buildFeaturesPage() {
 	// empty state starts hidden and is revealed only once nothing is known
 	// to be on offer.
 	emptyState := adw.NewStatusPage()
-	emptyState.SetIconName("preferences-other-symbolic")
+	emptyState.SetIconName("application-x-addon-symbolic")
 	emptyGroup := adw.NewPreferencesGroup()
 	emptyGroup.Add(&emptyState.Widget)
 	emptyGroup.SetVisible(false)

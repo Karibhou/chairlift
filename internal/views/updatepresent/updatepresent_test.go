@@ -427,9 +427,9 @@ func TestSourceIconMapsProviderKinds(t *testing.T) {
 		id   updateflow.SourceID
 		want string
 	}{
-		{updateflow.Applications, "applications-system-symbolic"},
+		{updateflow.Applications, "system-software-install-symbolic"},
 		{updateflow.DeveloperTools, "package-x-generic-symbolic"},
-		{updateflow.SystemComponents, "applications-system-symbolic"},
+		{updateflow.SystemComponents, "application-x-addon-symbolic"},
 		{updateflow.OperatingSystem, "drive-harddisk-system-symbolic"},
 		{"unknown", "software-update-available-symbolic"},
 	}
@@ -773,5 +773,18 @@ func TestRestartFailedMessageHasNoRawError(t *testing.T) {
 	want := "Couldn't restart your computer. Try again."
 	if got != want {
 		t.Fatalf("RestartFailedMessage() = %q, want %q", got, want)
+	}
+}
+
+// TestSourceIconsAreDistinct keeps two update rows from looking identical:
+// Applications and System components once shared one icon.
+func TestSourceIconsAreDistinct(t *testing.T) {
+	seen := map[string]updateflow.SourceID{}
+	for _, id := range []updateflow.SourceID{updateflow.Applications, updateflow.DeveloperTools, updateflow.SystemComponents, updateflow.OperatingSystem} {
+		icon := SourceIcon(id)
+		if other, ok := seen[icon]; ok {
+			t.Errorf("%s and %s share the icon %s", other, id, icon)
+		}
+		seen[icon] = id
 	}
 }
