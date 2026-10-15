@@ -72,6 +72,7 @@ func newSourceRow(state updateflow.SourceState, group *adw.PreferencesGroup, she
 			button.SetValign(gtk.AlignCenterValue)
 			button.SetSensitive(state.Configured && state.Available && state.Enabled &&
 				updatepresent.CanStartOperation(shell.Busy(), shell.closed.Load()) && !updatepresent.ShowProgress(shell.snapshot.Phase))
+			describeFor(button, updatepresent.ItemTitle(item))
 			pending := item
 			shell.updateButtons.connect(button, func(gtk.Button) { shell.startItemUpdate(state.ID, pending, detail) })
 			detail.AddSuffix(&button.Widget)

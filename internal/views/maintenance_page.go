@@ -200,7 +200,7 @@ func (uh *UserHome) buildConfiguredTasksGroup(page *adw.PreferencesPage) {
 
 		button := gtk.NewButtonWithLabel(cleanupview.ScriptsButtonLabel)
 		button.SetValign(gtk.AlignCenterValue)
-		button.AddCssClass("suggested-action")
+		describeFor(button, action.Title)
 
 		script := action.Script
 		sudo := action.Sudo

@@ -643,6 +643,9 @@ func (w *Window) SetUpdateBadge(count int) {
 
 	if count > 0 {
 		w.updateBadge.SetLabel(fmt.Sprintf("%d", count))
+		// A bare number means nothing read aloud; the row is announced as
+		// "Updates", then this.
+		w.updateBadge.UpdateProperty(gtk.AccessiblePropertyLabelValue, fmt.Sprintf("%d updates available", count), -1)
 		w.updateBadge.SetVisible(true)
 	} else {
 		w.updateBadge.SetVisible(false)

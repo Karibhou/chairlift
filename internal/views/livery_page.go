@@ -677,7 +677,11 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 			images[result.ID] = image
 		}
 		if result.Selected {
-			row.AddSuffix(&gtk.NewImageFromIconName("object-select-symbolic").Widget)
+			// The check is the only sign of the current mark; say so to
+			// assistive technology too, as the foundation grid does.
+			check := gtk.NewImageFromIconName("object-select-symbolic")
+			SetAccessibleLabel(check, "Selected")
+			row.AddSuffix(&check.Widget)
 		}
 		list.Append(&row.Widget)
 	}

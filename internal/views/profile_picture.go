@@ -179,6 +179,7 @@ func (uh *UserHome) buildAvatarPicker(p *avatarPicker) {
 		row.SetSubtitle(text.Subtitle)
 		row.SetActivatable(true)
 		check := gtk.NewImageFromIconName("object-select-symbolic")
+		SetAccessibleLabel(check, "Selected")
 		check.SetVisible(false)
 		row.AddSuffix(&check.Widget)
 		p.checks[i] = check

@@ -67,6 +67,14 @@ func SetAccessibleLabel(widget interface {
 	widget.UpdateProperty(gtk.AccessiblePropertyLabelValue, label, -1)
 }
 
+// describeFor names what a repeated row button acts on. Every pending item
+// shows the same "Update", every untrusted package the same "Trust"; the
+// description lets a screen reader say which one, and unlike the button's
+// name it survives the label changing to a progress word.
+func describeFor(button *gtk.Button, subject string) {
+	button.UpdateProperty(gtk.AccessiblePropertyDescriptionValue, subject, -1)
+}
+
 func newActivitySpinner() *gtk.Spinner {
 	spinner := gtk.NewSpinner()
 	spinner.SetValign(gtk.AlignCenterValue)

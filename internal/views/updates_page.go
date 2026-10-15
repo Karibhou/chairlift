@@ -171,7 +171,7 @@ func (uh *UserHome) loadUntrustedTaps() {
 			// action than it actually is.
 			trustBtn := gtk.NewButtonWithLabel("Trust Tap")
 			trustBtn.SetValign(gtk.AlignCenterValue)
-			trustBtn.AddCssClass("suggested-action")
+			describeFor(trustBtn, presentation.Title)
 			uh.trustButtons.connect(trustBtn, func(gtk.Button) {
 				uh.confirmTrustTap(entry, trustBtn)
 			})
@@ -248,6 +248,7 @@ func (uh *UserHome) buildUntrustedPackageRow(qualifiedName string, kind homebrew
 
 	btn := gtk.NewButtonWithLabel("Trust")
 	btn.SetValign(gtk.AlignCenterValue)
+	describeFor(btn, presentation.Title)
 	uh.trustButtons.connect(btn, func(gtk.Button) {
 		uh.confirmTrustPackage(qualifiedName, kind, tapName, btn)
 	})
@@ -567,8 +568,8 @@ func (uh *UserHome) onBootcStageClicked() {
 	activityRow.SetUseMarkup(false)
 	activityRow.SetTitle("Progress")
 	activityRow.SetSubtitle("Working…")
-	spinner := gtk.NewSpinner()
-	spinner.Start()
+	spinner := newActivitySpinner()
+	setActivitySpinner(spinner, true)
 	activityRow.AddSuffix(&spinner.Widget)
 	expander.AddRow(&activityRow.Widget)
 	uh.bootcActivityRow = activityRow
