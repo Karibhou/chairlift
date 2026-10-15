@@ -86,7 +86,7 @@ const BootcStageRunningSubtitle = "Looking for a newer version and downloading i
 // from the source are still untrusted, so the body says exactly how much
 // the one click trusts — "all 1 programs" never reaches a person.
 func TapTrustConfirmation(name string, count int) (title, body string) {
-	title = fmt.Sprintf("Trust software from %s?", name)
+	title = fmt.Sprintf("Trust Software from %s?", name)
 	const caution = "Only trust sources you recognize."
 	switch {
 	case count == 1:
@@ -166,9 +166,9 @@ func BootcStageResultSubtitle(staged bool, version string) string {
 // on Dakota, bootc logged its progress to the journal, not to the pipe.
 func BootcStageFailureSubtitle(hadOutput bool) string {
 	if hadOutput {
-		return "The update could not be downloaded. Open Details to see what happened."
+		return "The update couldn't be downloaded. Open Details to see what happened."
 	}
-	return "The update could not be downloaded"
+	return "The update couldn't be downloaded"
 }
 
 // UpdateBusyToast answers a Download, early-updates, or graphics-driver
@@ -247,7 +247,7 @@ func FeaturesEmptyState(bluefinGroups, printers, optionalFeatures bool) (Row, bo
 		return Row{}, false
 	}
 	return Row{
-		Title:    "Nothing to set up here",
+		Title:    "Nothing to Set Up Here",
 		Subtitle: "This computer has no extra features to set up.",
 	}, true
 }
@@ -257,15 +257,15 @@ func FeaturesEmptyState(bluefinGroups, printers, optionalFeatures bool) (Row, bo
 // Each title names what its key holds in the distribution's shipped
 // configuration (projectbluefin/common's help_resources_group): website is
 // the documentation site and chat is the Ask Bluefin assistant. Titling chat
-// as documentation put "Browse documentation" on the assistant and "Visit
-// project website" on the documentation. "Ask for help" rather than "Ask
+// as documentation put "Browse Documentation" on the assistant and "Visit
+// project website" on the documentation. "Ask for Help" rather than "Ask
 // Bluefin" because the Ask Bluefin menu entry opens Troubleshooting on the
 // Agents page, a different destination.
 func HelpResources(website, issues, chat string) []HelpResource {
 	candidates := []HelpResource{
-		{Title: "Browse documentation", URL: website},
-		{Title: "Report a problem", URL: issues},
-		{Title: "Ask for help", URL: chat},
+		{Title: "Browse Documentation", URL: website},
+		{Title: "Report a Problem", URL: issues},
+		{Title: "Ask for Help", URL: chat},
 	}
 	resources := make([]HelpResource, 0, len(candidates))
 	for _, resource := range candidates {
@@ -291,7 +291,7 @@ func MaintenanceCommand(script string, sudo bool) Command {
 // own version. staged reports that an update is waiting even when its
 // version cannot be read, which a composefs host cannot do without root.
 func SystemVersionRow(version, released string, staged bool, stagedVersion string) Row {
-	row := Row{Title: "System version"}
+	row := Row{Title: "System Version"}
 	date := formatReleaseDate(released)
 	switch {
 	case version != "" && date != "":
@@ -349,7 +349,7 @@ func formatReleaseDate(timestamp string) string {
 // afterwards: the versions are less tested, and taking one replaces the
 // operating system and needs a restart.
 func ChannelRow(onTesting, switchable bool) Row {
-	row := Row{Title: "Get updates early"}
+	row := Row{Title: "Get Updates Early"}
 	switch {
 	case !switchable:
 		row.Subtitle = "Not offered for this computer."
@@ -486,7 +486,7 @@ func gamingApps(count int) string {
 // keeps — so offering a choice would imply a capability the operation does
 // not have.
 func BootcRollbackRow(version, timestamp string) Row {
-	row := Row{Title: "Go back to the previous version"}
+	row := Row{Title: "Go Back to the Previous Version"}
 	date := formatReleaseDate(timestamp)
 	switch {
 	case version == "" && date == "":
@@ -515,7 +515,7 @@ func BootcRollbackResultSubtitle() string {
 // rows, and per-layer switches, so its subtitle has to carry what the switch
 // actually governs.
 func AutomaticUpdatesRow(enabled bool) Row {
-	row := Row{Title: "Automatic updates"}
+	row := Row{Title: "Automatic Updates"}
 	if enabled {
 		row.Subtitle = "Updates download in the background and install when you restart."
 		return row
@@ -544,7 +544,7 @@ func AutomaticUpdatesResultSubtitle(enabled bool) string {
 // driver is for and the restart it costs, and promises nothing about speed:
 // what a driver switch buys varies per machine, and this row cannot know.
 func GraphicsDriverRow(current, hardware, recommended string) Row {
-	row := Row{Title: "Graphics driver"}
+	row := Row{Title: "Graphics Driver"}
 	// gpu.Set.Describe answers with a sentence, not a name, when nothing
 	// was detected (a virtual machine); interpolating it produced "for your
 	// No graphics hardware detected graphics".
@@ -592,7 +592,7 @@ func GraphicsDriverResultSubtitle(driver string) string {
 // PowerwashRow returns the Powerwash row text.
 func PowerwashRow() Row {
 	return Row{
-		Title:    "Remove Flatpak apps and containers",
+		Title:    "Remove Flatpak Apps and Containers",
 		Subtitle: "Removes every Flatpak app and Distrobox container in your account. Your files and everything on the Apps page stay.",
 	}
 }
@@ -628,7 +628,7 @@ func PowerwashConfirmation() (title, body string) {
 // FactoryResetRow returns the Factory Reset row text.
 func FactoryResetRow() Row {
 	return Row{
-		Title:    "Reset this computer",
+		Title:    "Reset This Computer",
 		Subtitle: "Reinstall the operating system the next time you restart. Your files and apps stay.",
 	}
 }

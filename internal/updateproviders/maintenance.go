@@ -12,7 +12,7 @@ import (
 )
 
 // CleanupGroup is the single configuration group governing routine cleanup.
-// It gates both surfaces: the Maintenance page's one "Free up space" button
+// It gates both surfaces: the Maintenance page's one "Free Up Space" button
 // and the post-update cleanup phase of an Update All run. One key for both
 // is deliberate — a user who turns cleanup off has turned cleanup off, and
 // two independent keys would let one surface clean while the other claimed
@@ -29,7 +29,7 @@ type MaintenanceDeps struct {
 }
 
 // StepID identifies one unit of the cleanup inventory. The inventory is
-// closed on purpose: this is the whole of what "Free up space" does, so an
+// closed on purpose: this is the whole of what "Free Up Space" does, so an
 // administrator-configured script can never be folded into it.
 type StepID string
 
@@ -113,7 +113,7 @@ func (c *Cleanup) Enabled() bool {
 
 // CleanupConfigured reports whether the configuration enables routine
 // cleanup through CleanupGroup. It is the one predicate both the cleanup
-// runner and the "Run maintenance after updates" preference read, so the
+// runner and the "Run Maintenance After Updates" preference read, so the
 // preference cannot offer an ON switch for a phase the runner would skip.
 func CleanupConfigured(cfg *config.Config) bool {
 	if cfg == nil {

@@ -75,9 +75,9 @@ func (uh *UserHome) buildHelpPage() {
 	// Collapsed behind one expander, and absent when nothing is missing.
 	if rows := pageview.UnavailableFeatures(uh.capabilities, uh.config.IsGroupEnabled); len(rows) > 0 {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("Feature availability")
+		group.SetTitle("Feature Availability")
 		expander := adw.NewExpanderRow()
-		expander.SetTitle("Why is something missing?")
+		expander.SetTitle("Why Is Something Missing?")
 		expander.SetSubtitle("Features this computer can't use right now.")
 		for _, r := range rows {
 			row := adw.NewActionRow()

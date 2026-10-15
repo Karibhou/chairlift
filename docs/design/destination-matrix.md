@@ -24,7 +24,7 @@ Tools or Local AI tools route. Wallpaper is not a shipped control.
 | `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, the active model dropdown, the Manage Models link to llmman's own page, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
 | `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and loopback-only printer applications |
 | `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
-| `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Powerwash entry |
+| `maintenance` | `maintenance_page.go` | Free Up Space, trusted administrator scripts and Powerwash entry |
 | `help` | `help_page.go` | Support links, diagnostics and capability explanations |
 | `recovery` | `recovery.go`, `reset.go` | Previous-deployment rollback and opt-in reset actions (the published-versions calendar is withdrawn, #522) |
 
@@ -95,7 +95,7 @@ graphics-driver switches, which replace the operating system and must not race
 an update run's staging; a refused Download or switch shows
 `pageview.UpdateBusyToast`. Failed observations preserve
 confirmed state; dry-run previews mutate none of it. Restart is offered from
-the Operating system row only after an observed staged deployment, through the
+the Operating System row only after an observed staged deployment, through the
 fixed `ublue.Restart` action, not an invented update executor.
 
 Provider-specific safety remains with each live owner:

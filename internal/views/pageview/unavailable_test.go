@@ -32,7 +32,7 @@ func TestUnavailableFeaturesListsConfiguredGroupsTheHostCannotBack(t *testing.T)
 	got := UnavailableFeatures(set, configured)
 	want := []Row{
 		{Title: "Powerwash", Subtitle: "Needs Flatpak or Distrobox"},
-		{Title: "App updates", Subtitle: "Needs Flatpak"},
+		{Title: "App Updates", Subtitle: "Needs Flatpak"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("UnavailableFeatures() = %+v, want %+v", got, want)

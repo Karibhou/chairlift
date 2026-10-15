@@ -36,7 +36,7 @@ func exitStatus(t *testing.T, code int) error {
 // prompt left a persistent error toast. Each error shape those actions
 // return must be classified from the error itself.
 func TestPrivilegedFailureToastTreatsDismissalAsCancellation(t *testing.T) {
-	const failure = "Could not switch the graphics driver"
+	const failure = "Couldn't switch the graphics driver"
 	dismissed := exitStatus(t, pkexec.DismissedExitCode)
 	tests := []struct {
 		name        string

@@ -92,7 +92,7 @@ func (p *operatingSystemProvider) checkBootc(ctx context.Context) (updateflow.Ch
 	}
 
 	item := updateflow.Item{
-		Name:             "Operating system",
+		Name:             "Operating System",
 		AvailableVersion: update.Version,
 		Scope:            bootcScope,
 	}

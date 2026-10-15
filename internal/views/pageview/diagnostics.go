@@ -23,7 +23,7 @@ type DiagnosticsData struct {
 // SystemDiagnosticsRow returns the title and subtitle for the diagnostics row.
 func SystemDiagnosticsRow() Row {
 	return Row{
-		Title:    "System diagnostics",
+		Title:    "System Diagnostics",
 		Subtitle: "Copy details about this computer for a help request.",
 	}
 }

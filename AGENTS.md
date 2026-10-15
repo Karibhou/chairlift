@@ -342,15 +342,15 @@ An agent must not break these:
   `bootc upgrade` route to `chairlift-helper` would break both the
   staging-ownership invariant below and the fixed-path contract an OS image
   relies on when it installs the helpers. The run's only privileged surface of its own is
-  `restart`, offered only from the Operating system row once the snapshot
+  `restart`, offered only from the Operating System row once the snapshot
   reaches `PhaseRestartRequired` (whose page-level action is
   `updateflow.ActionNone`), where the header's one status line reads
   "Restart to finish updating". A header with nothing to show is hidden
   through `updatepresent.Presentation.ShowStatus`, not merely cleared, so it
   adds no spacing. Phase announcements (each phase's status line) come from
   the shell's visible toast overlay.
-  The Operating system row carries a "Deployment staged" subtitle and a
-  "Restart now" suffix that calls `UpdateShell.StartRestart` and in turn
+  The Operating System row carries a "Deployment staged" subtitle and a
+  "Restart Now" suffix that calls `UpdateShell.StartRestart` and in turn
   `ublue.Restart`. That
   phase is reached only when a source genuinely reports a restart is
   required — staging an already-current system completes without staging
@@ -426,7 +426,7 @@ An agent must not break these:
   in `config.SchemaGroups` has no walkthrough entry. That last check is the
   forcing function: the group-to-phrase table is hand-written but its
   completeness is derived from the config schema, so a feature added to an
-  *existing* page — which is how the unified update shell, Automatic updates,
+  *existing* page — which is how the unified update shell, Automatic Updates,
   and Roll Back all landed — cannot slip through undocumented. The check is deliberately referential rather
   than a pixel comparison: font hinting and GTK point releases move pixels, so
   regenerating and diffing per push would churn the repository for no signal.
@@ -480,7 +480,7 @@ An agent must not break these:
   The same package owns what a dismissed authentication looks like
   (`IsAuthDismissed`, `MessageIsAuthDismissed`: exit 126 or pkexec's
   "Request dismissed"; 127 is a real failure) and the brief
-  `pkexec.CancelledMessage` ("Authentication cancelled") shown in its place.
+  `pkexec.CancelledMessage` ("Authentication canceled") shown in its place.
   `Window.ShowErrorToast` turns a message carrying that text into the brief
   toast instead of a persistent raw-stderr error. A view whose failure toast
   is fixed text without the helper's output — Download, early updates, and
@@ -704,14 +704,14 @@ An agent must not break these:
   snapshot.) Roll Back is
   different: `bootc rollback` toggles the selected deployment, so a successful
   live click completes its gate and leaves its button insensitive; only a
-  failure or preview resets it. A live success then swaps in a **Restart now**
+  failure or preview resets it. A live success then swaps in a **Restart Now**
   button (when the helper supports `restart`), because a queued rollback is
   not a staged deployment and the Updates page offers no restart for it
   (#520). `internal/views/actionstate`'s wiring tests guard both lifetimes.
   Dedicated staging, a live unified run whose operating-system source
   completed, and a live channel or driver switch refresh the changelog's
   Compare references from observed status (a switch also re-checks, so the
-  Operating system row offers Restart now).
+  Operating System row offers Restart Now).
   `UserHome.OnUpdateFinished` refreshes the installed Homebrew inventory when
   its source completed and Compare when the OS source completed — after a
   unified run and after a live single-row update alike; the coordinator
@@ -860,7 +860,7 @@ An agent must not break these:
 - **Troubleshooting runs Goose in ChairLift's own profile, never the user's.**
   The Agents page's **Troubleshooting** group (`agents_page`
   `troubleshooting_group`, floored on Homebrew; `internal/views/troubleshoot.go`)
-  holds the Goose row and the "Show Ask Bluefin in menu" switch; the Ask
+  holds the Goose row and the "Show Ask Bluefin in Menu" switch; the Ask
   Bluefin menu entry and `--ask-bluefin` are paths into it, not its name. It is the
   one Goose surface: Help no longer has an Troubleshooting group,
   and `help_page.troubleshooting_group` is still accepted and migrated to
@@ -1255,7 +1255,7 @@ An agent must not break these:
   still resolved under dry-run so a missing custom file or unknown brand is
   still reported.
 - **Routine cleanup has one key and one owner.** The Maintenance page offers
-  a single "Free up space" action, gated by `maintenance_freespace_group`.
+  a single "Free Up Space" action, gated by `maintenance_freespace_group`.
   That key is `internal/updateproviders.CleanupGroup`, the same constant
   gating the update run's post-update maintenance step
   (`updateproviders.NewMaintenance`), so one configuration switch

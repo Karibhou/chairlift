@@ -66,7 +66,7 @@ func TestChangelogSectionsOmitEmptyCategoriesAndLabelUnknownOrder(t *testing.T) 
 		t.Errorf("upgrade subtitle = %q", sections[0].Entries[0].Subtitle)
 	}
 	// A pair whose direction is unknown must not read as an upgrade.
-	if !strings.Contains(sections[1].Title, "order unknown") {
+	if !strings.Contains(sections[1].Title, "Order Unknown") {
 		t.Errorf("second section = %q", sections[1].Title)
 	}
 }

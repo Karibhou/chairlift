@@ -7,8 +7,8 @@ import (
 
 func TestSystemDiagnosticsRow(t *testing.T) {
 	row := SystemDiagnosticsRow()
-	if row.Title != "System diagnostics" {
-		t.Errorf("SystemDiagnosticsRow().Title = %q, want %q", row.Title, "System diagnostics")
+	if row.Title != "System Diagnostics" {
+		t.Errorf("SystemDiagnosticsRow().Title = %q, want %q", row.Title, "System Diagnostics")
 	}
 	if !strings.Contains(row.Subtitle, "help request") {
 		t.Errorf("SystemDiagnosticsRow().Subtitle = %q, want mention of asking for help", row.Subtitle)
@@ -106,9 +106,9 @@ func TestHelpResourcesHumanActionTitles(t *testing.T) {
 	)
 
 	want := []HelpResource{
-		{Title: "Browse documentation", URL: "https://docs.projectbluefin.io/"},
-		{Title: "Report a problem", URL: "https://issues.projectbluefin.io/"},
-		{Title: "Ask for help", URL: "https://ask.projectbluefin.io/"},
+		{Title: "Browse Documentation", URL: "https://docs.projectbluefin.io/"},
+		{Title: "Report a Problem", URL: "https://issues.projectbluefin.io/"},
+		{Title: "Ask for Help", URL: "https://ask.projectbluefin.io/"},
 	}
 	if len(resources) != len(want) {
 		t.Fatalf("len(resources) = %d, want %d", len(resources), len(want))

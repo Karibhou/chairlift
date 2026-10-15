@@ -98,7 +98,7 @@ this inventory, independently of the original YAML namespace names.
 | Agents | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Agent Mode using llmman, Troubleshooting's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
 | Features | `features_page.go` (+ `printers_page.go`) | Distribution features, Developer Mode, Gaming Mode, and Printers |
 | Livery | `livery_page.go` | Profile Picture, App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
-| Maintenance | `maintenance_page.go` | Free up space, administrator scripts and Powerwash entry |
+| Maintenance | `maintenance_page.go` | Free Up Space, administrator scripts and Powerwash entry |
 | Help | `help_page.go` | Support links, diagnostics and capability explanations |
 
 Powerwash is an existing detail (route `recovery`) built by `recovery.go` and reached from
@@ -163,7 +163,7 @@ toasts with Libadwaita's high priority, retaining those older errors in the
 queue rather than leaving every later result behind an infinite timeout. A
 message carrying pkexec's dismissal text (`pkexec.MessageIsAuthDismissed`) is
 not an error: `ShowErrorToast` shows the brief `pkexec.CancelledMessage`
-("Authentication cancelled") instead of pinning raw stderr. Views whose failure
+("Authentication canceled") instead of pinning raw stderr. Views whose failure
 toast is fixed text never carry that text, so they classify the error itself
 with `pageview.PrivilegedFailureToast` (exit 126 anywhere in the chain).
 
@@ -444,7 +444,7 @@ answer alone will not reveal the mistake. Without the gate, a group added to
 absent — the exact degradation policy this package exists to enforce — and no
 other gate would notice.
 
-The Help page's "Why is something missing?" expander is the floor's one
+The Help page's "Why Is Something Missing?" expander is the floor's one
 explanation surface. `pageview.UnavailableFeatures(set, configured)` walks
 `capability.Prerequisites()` with the window's already-resolved set — it never
 re-probes — and lists each group that configuration enables but `Supports`
@@ -794,12 +794,12 @@ surface in three layers that must stay separate:
   Preferences switch is shown off and insensitive and is not bound to its
   GSettings key (`pageview.UpdateSourcePreferenceLocked`): bound, it showed
   the stored preference — on — beside "Disabled by administrator". `ItemRows`
-  decides which pending items get a child row: the Operating system source's
+  decides which pending items get a child row: the Operating System source's
   one pending item is its deployment, so that source shows
   "Update available: <booted> → <new>" on its own row and gets no child row
   repeating its name. The fold is keyed on the source ID, never an item's
   name; every other source keeps one row per item, because Applications and
-  Developer tools carry each item's only Update button on that row.
+  Developer Tools carry each item's only Update button on that row.
 
 The shell learns each source's policy from `Window.buildUI`'s
 `sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from
@@ -827,8 +827,8 @@ check and is left alone.
 Everything else the Updates page owns is built by `buildUpdatesPage` into
 `UserHome.updatesPrefsPage`; `Window.buildContentArea` mounts it below the
 shell's source rows with `UpdateShell.SetSecondaryContent`. The secondary
-groups, in order, are automatic updates, System version, System update details
-(dedicated download and Compare), Manage source trust, and Advanced
+groups, in order, are Automatic Updates, System Version, System Update Details
+(dedicated download and Compare), Manage Source Trust, and Advanced
 channel/graphics controls. Application/tool source rows and item actions belong
 to the shell rather than duplicated preference groups. Configuration,
 capability and asynchronous runtime gates determine which groups are shown.
@@ -868,7 +868,7 @@ status line from the visible toast overlay. The status line carries the
 accessible description "Update status", which tells it apart from a source
 row with the same words. The Operating
 system row carries the action: its subtitle reads "Deployment
-staged" and a "Restart now" suffix calls `UpdateShell.StartRestart`, which
+staged" and a "Restart Now" suffix calls `UpdateShell.StartRestart`, which
 sends `ublue.Restart` through the `chairlift-helper` `restart` subcommand.
 Its argv is the fixed `systemctl reboot` (`ubluehelper.RestartArgs`) with no
 delay and no target; scheduled restarts would each need their own action.
@@ -1574,7 +1574,7 @@ A fresh launch returns only once Goose holds that lock, its process exits, or 15
 - When all readiness conditions are met, Goose Desktop is launched off the GTK main thread (the launch writes the profile) without presenting the Control Center window.
 - When any prerequisite is missing, or the launch fails to start or Goose exits non-zero during its startup wait, Control Center opens to the Agents page and displays the reason as a toast. A later asynchronous Goose exit is logged, not rerouted through the window.
 
-The Troubleshooting group also offers a **Show Ask Bluefin in menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state. The extension renders only slots listed in its `command-order` key, so the switch reads on only when the tuple is visible and its slot is listed; showing the entry also appends a missing slot to `command-order` (resetting instead when the result equals the distro default). Dakota's distro layer moves Ask Bluefin to `command12` while inheriting Bluefin's order of 1..11, which otherwise left a visible tuple the menu never rendered.
+The Troubleshooting group also offers a **Show Ask Bluefin in Menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state. The extension renders only slots listed in its `command-order` key, so the switch reads on only when the tuple is visible and its slot is listed; showing the entry also appends a missing slot to `command-order` (resetting instead when the result equals the distro default). Dakota's distro layer moves Ask Bluefin to `command12` while inheriting Bluefin's order of 1..11, which otherwise left a visible tuple the menu never rendered.
 After every flip the switch is re-set from a fresh `devmenu.AskBluefinState` read, decided by `actionmsg.AskBluefinMenu`: a preview says the menu entry was not changed, a write that did not take effect or a failed read-back is an error toast, and a failed read-back restores the previous position rather than leaving the switch half-flipped.
 
 ## Explicit setup flow

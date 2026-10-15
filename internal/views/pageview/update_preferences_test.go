@@ -63,7 +63,7 @@ func TestUpdateSourcePreferenceSubtitleMatchesTheUpdatesRow(t *testing.T) {
 	}
 }
 
-// The "Run maintenance after updates" switch was always bound and sensitive,
+// The "Run Maintenance After Updates" switch was always bound and sensitive,
 // so with maintenance_freespace_group disabled it offered an ON switch for a
 // post-update phase that skips every step. It is locked with the same words
 // as an administrator-disabled source.

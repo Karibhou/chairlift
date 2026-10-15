@@ -38,9 +38,9 @@ Feature: Fail-closed configuration and configuration-driven visibility
   @config.config-unknown-group
   Scenario: Fail-closed Help keeps only what needs no configuration
     Given ChairLift is running
-    Then I see "System diagnostics"
+    Then I see "System Diagnostics"
     And I do not see "Help & Resources"
-    And I do not see "Why is something missing?"
+    And I do not see "Why Is Something Missing?"
 
   @config.config-unknown-group
   Scenario: Only Help keeps a keyboard shortcut when configuration is broken
@@ -99,38 +99,38 @@ Feature: Fail-closed configuration and configuration-driven visibility
     Given ChairLift is running
     When I select "Maintenance" in the sidebar
     Then I see "Powerwash"
-    And I do not see "Free up space"
-    And the "Clean up" button is not shown
+    And I do not see "Free Up Space"
+    And the "Clean Up" button is not shown
 
   @config.config-one-group-off
   Scenario: Disabling one update source is reported as the administrator's choice
     Given ChairLift is running
     Then the "Applications" row says "Disabled by administrator"
-    And the "Developer tools" source row does not say "Disabled by administrator"
+    And the "Developer Tools" source row does not say "Disabled by administrator"
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: The capability floor hides pages and groups that configuration enables
     Given ChairLift is running
     Then the sidebar lists exactly "Updates, Features, Livery, Maintenance, Help"
     When I select "Help" in the sidebar
-    And I expand the "Why is something missing?" row with the keyboard
+    And I expand the "Why Is Something Missing?" row with the keyboard
     Then the "Agent Mode" row says "Needs Homebrew"
     And the "Troubleshooting" row says "Needs Homebrew"
-    And the "App updates" row says "Needs Flatpak"
+    And the "App Updates" row says "Needs Flatpak"
     And the "Powerwash" row says "Needs Flatpak or Distrobox"
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: An update source the host cannot back is not blamed on the administrator
     Given ChairLift is running
     Then the "Applications" row says "Not available on this computer"
-    And the "Developer tools" row says "Not available on this computer"
+    And the "Developer Tools" row says "Not available on this computer"
 
   @config.config-no-agents-maintenance @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: Help explains missing tools, never groups the administrator disabled
     Given ChairLift is running
     When I select "Help" in the sidebar
-    And I expand the "Why is something missing?" row with the keyboard
-    Then the "Installed apps and tools" row says "Needs Homebrew"
+    And I expand the "Why Is Something Missing?" row with the keyboard
+    Then the "Installed Apps and Tools" row says "Needs Homebrew"
     And the feature availability list omits "Agent Mode"
     And the feature availability list omits "Troubleshooting"
     And the feature availability list omits "Powerwash"
@@ -140,9 +140,9 @@ Feature: Fail-closed configuration and configuration-driven visibility
     Given ChairLift is running
     Then the application log does not contain "CONFIGURATION ERROR"
     When I select "Help" in the sidebar
-    And I expand the "Why is something missing?" row with the keyboard
-    Then the "Developer mode" row says "Needs Bluefin"
-    And the feature availability list <verdict> "Early updates"
+    And I expand the "Why Is Something Missing?" row with the keyboard
+    Then the "Developer Mode" row says "Needs Bluefin"
+    And the feature availability list <verdict> "Early Updates"
 
     @config.everything
     Examples: no legacy input
@@ -163,4 +163,4 @@ Feature: Fail-closed configuration and configuration-driven visibility
   Scenario: The legacy system_page release-channel group surfaces on Updates
     Given ChairLift is running
     Then the application log does not contain "CONFIGURATION ERROR"
-    And I see "Get updates early"
+    And I see "Get Updates Early"

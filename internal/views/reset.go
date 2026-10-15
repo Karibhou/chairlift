@@ -52,7 +52,7 @@ const (
 // buildResetGroup builds the Powerwash and Factory Reset rows. It is the
 // last group on the Maintenance page and reads as its own section: these
 // are recovery actions, not routine maintenance, and grouping them beside
-// "Free up space" would invite a person looking for disk space to press one
+// "Free Up Space" would invite a person looking for disk space to press one
 // of them.
 func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()

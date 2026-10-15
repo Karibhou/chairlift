@@ -128,7 +128,7 @@ livery_page:
     enabled: true
 
 help_page:
-  # website is titled "Browse documentation" and chat "Ask for help", matching
+  # website is titled "Browse Documentation" and chat "Ask for Help", matching
   # projectbluefin/common's shipped configuration.
   help_resources_group:
     enabled: true

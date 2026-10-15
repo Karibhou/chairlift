@@ -23,9 +23,9 @@ func AvatarCurrentRow(hasPicture bool, applied *avatar.Avatar) Row {
 	case applied != nil:
 		return AvatarEntryRow(*applied)
 	case hasPicture:
-		return Row{Title: "Current picture", Subtitle: "Choose a dinosaur to replace it"}
+		return Row{Title: "Current Picture", Subtitle: "Choose a dinosaur to replace it"}
 	default:
-		return Row{Title: "No picture set", Subtitle: "Choose a dinosaur from Project Bluefin's artwork"}
+		return Row{Title: "No Picture Set", Subtitle: "Choose a dinosaur from Project Bluefin's artwork"}
 	}
 }
 

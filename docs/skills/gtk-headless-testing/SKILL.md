@@ -248,7 +248,7 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 - **An `AdwActionRow` activatable widget is named by the row title.**
   `SetActivatableWidget` adds a `LABELLED_BY` relation to the title, so a
   "Choose…" button in an "Avatar" row (whose title describes the current
-  picture, e.g. "No picture set") announces itself as "No picture set" — a
+  picture, e.g. "No Picture Set") announces itself as "No Picture Set" — a
   name without its visible label (WCAG 2.5.3). Call
   `ResetRelation(gtk.AccessibleRelationLabelledByValue)` after
   `SetActivatableWidget`, and have the scenario click the button by its

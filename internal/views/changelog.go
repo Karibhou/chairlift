@@ -148,6 +148,7 @@ func (uh *UserHome) renderChangelogSections(result sbom.Result) {
 
 		for _, entry := range section.Entries {
 			row := adw.NewActionRow()
+			row.SetUseMarkup(false)
 			row.SetTitle(entry.Title)
 			row.SetSubtitle(entry.Subtitle)
 			expander.AddRow(&row.Widget)

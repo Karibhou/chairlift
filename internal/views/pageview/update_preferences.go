@@ -13,10 +13,10 @@ type UpdateSourcePreference struct {
 }
 
 var UpdateSourcePreferences = []UpdateSourcePreference{
-	{ID: updateflow.OperatingSystem, Key: "operating-system-enabled", Title: "Operating system"},
+	{ID: updateflow.OperatingSystem, Key: "operating-system-enabled", Title: "Operating System"},
 	{ID: updateflow.Applications, Key: "applications-enabled", Title: "Applications"},
-	{ID: updateflow.DeveloperTools, Key: "developer-tools-enabled", Title: "Developer tools"},
-	{ID: updateflow.SystemComponents, Key: "system-components-enabled", Title: "System components"},
+	{ID: updateflow.DeveloperTools, Key: "developer-tools-enabled", Title: "Developer Tools"},
+	{ID: updateflow.SystemComponents, Key: "system-components-enabled", Title: "System Components"},
 }
 
 // UpdateSourcePreferenceSubtitle distinguishes pending, configured, and

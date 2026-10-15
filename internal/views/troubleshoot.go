@@ -162,7 +162,7 @@ func (uh *UserHome) setUpGoose() {
 	row := uh.gooseRow
 	tools := uh.gooseFacts.Tools
 	uh.gooseLaunchBtn.SetSensitive(false)
-	uh.gooseLaunchBtn.SetLabel("Setting up…")
+	uh.gooseLaunchBtn.SetLabel("Setting Up…")
 	setActivitySpinner(uh.gooseSpinner, true)
 
 	go func() {

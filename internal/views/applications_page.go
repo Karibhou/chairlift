@@ -33,7 +33,7 @@ func (uh *UserHome) buildApplicationsPage() {
 	// Collections are the first task; installed packages and export follow.
 	if uh.groupEnabled("applications_page", "brew_bundles_group") {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("App collections")
+		group.SetTitle("App Collections")
 		group.SetDescription("Looking for app collections…")
 		page.Add(group)
 		uh.brewBundlesGroup = group
@@ -52,7 +52,7 @@ func (uh *UserHome) buildApplicationsPage() {
 
 		// Package-list export row
 		dumpRow := adw.NewActionRow()
-		dumpRow.SetTitle("Export package list")
+		dumpRow.SetTitle("Export Package List")
 		dumpRow.SetSubtitle(pageview.PackageListExportSubtitle)
 		dumpSpinner := newActivitySpinner()
 		dumpRow.AddSuffix(&dumpSpinner.Widget)
@@ -70,12 +70,12 @@ func (uh *UserHome) buildApplicationsPage() {
 
 		// Command line tools — Homebrew formulae
 		uh.installedFormulae = adw.NewPreferencesGroup()
-		uh.installedFormulae.SetTitle("Command line tools")
+		uh.installedFormulae.SetTitle("Command-Line Tools")
 		uh.installedFormulae.SetDescription("Counting…")
 
 		// Applications — Homebrew casks
 		uh.installedCasks = adw.NewPreferencesGroup()
-		uh.installedCasks.SetTitle("Installed apps")
+		uh.installedCasks.SetTitle("Installed Apps")
 		uh.installedCasks.SetDescription("Counting…")
 		page.Add(uh.installedCasks)
 		page.Add(uh.installedFormulae)
@@ -186,7 +186,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 
 		// Add group-level Install button header row
 		headerRow := adw.NewActionRow()
-		headerRow.SetTitle("Install selected collections")
+		headerRow.SetTitle("Install Selected Collections")
 		headerRow.SetSubtitle("Installs all checked collections in one step.")
 		headerInstallBtn := gtk.NewButtonWithLabel("Install")
 		headerInstallBtn.SetValign(gtk.AlignCenterValue)
@@ -350,10 +350,10 @@ func (uh *UserHome) loadHomebrewPackages() {
 					row.SetTitle(presentation.Title)
 					row.SetSubtitle(presentation.Subtitle)
 
-					pinLabel := "Pin"
+					pinLabel := "Pin…"
 					pinTooltip := "Keep this version during updates"
 					if pkg.Pinned {
-						pinLabel = "Unpin"
+						pinLabel = "Unpin…"
 						pinTooltip = "Allow updates again"
 					}
 					pinBtn := gtk.NewButton()
@@ -362,7 +362,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 					pinBtn.SetTooltipText(pinTooltip)
 
 					uninstallBtn := gtk.NewButton()
-					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
+					setPackageButtonLabel(uninstallBtn, "Uninstall…", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.SetTooltipText("Remove this tool")
 
@@ -432,7 +432,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 					}
 
 					uninstallBtn := gtk.NewButton()
-					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
+					setPackageButtonLabel(uninstallBtn, "Uninstall…", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.SetTooltipText("Remove this app")
 
@@ -505,11 +505,11 @@ func (uh *UserHome) runHomebrewPin(
 	dryRun := dryrun.Enabled()
 	decision := actionstate.PackagePin(err == nil, dryRun)
 
-	idleLabel := "Unpin"
+	idleLabel := "Unpin…"
 	completeLabel := "Unpinned"
 	errorMessage := fmt.Sprintf("Couldn't unpin %s. Try again.", name)
 	if pin {
-		idleLabel = "Pin"
+		idleLabel = "Pin…"
 		completeLabel = "Pinned"
 		errorMessage = fmt.Sprintf("Couldn't pin %s. Try again.", name)
 	}
@@ -579,7 +579,7 @@ func (uh *UserHome) runHomebrewUninstall(
 		err,
 		actionmsg.UninstallFailure(name, dependents),
 		actionmsg.Uninstall(dryRun, name),
-		"Uninstall",
+		"Uninstall…",
 		"Uninstalled",
 		primary,
 		controls,

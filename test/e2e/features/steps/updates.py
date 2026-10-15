@@ -32,7 +32,7 @@ def text_present(root, wanted, exact=False):
 STATUS_DESCRIPTION = "Update status"
 
 # Every label updatepresent gives the primary action.
-PRIMARY_LABELS = ("Check again", "Update all", "Try again", "Retry failed")
+PRIMARY_LABELS = ("Check Again", "Update All", "Try Again", "Retry Failed")
 
 
 def _status_nodes(context):
@@ -206,15 +206,15 @@ def step_switch_sensitive(context, row):
 
 # The Preferences dialog (internal/window/preferences.go) presents inside the
 # main window, over the Updates page, which has rows with the same titles. Its
-# "Update sources" group is the only one with that name, so it is the scope;
+# "Update Sources" group is the only one with that name, so it is the scope;
 # the post-update maintenance switch lives in its "Maintenance" group.
-_PREFERENCE_GROUPS = {"Run maintenance after updates": "Maintenance"}
+_PREFERENCE_GROUPS = {"Run Maintenance After Updates": "Maintenance"}
 
 
 def _preference_group(context, row):
     if context.app is None:
         raise AssertionError("ChairLift is not running in this scenario (@no-app?)")
-    group = _PREFERENCE_GROUPS.get(row, "Update sources")
+    group = _PREFERENCE_GROUPS.get(row, "Update Sources")
     return atspi.find(
         context.app,
         lambda n: atspi.role(n) == "grouping" and atspi.name(n) == group,

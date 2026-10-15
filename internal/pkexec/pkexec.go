@@ -43,7 +43,7 @@ const dismissedMarker = "Request dismissed"
 // PolicyKit prompt's error. The program never ran, so there is nothing to
 // diagnose and no raw pkexec stderr or exit status worth pinning to the
 // window (#492).
-const CancelledMessage = "Authentication cancelled"
+const CancelledMessage = "Authentication canceled"
 
 // IsAuthDismissed reports whether err is the user cancelling the PolicyKit
 // authentication prompt rather than a failure: pkexec's own exit status 126

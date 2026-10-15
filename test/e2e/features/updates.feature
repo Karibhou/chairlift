@@ -4,7 +4,7 @@ Feature: Updates
   status line under it, with visible updates grouped by system consequences
   and apps/tools. Flatpak and Homebrew
   are faked (fixtures/stubs_updates.py) so every source reports a known state.
-  Most scenarios omit bootc-stage to keep the Operating system source unavailable.
+  Most scenarios omit bootc-stage to keep the Operating System source unavailable.
   Staged-deployment scenarios enable it explicitly; the isolated container supplies
   an inert stage-helper marker and all mutations remain behind --dry-run.
 
@@ -13,14 +13,14 @@ Feature: Updates
     Given ChairLift is running
     Then the Updates status reads "1 update available"
     And the Updates status sits directly under the primary action
-    And the Updates page offers only the "Update all" action
-    And the "Update all" button is sensitive
+    And the Updates page offers only the "Update All" action
+    And the "Update All" button is sensitive
     And the "Applications" row says "1 update available"
     And the "Firefox" row says "Available: 131.0"
     And the update for "Firefox" is listed once with an accessible action
-    And the "Developer tools" row says "Up to date"
-    And the "System components" row says "Not available on this computer"
-    And the "Operating system" row says "Not available on this computer"
+    And the "Developer Tools" row says "Up to date"
+    And the "System Components" row says "Not available on this computer"
+    And the "Operating System" row says "Not available on this computer"
     And the Updates sidebar badge shows "1"
 
   @stub.updates-flatpak-current @stub.updates-brew-current
@@ -28,9 +28,9 @@ Feature: Updates
     Given ChairLift is running
     Then the Updates status starts with "Up to date · checked at"
     And the Updates status sits directly under the primary action
-    And the Updates page offers only the "Check again" action
+    And the Updates page offers only the "Check Again" action
     And the "Applications" row says "Up to date"
-    And the "Developer tools" row says "Up to date"
+    And the "Developer Tools" row says "Up to date"
     And the Updates sidebar row shows no badge
     And the action journal is empty
 
@@ -38,8 +38,8 @@ Feature: Updates
   @stub.updates-bootc-staged @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: A staged deployment keeps restart in its row and says so in one status line
     Given ChairLift is running
-    Then the "Operating system" row says "Deployment staged"
-    And the "Restart now" button in the "Operating system" row is sensitive
+    Then the "Operating System" row says "Deployment staged"
+    And the "Restart Now" button in the "Operating System" row is sensitive
     And the Updates page offers no primary action
     And the Updates status reads "Restart to finish updating"
     And I do not see "Restart required"
@@ -47,9 +47,9 @@ Feature: Updates
     When Flatpak now offers an update for Firefox
     And I click the "Refresh" button
     Then the Updates status reads "1 update available · restart needed"
-    And the Updates page offers only the "Update all" action
-    And the "Operating system" row says "Deployment staged"
-    And the "Restart now" button in the "Operating system" row is sensitive
+    And the Updates page offers only the "Update All" action
+    And the "Operating System" row says "Deployment staged"
+    And the "Restart Now" button in the "Operating System" row is sensitive
 
   @stub.updates-flatpak-slow-check @stub.updates-brew-current
   Scenario: The shell reports the check while it runs, then its result
@@ -62,7 +62,7 @@ Feature: Updates
     Then the Updates status reads "1 update available"
     And the "Applications" row says "1 update available"
     And the Updates progress bar is hidden
-    And the "Update all" button is sensitive
+    And the "Update All" button is sensitive
 
   @stub.updates-flatpak-check-fails @stub.updates-brew-current
   Scenario: A check that cannot reach the network is reported and can be retried
@@ -72,12 +72,12 @@ Feature: Updates
     And the "Applications" row says "Couldn't check for updates. Check your internet connection."
     And I do not see "Could not resolve hostname"
     And the application log contains "Could not resolve hostname"
-    And the Updates page offers only the "Try again" action
+    And the Updates page offers only the "Try Again" action
     When the Flatpak remote is reachable again
-    And I click the "Try again" button
+    And I click the "Try Again" button
     Then the Updates status starts with "Up to date · checked at"
     And the "Applications" row says "Up to date"
-    And the Updates page offers only the "Check again" action
+    And the Updates page offers only the "Check Again" action
 
   # Issue #471: a remote left behind by an uninstalled application cannot be
   # reached, but nothing installed comes from it, so it must not fail the check.
@@ -98,14 +98,14 @@ Feature: Updates
     And I do not see "Check your internet connection."
     And I do not see "no summary signatures found"
     And the application log contains "no summary signatures found"
-    And the Updates page offers only the "Try again" action
+    And the Updates page offers only the "Try Again" action
 
   @stub.updates-flatpak-current @stub.updates-brew-trust-check-fails
   Scenario: A failed source-trust check is not hidden as if every source were trusted
     Given ChairLift is running
-    Then I see "Manage source trust"
-    And the "Couldn't check for paused updates" row says "Check your internet connection and try again."
-    And the "Retry" button in the "Couldn't check for paused updates" row is sensitive
+    Then I see "Manage Source Trust"
+    And the "Couldn't Check for Paused Updates" row says "Check your internet connection and try again."
+    And the "Retry" button in the "Couldn't Check for Paused Updates" row is sensitive
     And the application log contains "untrusted tap check failed"
 
   @stub.updates-flatpak-current @stub.updates-brew-current
@@ -122,17 +122,17 @@ Feature: Updates
 
     Examples:
       | control     |
-      | Check again |
+      | Check Again |
       | Refresh     |
 
   @stub.updates-flatpak-one-update @stub.updates-brew-current
-  Scenario: Update all previews only the sources with updates and keeps them pending
+  Scenario: Update All previews only the sources with updates and keeps them pending
     Given ChairLift is running
     Then the Updates status reads "1 update available"
-    When I click the "Update all" button
+    When I click the "Update All" button
     Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user"
     And I see "[DRY-RUN] Preview: updates would be installed — no changes made"
-    And the "Update all" button is sensitive
+    And the "Update All" button is sensitive
     And the "Refresh" button is sensitive
     And the Updates status reads "1 update available"
     And the "Applications" row says "1 update available"
@@ -143,17 +143,17 @@ Feature: Updates
     And the action journal is empty
 
   @stub.updates-flatpak-current @stub.updates-brew-one-outdated
-  Scenario: Update all previews a Homebrew refresh and upgrade without running brew
+  Scenario: Update All previews a Homebrew refresh and upgrade without running brew
     Given ChairLift is running
     Then the Updates status reads "1 update available"
-    And the "Developer tools" row says "1 update available"
+    And the "Developer Tools" row says "1 update available"
     And the "jq" row says "Installed: 1.7.1"
-    When I click the "Update all" button
+    When I click the "Update All" button
     Then the application log contains "[DRY-RUN] Would execute: brew update"
     And the application log contains "[DRY-RUN] Would execute: brew upgrade"
     And I see "[DRY-RUN] Preview: updates would be installed — no changes made"
-    And the "Update all" button is sensitive
-    And the "Developer tools" row says "1 update available"
+    And the "Update All" button is sensitive
+    And the "Developer Tools" row says "1 update available"
     And the application log does not contain "Would execute: flatpak update"
     And the brew tool was never asked to "update"
     And the brew tool was never asked to "upgrade"
@@ -164,7 +164,7 @@ Feature: Updates
     Given ChairLift is running
     Then the Updates status starts with "Up to date"
     And the "Applications" row says "Disabled by administrator"
-    And the "Developer tools" row says "Up to date"
+    And the "Developer Tools" row says "Up to date"
     And the Updates sidebar row shows no badge
     And the flatpak tool was never asked to "remote-ls"
 
@@ -177,17 +177,17 @@ Feature: Updates
     When I press "<Control>comma"
     Then the Preferences "Applications" row says "Disabled by administrator"
     And the Preferences "Applications" switch is off and refuses input
-    And the Preferences "Developer tools" switch is on and accepts input
+    And the Preferences "Developer Tools" switch is on and accepts input
 
-  # "Run maintenance after updates" stayed bound and sensitive with routine
+  # "Run Maintenance After Updates" stayed bound and sensitive with routine
   # cleanup disabled, offering an ON switch for a post-update phase that skips
   # every step.
   @config.config-one-group-off @stub.updates-brew-current
   Scenario: Preferences locks post-update maintenance when cleanup is disabled
     Given ChairLift is running
     When I press "<Control>comma"
-    Then the Preferences "Run maintenance after updates" row says "Disabled by administrator"
-    And the Preferences "Run maintenance after updates" switch is off and refuses input
+    Then the Preferences "Run Maintenance After Updates" row says "Disabled by administrator"
+    And the Preferences "Run Maintenance After Updates" switch is off and refuses input
 
   # W3-15: turning a source off in Preferences left its row "Up to date"
   # until a manual Refresh.
@@ -201,7 +201,7 @@ Feature: Updates
     When I press "Escape"
     Then no dialog is shown
     And the "Applications" row says "Disabled in preferences"
-    And the "Developer tools" row says "Up to date"
+    And the "Developer Tools" row says "Up to date"
 
   # Issue #349 regressions: the Updates preferences page (buildUpdatesPage)
   # mounts beneath the update shell's sources, so automatic updates, the
@@ -214,26 +214,26 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: Turning automatic updates off in a dry run asks the helper once and keeps them on
     Given ChairLift is running
-    Then the switch in the "Automatic updates" row is on
-    When I toggle the switch in the "Automatic updates" row
+    Then the switch in the "Automatic Updates" row is on
+    When I toggle the switch in the "Automatic Updates" row
     Then the action journal records "auto-updates-disable" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper auto-updates-disable --dry-run"
     And I see "[DRY-RUN] Preview: automatic updates would be turned off — no changes made"
-    And the switch in the "Automatic updates" row can be toggled again
-    And the switch in the "Automatic updates" row is on
+    And the switch in the "Automatic Updates" row can be toggled again
+    And the switch in the "Automatic Updates" row is on
     And the action journal holds exactly 1 entry
 
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: Asking for early updates in a dry run journals the channel word only and stays on stable
     Given ChairLift is running
     Then the Updates status starts with "Up to date · checked at"
-    And the switch in the "Get updates early" row is off
-    When I toggle the switch in the "Get updates early" row
+    And the switch in the "Get Updates Early" row is off
+    When I toggle the switch in the "Get Updates Early" row
     Then the action journal records "channel-switch" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper channel-switch testing --dry-run"
     And I see "[DRY-RUN] Preview: would switch to the testing channel — no changes made"
-    And the switch in the "Get updates early" row can be toggled again
-    And the switch in the "Get updates early" row is off
+    And the switch in the "Get Updates Early" row can be toggled again
+    And the switch in the "Get Updates Early" row is off
     And the action journal holds exactly 1 entry
 
   # W4: switching channel replaces the operating system, so the update shell
@@ -243,32 +243,32 @@ Feature: Updates
   Scenario: Asking for early updates while a check runs is refused with an explanation
     Given ChairLift is running
     Then the Updates status reads "Checking for updates…"
-    When I toggle the switch in the "Get updates early" row
+    When I toggle the switch in the "Get Updates Early" row
     Then I see "Wait for the current update check or installation to finish"
-    And the switch in the "Get updates early" row is off
+    And the switch in the "Get Updates Early" row is off
     And the action journal is empty
 
   @stub.updates-image-dakota-stable @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: Switching to the recommended graphics driver in a dry run journals the driver word and restores the button
     Given ChairLift is running
     Then the Updates status starts with "Up to date · checked at"
-    And the "Graphics driver" row says "Switch to the NVIDIA (proprietary) driver for your NVIDIA + Intel graphics"
-    When I click the "Switch" button in the "Graphics driver" row
+    And the "Graphics Driver" row says "Switch to the NVIDIA (proprietary) driver for your NVIDIA + Intel graphics"
+    When I click the "Switch" button in the "Graphics Driver" row
     Then the action journal records "driver-switch" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper driver-switch nvidia --dry-run"
     And I see "[DRY-RUN] Preview: would switch to the NVIDIA (proprietary) image — no changes made"
-    And the "Switch" button in the "Graphics driver" row is sensitive
+    And the "Switch" button in the "Graphics Driver" row is sensitive
 
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: A stream that publishes no NVIDIA variant offers no driver switch
     Given ChairLift is running
-    Then the "Graphics driver" row says "Using the Standard driver for your NVIDIA + Intel graphics"
+    Then the "Graphics Driver" row says "Using the Standard driver for your NVIDIA + Intel graphics"
     And the "Switch" button is not shown
 
   @stub.updates-bootc-booted @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: The system version is read from the booted deployment
     Given ChairLift is running
-    Then the "System version" row says "Version 42.20260920.0, released 20 September 2026."
+    Then the "System Version" row says "Version 42.20260920.0, released 20 September 2026."
 
   @stub.updates-flatpak-one-update @stub.updates-brew-current
   Scenario: Updating one app from its row in a dry run previews that app only and restores the row
@@ -284,9 +284,9 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-one-outdated
   Scenario: Checking Homebrew for new versions in a dry run previews the refresh and restores the button
     Given ChairLift is running
-    When I click the "Check" button in the "Developer tools" row
+    When I click the "Check" button in the "Developer Tools" row
     Then the application log contains "[DRY-RUN] Would execute: brew update"
-    And the "Check" button in the "Developer tools" row is sensitive
+    And the "Check" button in the "Developer Tools" row is sensitive
     And the "jq" row says "Installed: 1.7.1"
     And the update for "jq" is listed once with an accessible action
     And the brew tool was never asked to "update"
@@ -294,33 +294,33 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-sources-fail
   Scenario: A failed source discovery remains visible and can be retried
     Given ChairLift is running
-    Then the "Couldn't check for paused updates" row says "Check your internet connection and try again."
+    Then the "Couldn't Check for Paused Updates" row says "Check your internet connection and try again."
     When software source discovery is reachable again
-    And I click the "Retry" button in the "Couldn't check for paused updates" row
-    Then I do not see "Couldn't check for paused updates"
+    And I click the "Retry" button in the "Couldn't Check for Paused Updates" row
+    Then I do not see "Couldn't Check for Paused Updates"
 
   @stub.updates-flatpak-current @stub.updates-brew-untrusted
   Scenario: Trust remains reachable without opening an update disclosure
     Given ChairLift is running
     Then the "vendor/tap" row says "Updates are paused for 1 program"
-    When I click the "Trust Tap" button in the "vendor/tap" row
-    Then a dialog titled "Trust software from vendor/tap?" is shown
+    When I click the "Trust Tap…" button in the "vendor/tap" row
+    Then a dialog titled "Trust Software from vendor/tap?" is shown
     And the dialog says "This will trust the 1 installed program from vendor/tap"
     When I choose "Trust Tap" in the dialog
     Then the application log contains "[DRY-RUN] Would execute: brew trust --formula vendor/tap/example"
-    And the "Trust Tap" button in the "vendor/tap" row is sensitive
+    And the "Trust Tap…" button in the "vendor/tap" row is sensitive
     And the "vendor/tap" row says "Updates are paused"
     And the brew tool was never asked to "trust"
 
   @stub.updates-flatpak-current @stub.updates-brew-untrusted
   Scenario: Trusting one program from a source in a dry run previews that program only
     Given ChairLift is running
-    When I expand the "vendor/tap" list under "Manage source trust"
+    When I expand the "vendor/tap" list under "Manage Source Trust"
     Then the "example" row says "Updates are paused for this program — Trust to update"
-    When I click the "Trust" button in the "example" row
+    When I click the "Trust…" button in the "example" row
     Then a dialog titled "Trust example from vendor/tap?" is shown
     When I choose "Trust" in the dialog
     Then the application log contains "[DRY-RUN] Would execute: brew trust --formula vendor/tap/example"
-    And the "Trust" button in the "example" row is sensitive
+    And the "Trust…" button in the "example" row is sensitive
     And the "example" row says "Updates are paused for this program"
     And the brew tool was never asked to "trust"

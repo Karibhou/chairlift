@@ -16,7 +16,7 @@ type sourceRow struct {
 	buttons     []*gtk.Button
 	items       []updateflow.Item
 	enabled     bool
-	// restartButton is the "Restart now" suffix on the Operating system row,
+	// restartButton is the "Restart Now" suffix on the Operating system row,
 	// created once and shown only when the OS source reports a staged
 	// deployment. Hidden in every other state so the row's resting shape
 	// never carries a control that cannot fire.
@@ -51,7 +51,7 @@ func newSourceRow(state updateflow.SourceState, group *adw.PreferencesGroup, she
 		// created once at build time — its callback identity is a single
 		// shared trampoline from updateButtons, so reloads do not leak
 		// slots — and render() decides whether it is currently on screen.
-		button := gtk.NewButtonWithLabel("Restart now")
+		button := gtk.NewButtonWithLabel("Restart Now")
 		button.SetValign(gtk.AlignCenterValue)
 		// The one next step once an update is staged; the header's primary
 		// action is hidden then, so this is the view's suggested action, as
@@ -68,6 +68,7 @@ func newSourceRow(state updateflow.SourceState, group *adw.PreferencesGroup, she
 	}
 	for _, item := range updatepresent.ItemRows(state) {
 		detail := adw.NewActionRow()
+		detail.SetUseMarkup(false)
 		detail.SetTitle(updatepresent.ItemTitle(item))
 		detail.SetSubtitle(updatepresent.ItemSubtitle(item))
 		detail.SetSubtitleLines(r.subtitleLines())
@@ -116,7 +117,7 @@ func (r *sourceRow) setSensitive(sensitive bool) {
 	}
 }
 
-// setRestartButtonSensitive toggles only the "Restart now" suffix. The
+// setRestartButtonSensitive toggles only the "Restart Now" suffix. The
 // shell calls it from StartRestart — the row owns the action now (#439) —
 // while setSensitive continues to gate every suffix at once during a
 // mutation, so a running update run cannot fire restart from either place.

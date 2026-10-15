@@ -51,7 +51,7 @@ func (uh *UserHome) buildUpdatesPage() {
 	// bootc hosts that ship the update-stage script.
 	if uh.groupEnabled("updates_page", "bootc_updates_group") {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("System update details")
+		group.SetTitle("System Update Details")
 		group.SetDescription("Download a system update on its own, or see what it changes.")
 		group.SetVisible(false)
 
@@ -62,7 +62,7 @@ func (uh *UserHome) buildUpdatesPage() {
 		// Pango markup by default, so a '<' or '&' would garble the row
 		// with a GTK warning (issue #437).
 		uh.bootcStageExpander.SetUseMarkup(false)
-		uh.bootcStageExpander.SetTitle("Download system update")
+		uh.bootcStageExpander.SetTitle("Download System Update")
 		uh.bootcStageExpander.SetSubtitle("Checking…")
 
 		uh.bootcStageBtn = gtk.NewButtonWithLabel(pageview.BootcStageButtonLabel)
@@ -86,7 +86,7 @@ func (uh *UserHome) buildUpdatesPage() {
 	// something a person can act on (Homebrew 6 tap trust).
 	if uh.groupEnabled("updates_page", "brew_trust_group") {
 		uh.brewTrustGroup = adw.NewPreferencesGroup()
-		uh.brewTrustGroup.SetTitle("Manage source trust")
+		uh.brewTrustGroup.SetTitle("Manage Source Trust")
 		uh.brewTrustGroup.SetDescription("Some software came from a source you have not said you trust, so it stays at the version you have. Trust the source to let all its software update, or open it to trust a specific program.")
 		uh.brewTrustGroup.SetVisible(false)
 		page.Add(uh.brewTrustGroup)
@@ -141,7 +141,7 @@ func (uh *UserHome) loadUntrustedTaps() {
 			// default, so a '<' or '&' in that text would garble or drop
 			// the row with a GTK warning (issue #437).
 			row.SetUseMarkup(false)
-			row.SetTitle("Couldn't check for paused updates")
+			row.SetTitle("Couldn't Check for Paused Updates")
 			row.SetSubtitle("Check your internet connection and try again.")
 			button := gtk.NewButtonWithLabel("Retry")
 			button.SetValign(gtk.AlignCenterValue)
@@ -169,7 +169,7 @@ func (uh *UserHome) loadUntrustedTaps() {
 			// rather trust individually. Naming it "Trust Tap" makes the
 			// wider scope visible so a click cannot read as a narrower
 			// action than it actually is.
-			trustBtn := gtk.NewButtonWithLabel("Trust Tap")
+			trustBtn := gtk.NewButtonWithLabel("Trust Tap…")
 			trustBtn.SetValign(gtk.AlignCenterValue)
 			describeFor(trustBtn, presentation.Title)
 			uh.trustButtons.connect(trustBtn, func(gtk.Button) {
@@ -246,7 +246,7 @@ func (uh *UserHome) buildUntrustedPackageRow(qualifiedName string, kind homebrew
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
 
-	btn := gtk.NewButtonWithLabel("Trust")
+	btn := gtk.NewButtonWithLabel("Trust…")
 	btn.SetValign(gtk.AlignCenterValue)
 	describeFor(btn, presentation.Title)
 	uh.trustButtons.connect(btn, func(gtk.Button) {
@@ -294,8 +294,8 @@ func (uh *UserHome) trustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 	sgtk.RunOnMainThread(func() {
 		if err != nil {
 			button.SetSensitive(true)
-			button.SetLabel("Trust Tap")
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not trust %s", tap.Name))
+			button.SetLabel("Trust Tap…")
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't trust %s", tap.Name))
 			return
 		}
 
@@ -318,7 +318,7 @@ func (uh *UserHome) trustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 			// disappear from the unverified-sources list. Reset the button
 			// instead of leaving it stuck on "Trusting Tap…".
 			button.SetSensitive(true)
-			button.SetLabel("Trust Tap")
+			button.SetLabel("Trust Tap…")
 			uh.toastAdder.ShowToast(decision.Toast)
 		}
 	})
@@ -373,8 +373,8 @@ func (uh *UserHome) trustPackage(qualifiedName string, kind homebrew.PackageKind
 	sgtk.RunOnMainThread(func() {
 		if err != nil {
 			button.SetSensitive(true)
-			button.SetLabel("Trust")
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not trust %s", qualifiedName))
+			button.SetLabel("Trust…")
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't trust %s", qualifiedName))
 			return
 		}
 
@@ -409,7 +409,7 @@ func (uh *UserHome) trustPackage(qualifiedName string, kind homebrew.PackageKind
 			}
 		} else {
 			button.SetSensitive(true)
-			button.SetLabel("Trust")
+			button.SetLabel("Trust…")
 			uh.toastAdder.ShowToast(decision.Toast)
 		}
 	})
@@ -625,7 +625,7 @@ func (uh *UserHome) onBootcStageClicked() {
 
 			if stageErr != nil {
 				log.Printf("staging the system update failed: %v", stageErr)
-				toast, isError := pageview.PrivilegedFailureToast(stageErr, "The system update could not be downloaded")
+				toast, isError := pageview.PrivilegedFailureToast(stageErr, "The system update couldn't be downloaded")
 				if !isError {
 					// Authentication was dismissed: nothing ran, so the row
 					// reads as it did before the click.
@@ -664,18 +664,18 @@ func (uh *UserHome) onBootcStageClicked() {
 	}()
 }
 
-// buildSystemVersionGroup builds the read-only "System version" group: one
+// buildSystemVersionGroup builds the read-only "System Version" group: one
 // plain-language row saying what this machine runs, and a Details row
 // holding the identifiers a support request asks for. It is built hidden
 // and revealed asynchronously, because reading the version requires an exec
 // and this host may not be image-based at all.
 func (uh *UserHome) buildSystemVersionGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle("Your system")
+	group.SetTitle("Your System")
 	group.SetVisible(false)
 
 	versionRow := adw.NewActionRow()
-	versionRow.SetTitle("System version")
+	versionRow.SetTitle("System Version")
 	versionRow.SetSubtitle("Checking…")
 	group.Add(&versionRow.Widget)
 
@@ -808,7 +808,7 @@ func (uh *UserHome) buildChannelErrorGroup(page *adw.PreferencesPage) {
 	group.SetTitle("Advanced")
 
 	row := adw.NewActionRow()
-	row.SetTitle("Unavailable right now")
+	row.SetTitle("Unavailable Right Now")
 	row.SetSubtitle("These options are off because of a problem with this computer's update settings.")
 	group.Add(&row.Widget)
 
@@ -932,7 +932,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 
 			if err != nil {
 				log.Printf("switching the graphics driver failed: %v", err)
-				uh.showPrivilegedFailure(err, "Could not switch the graphics driver")
+				uh.showPrivilegedFailure(err, "Couldn't switch the graphics driver")
 				return
 			}
 
@@ -980,7 +980,7 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 			if err != nil {
 				toggle.set(!toTesting)
 				log.Printf("switching the release channel failed: %v", err)
-				uh.showPrivilegedFailure(err, "Could not change when this system gets updates")
+				uh.showPrivilegedFailure(err, "Couldn't change when this system gets updates")
 				return
 			}
 

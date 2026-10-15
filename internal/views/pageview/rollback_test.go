@@ -32,8 +32,8 @@ func TestBootcRollbackRowDescribesTheOneDestination(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			row := BootcRollbackRow(test.version, test.timestamp)
-			if row.Title != "Go back to the previous version" {
-				t.Errorf("BootcRollbackRow().Title = %q, want %q", row.Title, "Go back to the previous version")
+			if row.Title != "Go Back to the Previous Version" {
+				t.Errorf("BootcRollbackRow().Title = %q, want %q", row.Title, "Go Back to the Previous Version")
 			}
 			if !strings.Contains(row.Subtitle, test.wantHas) {
 				t.Errorf("BootcRollbackRow(%q, %q).Subtitle = %q, want it to contain %q",

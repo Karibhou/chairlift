@@ -41,7 +41,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Action: updateflow.ActionCheck,
 			},
 			want: Presentation{Status: "Up to date",
-				ActionLabel: "Check again",
+				ActionLabel: "Check Again",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
 		},
@@ -73,7 +73,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				TotalUpdates: 2,
 			},
 			want: Presentation{Status: "2 updates available",
-				ActionLabel: "Update all",
+				ActionLabel: "Update All",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
 		},
@@ -88,7 +88,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				TotalUpdates: 1,
 			},
 			want: Presentation{Status: "1 update available · restart needed",
-				ActionLabel: "Update all",
+				ActionLabel: "Update All",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
 		},
@@ -105,8 +105,8 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 			},
 			want: Presentation{Status: "Couldn't check for updates",
-				Detail:      "Not checked: Developer tools. Check your internet connection.",
-				ActionLabel: "Try again",
+				Detail:      "Not checked: Developer Tools. Check your internet connection.",
+				ActionLabel: "Try Again",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
 		},
@@ -117,7 +117,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Current:  updateflow.DeveloperTools,
 				Progress: "Installing packages…",
 			},
-			want: Presentation{Status: "Developer tools: Installing packages…"},
+			want: Presentation{Status: "Developer Tools: Installing packages…"},
 		},
 		{
 			name: "updating without provider progress",
@@ -145,7 +145,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Current:     updateflow.DeveloperTools,
 				Progress:    "Removing old downloads",
 			},
-			want: Presentation{Status: "Developer tools: Removing old downloads"},
+			want: Presentation{Status: "Developer Tools: Removing old downloads"},
 		},
 		{
 			name: "partial failure",
@@ -166,8 +166,8 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 			},
 			want: Presentation{Status: "Couldn't install some updates",
-				Detail:      "Not updated: Developer tools, Operating system",
-				ActionLabel: "Retry failed",
+				Detail:      "Not updated: Developer Tools, Operating System",
+				ActionLabel: "Retry Failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
 		},
@@ -183,7 +183,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{Status: "Updates installed, but couldn't clean up",
 				Detail:      "Old files are still on this computer. Details are in the log.",
-				ActionLabel: "Retry failed",
+				ActionLabel: "Retry Failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
 		},
@@ -198,7 +198,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					},
 				},
 			},
-			// The restart action stays on the Operating system row (#439):
+			// The restart action stays on the Operating System row (#439):
 			// the header offers no primary action, only the line saying
 			// what is left to do.
 			want: Presentation{Status: "Restart to finish updating"},
@@ -238,7 +238,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				ID:         updateflow.DeveloperTools,
 				Configured: false,
 			},
-			title: "Developer tools",
+			title: "Developer Tools",
 			sub:   "Disabled by administrator",
 		},
 		{
@@ -248,7 +248,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Configured: true,
 				Available:  false,
 			},
-			title: "System components",
+			title: "System Components",
 			sub:   "Not available on this computer",
 		},
 		{
@@ -271,7 +271,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:    true,
 				Checking:   true,
 			},
-			title: "Operating system",
+			title: "Operating System",
 			sub:   "Checking for updates…",
 		},
 		{
@@ -295,7 +295,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:         true,
 				RestartRequired: true,
 			},
-			title: "Operating system",
+			title: "Operating System",
 			sub:   "Deployment staged",
 		},
 		{
@@ -307,7 +307,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:    true,
 				CheckErr:   &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("network is unreachable")},
 			},
-			title: "Developer tools",
+			title: "Developer Tools",
 			sub:   "Couldn't check for updates. Check your internet connection.",
 		},
 		{
@@ -319,7 +319,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:    true,
 				CheckErr:   errors.New("permission denied @ rb_sysopen - /home/linuxbrew/.linuxbrew/var"),
 			},
-			title: "Developer tools",
+			title: "Developer Tools",
 			sub:   "Couldn't check for updates. Details are in the log.",
 		},
 		{
@@ -331,7 +331,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:    true,
 				ApplyErr:   errors.New("staging failed"),
 			},
-			title: "Operating system",
+			title: "Operating System",
 			sub:   "Couldn't update. Details are in the log.",
 		},
 		{
@@ -358,15 +358,15 @@ func TestSourceMapsSourceState(t *testing.T) {
 	}
 }
 
-// The Operating system source's one pending item is the deployment itself:
+// The Operating System source's one pending item is the deployment itself:
 // its versions go on the source row and no child row repeats the source's
-// name. VM finding: "Operating system — 1 update available" followed by an
+// name. VM finding: "Operating System — 1 update available" followed by an
 // "Operating System" child row with "20261006 → 20261007". The fold is keyed
 // on the source ID, never the item's name: a lone app or formula that happens
 // to share its source's title keeps its row, which carries its only Update
 // button (Hive review on #539).
 func TestSourceFoldsSoleOperatingSystemItem(t *testing.T) {
-	osItem := updateflow.Item{Name: "Operating system", CurrentVersion: "20261006", AvailableVersion: "20261007", Scope: "bootc"}
+	osItem := updateflow.Item{Name: "Operating System", CurrentVersion: "20261006", AvailableVersion: "20261007", Scope: "bootc"}
 	apps := []updateflow.Item{{Name: "Firefox"}, {Name: "GIMP"}}
 	tests := []struct {
 		name     string
@@ -377,12 +377,12 @@ func TestSourceFoldsSoleOperatingSystemItem(t *testing.T) {
 	}{
 		{"os version transition", updateflow.OperatingSystem, []updateflow.Item{osItem}, "Update available: 20261006 → 20261007", nil},
 		{"os legacy capitalization", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating System", CurrentVersion: "1", AvailableVersion: "2"}}, "Update available: 1 → 2", nil},
-		{"os available version only", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating system", AvailableVersion: "20261007"}}, "Update available: 20261007", nil},
-		{"os without versions", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating system"}}, "1 update available", nil},
+		{"os available version only", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating System", AvailableVersion: "20261007"}}, "Update available: 20261007", nil},
+		{"os without versions", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating System"}}, "1 update available", nil},
 		{"single differently named app", updateflow.Applications, []updateflow.Item{{Name: "Firefox", CurrentVersion: "1", AvailableVersion: "2"}}, "1 update available", []updateflow.Item{{Name: "Firefox", CurrentVersion: "1", AvailableVersion: "2"}}},
 		{"single app named like its source", updateflow.Applications, []updateflow.Item{{Name: "Applications", CurrentVersion: "1", AvailableVersion: "2"}}, "1 update available", []updateflow.Item{{Name: "Applications", CurrentVersion: "1", AvailableVersion: "2"}}},
-		{"single tool named like its source", updateflow.DeveloperTools, []updateflow.Item{{Name: "Developer tools"}}, "1 update available", []updateflow.Item{{Name: "Developer tools"}}},
-		{"single component named like its source", updateflow.SystemComponents, []updateflow.Item{{Name: "System components"}}, "1 update available", []updateflow.Item{{Name: "System components"}}},
+		{"single tool named like its source", updateflow.DeveloperTools, []updateflow.Item{{Name: "Developer Tools"}}, "1 update available", []updateflow.Item{{Name: "Developer Tools"}}},
+		{"single component named like its source", updateflow.SystemComponents, []updateflow.Item{{Name: "System Components"}}, "1 update available", []updateflow.Item{{Name: "System Components"}}},
 		{"multiple apps", updateflow.Applications, apps, "2 updates available", apps},
 		{"multiple developer tools", updateflow.DeveloperTools, apps, "2 updates available", apps},
 		{"two operating system items", updateflow.OperatingSystem, []updateflow.Item{osItem, osItem}, "2 updates available", []updateflow.Item{osItem, osItem}},
@@ -684,12 +684,12 @@ func TestCheckFailedDetailNamesTheNetworkOnlyWhenEveryFailureWasIt(t *testing.T)
 				{ID: updateflow.Applications, CheckErr: offline},
 				{ID: updateflow.DeveloperTools, CheckErr: offline},
 			},
-			want: "Not checked: Applications, Developer tools. Check your internet connection.",
+			want: "Not checked: Applications, Developer Tools. Check your internet connection.",
 		},
 		{
 			name:    "one local failure",
 			sources: []updateflow.SourceState{{ID: updateflow.DeveloperTools, CheckErr: local}},
-			want:    "Not checked: Developer tools. Details are in the log.",
+			want:    "Not checked: Developer Tools. Details are in the log.",
 		},
 		{
 			name: "offline and local mixed",
@@ -697,7 +697,7 @@ func TestCheckFailedDetailNamesTheNetworkOnlyWhenEveryFailureWasIt(t *testing.T)
 				{ID: updateflow.Applications, CheckErr: offline},
 				{ID: updateflow.DeveloperTools, CheckErr: local},
 			},
-			want: "Not checked: Applications, Developer tools. Details are in the log.",
+			want: "Not checked: Applications, Developer Tools. Details are in the log.",
 		},
 	}
 	for _, tt := range tests {
@@ -710,7 +710,7 @@ func TestCheckFailedDetailNamesTheNetworkOnlyWhenEveryFailureWasIt(t *testing.T)
 	}
 }
 
-// The restart lives on the Operating system row (#439); the header must not
+// The restart lives on the Operating System row (#439); the header must not
 // grow a restart, destructive, or any other primary action for it.
 func TestRestartRequiredLeavesTheActionOnTheRow(t *testing.T) {
 	got := Snapshot(updateflow.Snapshot{

@@ -19,10 +19,10 @@ func PrintersGroupDescription() string {
 	return "Extra drivers for printers that don't work on their own. Only this computer can use them."
 }
 
-// familyRowTitles overrides the derived "<family> printers" title where the
+// familyRowTitles overrides the derived "<family> Printers" title where the
 // family name alone would not tell a person which printers it is for.
 var familyRowTitles = map[string]string{
-	"hplip": "HP printers (HPLIP)",
+	"hplip": "HP Printers (HPLIP)",
 }
 
 // PrinterFamilyRow is the switch row's title for one driver family.
@@ -30,7 +30,7 @@ func PrinterFamilyRow(f printerapp.Family) string {
 	if title, ok := familyRowTitles[f.ID]; ok {
 		return title
 	}
-	return f.DisplayName + " printers"
+	return f.DisplayName + " Printers"
 }
 
 // PrinterAppSubtitle is the switch row's subtitle for a resolved state. port

@@ -112,7 +112,7 @@ unattended-update switch is `updates_page.automatic_updates_group`.
 ### Agents Page (`agents_page`)
 
 - `agents_group`: Agent Mode — llmman installed with Homebrew and served as a systemd user unit on `127.0.0.1:17434` in the invoking user's own account; shown where Homebrew is present. Nothing here crosses a privilege boundary. It has no options beyond `enabled`. The page also presents Contribute to Bluefin via `ujust contribute`.
-- `troubleshooting_group`: Troubleshooting — the Goose row and the "Show Ask Bluefin in menu" shortcut preference; shown where Homebrew is present. Set Up installs `linux-mcp-server` and the Goose desktop app with Homebrew in the invoking user's account (nothing is downloaded until it is pressed; the app is published for x86_64 only); Launch runs Goose on the Agent Mode model in ChairLift's own profile under `$XDG_DATA_HOME/chairlift/troubleshooting`, never `~/.config/goose`, with read-only tools for this computer and online searches of the Project Bluefin knowledge base. It has no options beyond `enabled`. Formerly `help_page.troubleshooting_group`; that key is still accepted and moved here, and a value set under `agents_page` wins.
+- `troubleshooting_group`: Troubleshooting — the Goose row and the "Show Ask Bluefin in Menu" shortcut preference; shown where Homebrew is present. Set Up installs `linux-mcp-server` and the Goose desktop app with Homebrew in the invoking user's account (nothing is downloaded until it is pressed; the app is published for x86_64 only); Launch runs Goose on the Agent Mode model in ChairLift's own profile under `$XDG_DATA_HOME/chairlift/troubleshooting`, never `~/.config/goose`, with read-only tools for this computer and online searches of the Project Bluefin knowledge base. It has no options beyond `enabled`. Formerly `help_page.troubleshooting_group`; that key is still accepted and moved here, and a value set under `agents_page` wins.
 
 ### Updates Page (`updates_page`)
 
@@ -178,7 +178,7 @@ Both require hardware virtualization and access to `/dev/kvm`. Missing fixed
 helper actions disable only affected switches, not their discoverability.
 KVM permission changes require a new login; Docker needs an accessible daemon
 socket for this session. No user-configurable privileged argv is accepted.
-The **Virtual machine engine** chooser (Built-in for nsl, or Lima) changes the backend used in the current window;
+The **Virtual Machine Engine** chooser (Built-in for nsl, or Lima) changes the backend used in the current window;
 `wsl_backend` configures the initial choice. With the nsl default, an existing
 Lima Ubuntu machine and no ChairLift nsl machine select Lima instead of creating
 another. nsl creates an Ubuntu machine, but keeps using the Debian machine an
@@ -223,7 +223,7 @@ updates_page:
   flatpak_updates_group:
     enabled: true # Keep Flatpak updates
   brew_updates_group:
-    enabled: false # Hide Homebrew updates, and drop the "Developer tools" source from the update run
+    enabled: false # Hide Homebrew updates, and drop the "Developer Tools" source from the update run
   brew_trust_group:
     enabled: false # Hide Homebrew tap trust
 

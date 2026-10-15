@@ -93,10 +93,10 @@ func TestUninstallFailureNamesDependents(t *testing.T) {
 		dependents []string
 		want       string
 	}{
-		{nil, "Could not uninstall node"},
-		{[]string{"yarn"}, "Could not uninstall node because yarn needs it"},
-		{[]string{"yarn", "pnpm"}, "Could not uninstall node because yarn and pnpm need it"},
-		{[]string{"glib", "pipx", "yarn"}, "Could not uninstall node because glib, pipx and yarn need it"},
+		{nil, "Couldn't uninstall node"},
+		{[]string{"yarn"}, "Couldn't uninstall node because yarn needs it"},
+		{[]string{"yarn", "pnpm"}, "Couldn't uninstall node because yarn and pnpm need it"},
+		{[]string{"glib", "pipx", "yarn"}, "Couldn't uninstall node because glib, pipx and yarn need it"},
 	} {
 		if got := UninstallFailure("node", tt.dependents); got != tt.want {
 			t.Errorf("UninstallFailure(node, %q) = %q, want %q", tt.dependents, got, tt.want)

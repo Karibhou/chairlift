@@ -82,7 +82,7 @@ func GooseLaunchButtonLabel() string {
 }
 
 func AskBluefinMenuRowTitle() string {
-	return "Show Ask Bluefin in menu"
+	return "Show Ask Bluefin in Menu"
 }
 
 func AskBluefinMenuRowSubtitle() string {

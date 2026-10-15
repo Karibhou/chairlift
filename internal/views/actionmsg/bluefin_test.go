@@ -318,20 +318,20 @@ func TestAgentModeDisableSaysModelsWereKept(t *testing.T) {
 
 func TestPrinterAppDryRunDoesNotConfirmAndNamesTheRow(t *testing.T) {
 	for _, enable := range []bool{true, false} {
-		decision := PrinterApp(true, enable, "HP printers (HPLIP)")
-		if decision.Confirm || !strings.HasPrefix(decision.Toast, "[DRY-RUN] Preview: HP printers (HPLIP) would be") || !strings.HasSuffix(decision.Toast, "— no changes made") {
+		decision := PrinterApp(true, enable, "HP Printers (HPLIP)")
+		if decision.Confirm || !strings.HasPrefix(decision.Toast, "[DRY-RUN] Preview: HP Printers (HPLIP) would be") || !strings.HasSuffix(decision.Toast, "— no changes made") {
 			t.Errorf("dry run enable=%v: %+v", enable, decision)
 		}
 	}
 }
 
 func TestPrinterAppLiveConfirmsAndDisableSaysSettingsWereKept(t *testing.T) {
-	on := PrinterApp(false, true, "Gutenprint printers")
-	if !on.Confirm || on.Toast != "Gutenprint printers is on." {
+	on := PrinterApp(false, true, "Gutenprint Printers")
+	if !on.Confirm || on.Toast != "Gutenprint Printers is on." {
 		t.Errorf("live enable: %+v", on)
 	}
-	off := PrinterApp(false, false, "Gutenprint printers")
-	if !off.Confirm || !strings.HasPrefix(off.Toast, "Gutenprint printers is off") || !strings.Contains(off.Toast, "kept") {
+	off := PrinterApp(false, false, "Gutenprint Printers")
+	if !off.Confirm || !strings.HasPrefix(off.Toast, "Gutenprint Printers is off") || !strings.Contains(off.Toast, "kept") {
 		t.Errorf("live disable: %+v", off)
 	}
 }

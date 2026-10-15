@@ -17,7 +17,7 @@ import (
 // defaults are used only until the real state has been read successfully.
 func (uh *UserHome) buildShellExtensionsGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle("Desktop integrations")
+	group.SetTitle("Desktop Integrations")
 	group.SetDescription("Choose what appears in Quick Settings.")
 	page.Add(group)
 	for _, extension := range shellextensions.Catalog() {

@@ -19,19 +19,19 @@ func TestUpdateAllCompleteCoversEveryOutcome(t *testing.T) {
 	}{
 		{
 			name:         "nothing applied",
-			wantTitleHas: "Nothing to update",
+			wantTitleHas: "Nothing to Update",
 		},
 		{
 			name:         "everything failed",
 			failed:       2,
-			wantTitleHas: "Update failed",
+			wantTitleHas: "Update Failed",
 			wantUrgency:  UrgencyHigh,
 		},
 		{
 			name:            "partial failure without a restart",
 			succeeded:       1,
 			failed:          1,
-			wantTitleHas:    "problems",
+			wantTitleHas:    "Problems",
 			wantBodyHas:     "1 part(s) updated, 1 failed.",
 			wantUrgency:     UrgencyHigh,
 			restartRequired: false,
@@ -41,7 +41,7 @@ func TestUpdateAllCompleteCoversEveryOutcome(t *testing.T) {
 			succeeded:       1,
 			failed:          1,
 			restartRequired: true,
-			wantTitleHas:    "problems",
+			wantTitleHas:    "Problems",
 			wantBodyHas:     "Restart",
 			wantUrgency:     UrgencyHigh,
 		},
@@ -49,7 +49,7 @@ func TestUpdateAllCompleteCoversEveryOutcome(t *testing.T) {
 			name:            "clean run staged a restart",
 			succeeded:       3,
 			restartRequired: true,
-			wantTitleHas:    "Update complete",
+			wantTitleHas:    "Update Complete",
 			wantBodyHas:     "Restart",
 		},
 		{
@@ -57,7 +57,7 @@ func TestUpdateAllCompleteCoversEveryOutcome(t *testing.T) {
 			// installed them; "already up to date" was false.
 			name:          "clean run installed updates",
 			succeeded:     3,
-			wantTitleHas:  "Update complete",
+			wantTitleHas:  "Update Complete",
 			wantBodyHas:   "All updates were installed.",
 			wantBodyLacks: "already",
 		},
@@ -65,7 +65,7 @@ func TestUpdateAllCompleteCoversEveryOutcome(t *testing.T) {
 			name:              "updates installed but cleanup failed",
 			succeeded:         1,
 			maintenanceFailed: true,
-			wantTitleHas:      "problems",
+			wantTitleHas:      "Problems",
 			wantBodyHas:       "cleaning up afterwards failed",
 			wantBodyLacks:     "already",
 		},

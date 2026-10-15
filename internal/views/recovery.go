@@ -126,7 +126,7 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	}
 	uh.bootcRollbackBtn.ConnectClicked(&rollbackClickedCb)
 	uh.bootcRollbackRow.AddSuffix(&uh.bootcRollbackBtn.Widget)
-	uh.bootcRestartBtn = gtk.NewButtonWithLabel("Restart now")
+	uh.bootcRestartBtn = gtk.NewButtonWithLabel("Restart Now")
 	uh.bootcRestartBtn.SetValign(gtk.AlignCenterValue)
 	uh.bootcRestartBtn.AddCssClass("suggested-action")
 	uh.bootcRestartBtn.SetVisible(false)

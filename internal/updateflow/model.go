@@ -201,7 +201,7 @@ func derive(s Snapshot) Snapshot {
 		s.Action = ActionRetryFailed
 	case s.RestartRequired() && s.TotalUpdates == 0:
 		s.Phase = PhaseRestartRequired
-		// No page-level action: the Operating system row's "Restart now"
+		// No page-level action: the Operating system row's "Restart Now"
 		// suffix is the only restart control (#439).
 		s.Action = ActionNone
 	case !hasConfiguredAvailable(s.Sources):

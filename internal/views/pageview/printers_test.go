@@ -36,7 +36,7 @@ func TestPrinterFamilyRowNamesEveryFamilyDistinctly(t *testing.T) {
 		}
 		seen[title] = f.ID
 	}
-	if got := PrinterFamilyRow(printerapp.Family{ID: "hplip", DisplayName: "HPLIP"}); !strings.HasPrefix(got, "HP printers") {
+	if got := PrinterFamilyRow(printerapp.Family{ID: "hplip", DisplayName: "HPLIP"}); !strings.HasPrefix(got, "HP Printers") {
 		t.Errorf("HPLIP row = %q; a person looks for HP, not HPLIP", got)
 	}
 }
@@ -120,12 +120,12 @@ func TestPrinterAppReadySubtitleNamesTheWebPage(t *testing.T) {
 // A failed stop keeps the unit because the service may still run, so the
 // toast has to keep saying it is running, and name which row it is about.
 func TestPrinterAppFailureToastNamesTheRowAndDoesNotClaimAStop(t *testing.T) {
-	off := strings.ToLower(PrinterAppFailureToast(false, "HP printers (HPLIP)"))
+	off := strings.ToLower(PrinterAppFailureToast(false, "HP Printers (HPLIP)"))
 	if !strings.Contains(off, "hp printers") || !strings.Contains(off, "still running") || !strings.Contains(off, "couldn't turn it off") {
 		t.Errorf("failed-disable toast = %q", off)
 	}
-	on := PrinterAppFailureToast(true, "Gutenprint printers")
-	if !strings.Contains(on, "Gutenprint printers") || !strings.HasPrefix(on, "Couldn't turn on") {
+	on := PrinterAppFailureToast(true, "Gutenprint Printers")
+	if !strings.Contains(on, "Gutenprint Printers") || !strings.HasPrefix(on, "Couldn't turn on") {
 		t.Errorf("failed-enable toast = %q", on)
 	}
 }

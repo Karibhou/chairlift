@@ -54,7 +54,7 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 
 		if choice.kind == "wsl" {
 			combo := adw.NewComboRow()
-			combo.SetTitle("Virtual machine engine")
+			combo.SetTitle("Virtual Machine Engine")
 			combo.SetSubtitle(devtools.EngineSubtitle(""))
 			combo.SetModel(gtk.NewStringList([]string{"Built-in (recommended)", "Lima"}))
 			uh.wslSuppress = true

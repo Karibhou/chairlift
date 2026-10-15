@@ -1,5 +1,5 @@
 // Package cleanupview owns the decidable half of the Maintenance page's
-// single "Free up space" action: what the row says, how a set of per-provider
+// single "Free Up Space" action: what the row says, how a set of per-provider
 // step results becomes one honest sentence, and whether a measured change in
 // free space is trustworthy enough to show the user a number.
 //
@@ -30,12 +30,12 @@ import (
 const (
 	GroupTitle       = "Storage"
 	GroupDescription = "Remove files this computer no longer needs."
-	RowTitle         = "Free up space"
+	RowTitle         = "Free Up Space"
 	RowSubtitle      = "Delete old downloads and app parts nothing uses."
 	// ButtonLabel carries no ellipsis: the button acts immediately, it does
 	// not open a dialog.
-	ButtonLabel = "Clean up"
-	BusyLabel   = "Cleaning up…"
+	ButtonLabel = "Clean Up"
+	BusyLabel   = "Cleaning Up…"
 )
 
 // Text shown by the administrator-script group. These scripts are opaque to
@@ -43,7 +43,7 @@ const (
 // does — so the group says where they came from and never folds them into
 // the one-button cleanup above.
 const (
-	ScriptsGroupTitle       = "Maintenance tasks"
+	ScriptsGroupTitle       = "Maintenance Tasks"
 	ScriptsGroupDescription = "Set up by whoever set up this computer."
 	ScriptsAdminSubtitle    = "Asks for your administrator password."
 	ScriptsButtonLabel      = "Run"
@@ -150,7 +150,7 @@ func Summarize(dryRun bool, results []updateproviders.StepResult, space Space) O
 		case updateproviders.OutcomeFailed:
 			parts = append(parts, fmt.Sprintf("Couldn't remove %s.", label))
 		case updateproviders.OutcomeCancelled:
-			parts = append(parts, fmt.Sprintf("Removing %s was cancelled.", label))
+			parts = append(parts, fmt.Sprintf("Removing %s was canceled.", label))
 		}
 	}
 	if freed, ok := space.Reclaimed(); ok && cleaned > 0 {

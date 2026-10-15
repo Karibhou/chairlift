@@ -149,9 +149,9 @@ func TestNoResultsRowNamesTheCatalogItSearched(t *testing.T) {
 		title   string
 		catalog string
 	}{
-		{livery.AppGrid, "No matching brand", "No brand matches"},
-		{livery.Panel, "No matching mark", "No mark matches"},
-		{livery.Dock, "No matching project", "No project matches"},
+		{livery.AppGrid, "No Matching Brand", "No brand matches"},
+		{livery.Panel, "No Matching Mark", "No mark matches"},
+		{livery.Dock, "No Matching Project", "No project matches"},
 	}
 	for _, tc := range cases {
 		row := LiveryNoResultsRow(tc.surface, "zzq")

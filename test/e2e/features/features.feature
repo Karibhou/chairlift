@@ -53,7 +53,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
   Scenario: Disabling a running WSL machine previews stop without deleting data
     Given ChairLift is running
     When I open the "Features" page
-    Then I see "Virtual machine engine"
+    Then I see "Virtual Machine Engine"
     And the switch in the "WSL Mode" row is on
     When I toggle the switch in the "WSL Mode" row
     Then the application log contains "would stop the ubuntu or debian nsl machine WSL Mode manages"
@@ -120,12 +120,12 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Given ChairLift is running
     When I open the "Features" page
     And I select the "ProtonUp-Qt" gaming component
-    And I click the "Remove Selected" button
-    Then a dialog titled "Remove selected gaming apps?" is shown
+    And I click the "Remove Selected…" button
+    Then a dialog titled "Remove Selected Gaming Apps?" is shown
     When I choose "Remove" in the dialog
     Then the gaming preview removes only "ProtonUp-Qt" from the system scope
     And each gaming component says "Installed system-wide"
-    And the "Remove Selected" button is sensitive
+    And the "Remove Selected…" button is sensitive
     And the fake flatpak was never asked to "uninstall"
 
   # Dakota's /usr/share/ublue-os/homebrew/system-flatpaks.Brewfile ships
@@ -135,13 +135,13 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Given ChairLift is running
     When I open the "Features" page
     And I select the "Flatseal" gaming component
-    And I click the "Remove Selected" button
+    And I click the "Remove Selected…" button
     And I choose "Remove" in the dialog
     Then the Gaming inventory is read again after the change
     And the application log contains "views: gaming component com.github.tchx84.Flatseal came with the system"
     And the application log does not contain "flatpak uninstall"
     And each gaming component says "Installed system-wide"
-    And the "Remove Selected" button is sensitive
+    And the "Remove Selected…" button is sensitive
 
   @stub.features-gaming-user
   Scenario: Per-user gaming apps an earlier release installed are removed from your account
@@ -149,7 +149,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     Then each gaming component says "Installed for your account"
     When I select the "Steam" gaming component
-    And I click the "Remove Selected" button
+    And I click the "Remove Selected…" button
     And I choose "Remove" in the dialog
     Then the gaming preview removes only "Steam" from the user scope
     And the Gaming inventory is read again after the change
@@ -162,7 +162,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     Then the "Gaming Mode" row says "Couldn't check which gaming apps are installed."
     And the "Install Selected" button is insensitive
-    And the "Remove Selected" button is insensitive
+    And the "Remove Selected…" button is insensitive
     And the application log contains "views: gaming status unavailable"
     And the action journal is empty
 
@@ -196,7 +196,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Then the Features page shows a "Gaming" group
     And the Features page shows no "Developer" group
     And I do not see "WSL Mode"
-    And I do not see "Virtual machine engine"
+    And I do not see "Virtual Machine Engine"
     And I do not see "Enable Docker"
 
   @config.features-no-desktop @stub.features-no-descriptor @stub.features-gaming-none
@@ -204,7 +204,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
   Scenario: A host with nothing to offer does not advertise a blank Features page
     Given ChairLift is running
     Then the Features destination is hidden or says why it offers nothing
-    And I see "Nothing to set up here"
+    And I see "Nothing to Set Up Here"
     And the application log contains "views: features page offers nothing on this system"
 
   # ------------------------------------------------------------ Printers
@@ -220,9 +220,9 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Then the Features page shows a "Printers" group
     And the Printers group offers exactly these rows, each off and ready to turn on
       | row                  |
-      | Ghostscript printers |
-      | HP printers (HPLIP)  |
-      | Gutenprint printers  |
+      | Ghostscript Printers |
+      | HP Printers (HPLIP)  |
+      | Gutenprint Printers  |
     And the application log contains "views: printers group built families=3"
     And the systemctl tool was never asked to mutate
     And no printer quadlet was written
@@ -233,7 +233,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Given ChairLift is running
     When I open the "Features" page
     Then the Features page shows no "Printers" group
-    And I do not see "Ghostscript printers"
+    And I do not see "Ghostscript Printers"
     And the application log does not contain "views: printers group built"
     When I press "F1"
     And I ask the Help page why something is missing
@@ -249,7 +249,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     Then the Features page shows a "Gaming" group
     And the Features page shows no "Printers" group
-    And I do not see "Ghostscript printers"
+    And I do not see "Ghostscript Printers"
     And the application log does not contain "views: printers group built"
     When I press "F1"
     And I ask the Help page why something is missing
@@ -257,7 +257,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And the Help page does not call "Printers" missing
 
   @stub.features-extensions
-  Scenario: Desktop integrations preserve their observed state in preview mode
+  Scenario: Desktop Integrations preserve their observed state in preview mode
     Given ChairLift is running
     When I open the "Features" page
     Then the switch in the "Tailscale Integration" row is on
@@ -273,7 +273,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And the fake gnome-extensions was never asked to "disable"
 
   @stub.features-extensions-reversed
-  Scenario: Desktop integrations restore existing GNOME choices instead of defaults
+  Scenario: Desktop Integrations restore existing GNOME choices instead of defaults
     Given ChairLift is running
     When I open the "Features" page
     Then the switch in the "Tailscale Integration" row accepts input
