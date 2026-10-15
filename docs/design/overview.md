@@ -60,7 +60,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/updateproviders/ Provider adapters for the unified update coordinator
         ├── internal/userprefs/ Pure user update preferences model
         ├── internal/settings/  GSettings adapter for user update preferences
-        ├── internal/commands/  Shared action names (shortcuts live in navigation)
+        ├── internal/ui/        Blueprint sources (*.blp), their committed blueprint-compiler output (*.ui, embedded), and the ui.Bind struct-tag binder (ADR-0022)
         └── internal/version/   Build metadata (ldflags injection)
 ```
 
@@ -78,7 +78,7 @@ External shared library: `github.com/frostyard/snowkit` (published module, pinne
 
 The `views.go` file defines the central `UserHome` struct that holds references to all page widgets, config, and the `ToastAdder` interface. It provides:
 
-- `New(cfg, caps, toastAdder)` — constructor receiving the same capability set as navigation
+- `New(cfg, caps, toastAdder, updates)` — constructor receiving the same capability set as navigation, and the update shell's preferences page, to which `buildUpdatesPage` appends its groups
 - `ToastAdder` — toast, badge, and background-notification callbacks implemented by Window
 
 `internal/views` imports puregotk, so it cannot host headless test binaries. Pure leaf packages own decidable presentation and state: `actionmsg`, `trustmsg`, `actionstate`, `bundleview`, `rowset`, `progresslog`, `featurestatus`, `signalroute`, `liverystate`, `cleanupview`, `updatepresent`, and `pageview`. The update inventory and badge belong to `internal/updateflow`, not a second view-side count store. `pageview` supplies shared presentation for all seven page builders, whose wiring test remains enforced. This layout is decision record

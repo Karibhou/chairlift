@@ -26,6 +26,10 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   `TestMakefilePhonyCoversEveryTarget` now holds the full target inventory in
   both directions, so adding a target without declaring it fails CI.
 - `make fmt` — `gofmt -s -w .`.
+- `make blueprints` / `make blueprints-check` — compile `internal/ui/*.blp`
+  to the committed `.ui` files, or fail if one is stale; both run
+  `blueprint-compiler` inside the pinned Dakota image (see the Blueprint
+  invariant below).
 - `make lint` — `golangci-lint run`.
 - `make ci` — runs every **host-independent** CI gate, in CI's order (go.mod
   tidy check, `go vet`, gofmt check, lint, unit tests, race detector, build).
@@ -186,8 +190,13 @@ The separately invoked tests under `test/e2e/` are outside the
 workflow's explicit `make e2e` step; do not assume adding a test outside
 `internal/` is enough without that dedicated gate.
 
-There are no generated files and no codegen step; everything under version
-control is hand-written Go, YAML, and data assets.
+There is one generated artifact and no build-time codegen step: each
+`internal/ui/*.ui` is `blueprint-compiler` output from the `.blp` beside it,
+committed so the pure-Go build embeds it (ADR-0022). `make blueprints`
+regenerates them inside the pinned Dakota image (it needs podman, so it is not
+part of `make ci`), and the E2E CI job runs `make blueprints-check`, which
+fails on a stale `.ui`. Never edit a `.ui` by hand. Everything else under
+version control is hand-written Go, YAML, Blueprint, and data assets.
 
 ## Repository invariants
 
@@ -316,10 +325,13 @@ An agent must not break these:
   administrator". Do not collapse them back into one boolean map. The rest
   of the Updates page — automatic updates, system version, dedicated staging
   and Compare, unverified sources, and Advanced channel/driver controls — is
-  `buildUpdatesPage`'s preferences page, mounted by `buildContentArea` beneath
-  the shell's source rows through `UpdateShell.SetSecondaryContent`. Per-source
-  rows belong to the shell; without the mount none of the secondary controls
-  is reachable.
+  built by `buildUpdatesPage` as groups of the shell's own preferences page
+  (`UpdateShell.PreferencesPage`, which the window hands to `views.New`), after
+  the shell's hero and source groups: the Updates destination is one
+  `AdwPreferencesPage` with one scroller, as every GNOME Settings panel is.
+  Per-source rows belong to the shell. Do not reintroduce a second, nested
+  preferences page or reach into libadwaita's private widget tree to unclamp
+  one.
   A provider that learns only during `Check` that the host cannot back it
   (the operating-system source finding bootc not booted) wraps
   `updateflow.ErrUnavailable`; the coordinator then shows the source as not
@@ -488,6 +500,28 @@ An agent must not break these:
   `bootc_updates_group`; ChairLift ships no OS staging implementation. Do not
   make the privileged path configurable from ChairLift's user-writable
   configuration.
+- **Static widget trees are Blueprint; Go binds them by struct tag.** The
+  window shell, every page skeleton (`page.blp`: a header bar over an
+  `AdwPreferencesPage`, with no `GtkScrolledWindow` around the page, which
+  scrolls itself), the Updates destination, the first-run bookends, and the
+  About, shortcuts, and avatar dialogs are `internal/ui/*.blp`, compiled to
+  the committed `.ui` files the binary embeds (ADR-0022). Go binds one with
+  `ui.Bind` into a struct of `ui:"<id>"`-tagged fields plus a blank
+  `ui.File` field naming the blueprint, then connects every signal in Go,
+  once, at build time; a blueprint names no handler, because GtkBuilder
+  cannot find a Go function and puregotk cannot build templates. Content
+  that depends on data or configuration stays in Go and is added to bound
+  containers. `internal/installcheck`'s blueprint tests hold, without GTK,
+  that each tagged field names an id of the same class in its blueprint,
+  each blueprint is compiled, each action a blueprint names is registered by
+  `internal/window` or `internal/app`, no blueprint spells the product name
+  (set it from `branding.AppName`), and no blueprint uses a class newer than
+  libadwaita 1.6 — the Bluefin LTS floor; GtkBuilder aborts the process on an
+  unknown class — unless it is listed as version gated with a fallback
+  (`shortcuts.blp`, AdwShortcutsDialog on 1.8, else `shortcuts-legacy.blp`).
+  The main window collapses its split view below 550sp through
+  `window.blp`'s breakpoint and requests the HIG's 360×294 minimum.
+  `docs/skills/blueprint-ui/SKILL.md` carries the traps.
 - **GTK main-thread safety.** All external tool calls run in goroutines; every
   UI update marshals back to the GTK main thread via
   `snowkit`'s `sgtk.RunOnMainThread(...)`. Never touch a widget directly from a
@@ -528,7 +562,8 @@ An agent must not break these:
   group configuration: omit a functional page when all of its builder-backed
   groups are disabled, always retain Help, and compact Alt+number over visible
   pages. Mouse activation, window navigation actions, and the Powerwash
-  detail's entry row and Back button must all call `Window.navigateToPage`,
+  detail's entry row, Back button, and `win.go-back` (Alt+Left) must all
+  call `Window.navigateToPage`,
   which applies the complete `navigation.Resolve` transition against
   `Window.navRoutes` (`navigation.VisibleRoutes`: the visible primaries plus
   the details they offer) — visible-row index, visible child, title,

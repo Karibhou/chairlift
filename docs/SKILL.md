@@ -14,6 +14,7 @@ generated Common catalog.
 | Plan acceptance checks or split implementation work | [automated-acceptance](skills/automated-acceptance/SKILL.md), then the planning entries in the catalog |
 | Add unit tests, report coverage, or drive the GTK/AT-SPI suite | [gated-test-placement](skills/gated-test-placement/SKILL.md), [gtk-headless-testing](skills/gtk-headless-testing/SKILL.md) |
 | Validate configuration, precedence, or YAML keys | [canonical-schema](skills/canonical-schema/SKILL.md), then the validation entries in the catalog |
+| Change a window, page skeleton, or dialog; audit against the GNOME HIG | [blueprint-ui](skills/blueprint-ui/SKILL.md) |
 | Render streamed external output | [bounded-stream-rendering](skills/bounded-stream-rendering/SKILL.md) |
 | Change a container digest or the Dakota E2E image | [multi-arch-digest-pinning](skills/multi-arch-digest-pinning/SKILL.md) |
 | Change a Make target | [phony-target-shadowing](skills/phony-target-shadowing/SKILL.md) |

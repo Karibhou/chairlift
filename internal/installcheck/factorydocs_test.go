@@ -44,7 +44,7 @@ var expectedLegacySkillAliases = map[string]string{
 // and self-referential-assertions. Issue #81 added bounded-stream-rendering.
 // Issue #204 added fail-open-tables-need-a-totality-gate. The Prow cutover
 // removed issue-lifecycle.
-const factoryCanonicalSkillPackageCount = 33
+const factoryCanonicalSkillPackageCount = 34
 
 type factorySkillFrontMatter struct {
 	name         string
