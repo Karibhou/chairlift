@@ -100,6 +100,9 @@ func (uh *UserHome) buildFeaturesPage() {
 	// to be on offer.
 	emptyState := adw.NewStatusPage()
 	emptyState.SetIconName("application-x-addon-symbolic")
+	// Compact: it sits inside the page's own scroller and clamp, so the
+	// full-page status layout's large icon and margins do not apply.
+	emptyState.AddCssClass("compact")
 	emptyGroup := adw.NewPreferencesGroup()
 	emptyGroup.Add(&emptyState.Widget)
 	emptyGroup.SetVisible(false)

@@ -368,6 +368,8 @@ func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
 	grid.SetSelectionMode(gtk.SelectionNoneValue)
 	grid.SetMinChildrenPerLine(2)
 	grid.SetMaxChildrenPerLine(5)
+	grid.SetRowSpacing(6)
+	grid.SetColumnSpacing(6)
 	grid.SetSensitive(false)
 	uh.liveryFoundationGrid = grid
 	uh.liveryFoundationImages = make(map[string]*gtk.Image)

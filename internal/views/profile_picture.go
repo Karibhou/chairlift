@@ -11,6 +11,7 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/avatar"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/ui"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -138,38 +139,29 @@ func (uh *UserHome) presentAvatarPicker() {
 	p.dialog.Present(&uh.liveryPrefsPage.Widget)
 }
 
+// avatarPickerUI is the chooser's blueprint: internal/ui/avatar-picker.blp.
+type avatarPickerUI struct {
+	_       ui.File      `ui:"avatar-picker"`
+	Dialog  *adw.Dialog  `ui:"dialog"`
+	Cancel  *gtk.Button  `ui:"cancel"`
+	Apply   *gtk.Button  `ui:"apply"`
+	Banner  *adw.Banner  `ui:"banner"`
+	Preview *adw.Avatar  `ui:"preview"`
+	Prompt  *gtk.Label   `ui:"prompt"`
+	List    *gtk.ListBox `ui:"list"`
+}
+
 // buildAvatarPicker constructs the chooser and connects its two signals. It
 // runs at most once per session, for the callback-table reason documented
 // on presentLiveryPicker.
 func (uh *UserHome) buildAvatarPicker(p *avatarPicker) {
-	dialog := adw.NewDialog()
+	var view avatarPickerUI
+	ui.Bind(&view)
+	dialog, banner, preview, label, apply, list := view.Dialog, view.Banner, view.Preview, view.Prompt, view.Apply, view.List
 	dialog.SetTitle(pageview.AvatarPickerTitle)
-	dialog.SetContentWidth(420)
-	dialog.SetContentHeight(620)
+	apply.SetLabel(pageview.AvatarApplyLabel)
+	label.SetLabel(pageview.AvatarPickerPrompt)
 
-	apply := gtk.NewButtonWithLabel(pageview.AvatarApplyLabel)
-	apply.AddCssClass("suggested-action")
-	apply.SetSensitive(false)
-
-	header := adw.NewHeaderBar()
-	header.PackEnd(&apply.Widget)
-
-	banner := adw.NewBanner("")
-	banner.SetRevealed(false)
-
-	preview := adw.NewAvatar(128, "", false)
-	preview.SetMarginTop(12)
-
-	label := gtk.NewLabel(pageview.AvatarPickerPrompt)
-	label.AddCssClass("dim-label")
-
-	list := gtk.NewListBox()
-	list.SetSelectionMode(gtk.SelectionNoneValue)
-	list.AddCssClass("boxed-list")
-	list.SetMarginTop(12)
-	list.SetMarginBottom(12)
-	list.SetMarginStart(12)
-	list.SetMarginEnd(12)
 	p.checks = make([]*gtk.Image, len(p.catalog))
 	for i, entry := range p.catalog {
 		text := pageview.AvatarEntryRow(entry)
@@ -186,22 +178,6 @@ func (uh *UserHome) buildAvatarPicker(p *avatarPicker) {
 		list.Append(&row.Widget)
 	}
 
-	body := gtk.NewBox(gtk.OrientationVerticalValue, 6)
-	body.Append(&banner.Widget)
-	body.Append(&preview.Widget)
-	body.Append(&label.Widget)
-	body.Append(&list.Widget)
-
-	scrolled := gtk.NewScrolledWindow()
-	scrolled.SetPolicy(gtk.PolicyNeverValue, gtk.PolicyAutomaticValue)
-	scrolled.SetVexpand(true)
-	scrolled.SetChild(&body.Widget)
-
-	content := adw.NewToolbarView()
-	content.AddTopBar(&header.Widget)
-	content.SetContent(&scrolled.Widget)
-	dialog.SetChild(&content.Widget)
-
 	p.dialog, p.banner, p.preview, p.label, p.apply = dialog, banner, preview, label, apply
 
 	rowActivated := func(_ gtk.ListBox, rowPtr uintptr) {
@@ -214,6 +190,8 @@ func (uh *UserHome) buildAvatarPicker(p *avatarPicker) {
 
 	applyClicked := func(_ gtk.Button) { uh.applyAvatar(p) }
 	apply.ConnectClicked(&applyClicked)
+	cancelClicked := func(_ gtk.Button) { dialog.Close() }
+	view.Cancel.ConnectClicked(&cancelClicked)
 
 	prefetchPreviews(p.catalog)
 }
