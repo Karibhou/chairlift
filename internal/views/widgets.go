@@ -56,6 +56,9 @@ func (r *dialogRoute) connect(dialog *adw.AlertDialog, action func(response stri
 
 func newIconButton(icon, label string) *gtk.Button {
 	button := gtk.NewButtonFromIconName(icon)
+	// Rows do not flatten their suffix buttons; a header bar does, so
+	// flat is right in both places.
+	button.AddCssClass("flat")
 	button.SetTooltipText(label)
 	button.UpdateProperty(gtk.AccessiblePropertyLabelValue, label, -1)
 	return button

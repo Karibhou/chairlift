@@ -364,7 +364,6 @@ func (uh *UserHome) loadHomebrewPackages() {
 					uninstallBtn := gtk.NewButton()
 					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
-					uninstallBtn.AddCssClass("destructive-action")
 					uninstallBtn.SetTooltipText("Remove this tool")
 
 					gate := uh.formulaGates.New()
@@ -435,7 +434,6 @@ func (uh *UserHome) loadHomebrewPackages() {
 					uninstallBtn := gtk.NewButton()
 					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
-					uninstallBtn.AddCssClass("destructive-action")
 					uninstallBtn.SetTooltipText("Remove this app")
 
 					gate := uh.caskGates.New()

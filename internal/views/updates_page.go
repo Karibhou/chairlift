@@ -884,7 +884,6 @@ func (uh *UserHome) buildDriverRow(status ublue.Status) {
 		driverRow := row
 		button := gtk.NewButtonWithLabel("Switch")
 		button.SetValign(gtk.AlignCenterValue)
-		button.AddCssClass("suggested-action")
 		clickedCb := func(gtk.Button) {
 			uh.onDriverSwitchClicked(driver, button, driverRow)
 		}

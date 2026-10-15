@@ -53,6 +53,10 @@ func newSourceRow(state updateflow.SourceState, group *adw.PreferencesGroup, she
 		// slots — and render() decides whether it is currently on screen.
 		button := gtk.NewButtonWithLabel("Restart now")
 		button.SetValign(gtk.AlignCenterValue)
+		// The one next step once an update is staged; the header's primary
+		// action is hidden then, so this is the view's suggested action, as
+		// Roll Back's Restart now is.
+		button.AddCssClass("suggested-action")
 		button.SetTooltipText("Restart to finish installing the staged update")
 		button.SetVisible(state.RestartRequired)
 		button.SetSensitive(updatepresent.CanStartOperation(shell.Busy(), shell.closed.Load()) && !updatepresent.ShowProgress(shell.snapshot.Phase) && !shell.restartInFlight.Load())
