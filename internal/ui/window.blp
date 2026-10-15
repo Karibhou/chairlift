@@ -1,0 +1,133 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The main window's content. ChairLiftWindow is a Go-registered subclass of
+// AdwApplicationWindow, so this file describes its child tree rather than a
+// template; internal/window binds it through ui.Bind and wires every signal
+// in Go.
+Adw.ToastOverlay toasts {
+  child: Adw.ToolbarView setup_toolbar {
+    reveal-bottom-bars: false;
+
+    content: Stack setup_stack {
+      vexpand: true;
+      transition-type: crossfade;
+
+      StackPage {
+        name: "pages";
+
+        child: Adw.NavigationSplitView split_view {
+          min-sidebar-width: 200;
+          max-sidebar-width: 260;
+
+          sidebar: Adw.NavigationPage sidebar_page {
+            tag: "sidebar";
+
+            child: Adw.ToolbarView {
+              [top]
+              Adw.HeaderBar {
+                show-end-title-buttons: false;
+
+                [end]
+                MenuButton menu_button {
+                  icon-name: "open-menu-symbolic";
+                  menu-model: primary_menu;
+                  primary: true;
+                  tooltip-text: _("Main Menu");
+
+                  accessibility {
+                    label: _("Main Menu");
+                  }
+                }
+              }
+
+              content: ScrolledWindow {
+                hscrollbar-policy: never;
+                vexpand: true;
+
+                child: ListBox sidebar_list {
+                  selection-mode: single;
+
+                  styles [
+                    "navigation-sidebar",
+                  ]
+
+                  accessibility {
+                    label: _("Navigation");
+                  }
+                };
+              };
+            };
+          };
+
+          content: Adw.NavigationPage content_page {
+            tag: "content";
+            title: _("Content");
+
+            child: Stack content_stack {
+              transition-type: crossfade;
+            };
+          };
+        };
+      }
+    };
+
+    [bottom]
+    ActionBar setup_footer {
+      [start]
+      Button setup_dismiss {
+        label: _("_Dismiss Setup");
+        use-underline: true;
+      }
+
+      [end]
+      Button setup_next {
+        label: _("_Next");
+        use-underline: true;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+
+      [end]
+      Button setup_back {
+        label: _("_Back");
+        use-underline: true;
+      }
+    }
+  };
+}
+
+// Collapses the split view on a narrow window, as GNOME Settings does, so
+// the sidebar and the page are shown one at a time.
+Adw.Breakpoint narrow_breakpoint {
+  condition ("max-width: 550sp")
+
+  setters {
+    split_view.collapsed: true;
+  }
+}
+
+menu primary_menu {
+  section {
+    item {
+      label: _("_Setup Assistant…");
+      action: "win.show-setup";
+    }
+  }
+
+  // internal/window appends "About <AppName>" here: the product name has one
+  // owner, internal/branding.
+  section app_section {
+    item {
+      label: _("_Preferences");
+      action: "win.show-preferences";
+    }
+
+    item {
+      label: _("_Keyboard Shortcuts");
+      action: "win.show-shortcuts";
+    }
+  }
+}

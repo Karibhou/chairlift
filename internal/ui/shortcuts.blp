@@ -1,0 +1,19 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The keyboard shortcuts dialog on libadwaita 1.8 and later. Its items come
+// from internal/navigation, the one shortcut inventory, so internal/window
+// adds them to these sections at present time. Older libadwaita cannot parse
+// AdwShortcutsDialog at all, so the window binds shortcuts-legacy instead
+// there; see ui.SupportsShortcutsDialog.
+Adw.ShortcutsDialog shortcuts_dialog {
+  title: _("Keyboard Shortcuts");
+
+  Adw.ShortcutsSection navigation_section {
+    title: _("Navigation");
+  }
+
+  Adw.ShortcutsSection general_section {
+    title: _("General");
+  }
+}
