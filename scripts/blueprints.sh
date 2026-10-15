@@ -39,6 +39,12 @@ podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
     -v "$UI:$UI:ro" -v "$out:$out" -w "$UI" "$IMAGE" \
     blueprint-compiler batch-compile "$out" "$UI" "${sources[@]}"
 
+# blueprint-compiler ends its output without a newline; the repository's
+# end-of-file gate wants exactly one.
+for ui in "$out"/*.ui; do
+    [ -z "$(tail -c1 "$ui")" ] || printf '\n' >> "$ui"
+done
+
 if [ "$check" = 1 ]; then
     status=0
     for blp in "${sources[@]}"; do

@@ -266,6 +266,9 @@ func (uh *UserHome) confirmTrustTap(entry *untrustedTapEntry, button *gtk.Button
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("trust", "Trust Tap")
 	dialog.SetResponseAppearance("trust", adw.ResponseSuggestedValue)
+	// Escape and the default both cancel: nothing happens unless asked.
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
 
 	uh.confirmations.connect(dialog, func(response string) {
 		if response != "trust" {
@@ -337,6 +340,9 @@ func (uh *UserHome) confirmTrustPackage(qualifiedName string, kind homebrew.Pack
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("trust", "Trust")
 	dialog.SetResponseAppearance("trust", adw.ResponseSuggestedValue)
+	// Escape and the default both cancel: nothing happens unless asked.
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
 
 	uh.confirmations.connect(dialog, func(response string) {
 		if response != "trust" {

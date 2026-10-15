@@ -489,9 +489,7 @@ def step_window_shown(context, title):
 
 @then('no window titled "{title}" is shown')
 def step_window_gone(context, title):
-    gone = atspi.poll(
-        lambda: not any(atspi.name(w) == title and atspi.showing(w) for w in atspi.children(app(context)))
-    )
+    gone = atspi.poll(lambda: atspi.titled(app(context), title) is None)
     assert gone, f"window {title!r} is still showing"
 
 
@@ -508,9 +506,7 @@ def step_close_window(context, title):
         atspi.activate(closers[0])
     else:
         atspi.press("Escape")
-    gone = atspi.poll(
-        lambda: not any(atspi.name(w) == title and atspi.showing(w) for w in atspi.children(app(context)))
-    )
+    gone = atspi.poll(lambda: atspi.titled(app(context), title) is None)
     assert gone, f"window {title!r} is still showing"
 
 

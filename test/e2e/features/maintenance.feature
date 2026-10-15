@@ -160,7 +160,7 @@ Feature: Maintenance and its Powerwash detail
     When I open the "Maintenance" page
     And I open the Powerwash detail
     And I click the "Reset…" button in the "Reset this computer" row
-    And I choose "Factory Reset" in the dialog
+    And I choose "Reset" in the dialog
     Then I see "[DRY-RUN] Preview: would reset this computer — no changes made"
     And no dialog is shown
     And the action journal records "factory-reset" as dry-run

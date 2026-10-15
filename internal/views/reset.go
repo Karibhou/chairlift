@@ -106,6 +106,9 @@ func (uh *UserHome) onPowerwashClicked(button *gtk.Button, row *adw.ActionRow) {
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("confirm", "Remove Apps and Containers")
 	dialog.SetResponseAppearance("confirm", adw.ResponseDestructiveValue)
+	// Escape and the default both cancel: nothing happens unless asked.
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {
 		if response != "confirm" {
@@ -167,8 +170,11 @@ func (uh *UserHome) onFactoryResetClicked(button *gtk.Button, row *adw.ActionRow
 	title, body := pageview.FactoryResetConfirmation()
 	dialog := adw.NewAlertDialog(title, body)
 	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("confirm", "Factory Reset")
+	dialog.AddResponse("confirm", "Reset")
 	dialog.SetResponseAppearance("confirm", adw.ResponseDestructiveValue)
+	// Escape and the default both cancel: nothing happens unless asked.
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {
 		if response != "confirm" {

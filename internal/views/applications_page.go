@@ -474,6 +474,9 @@ func (uh *UserHome) confirmHomebrewPin(
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("confirm", action)
 	dialog.SetResponseAppearance("confirm", adw.ResponseSuggestedValue)
+	// Escape and the default both cancel: nothing happens unless asked.
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
 
 	uh.confirmations.connect(dialog, func(response string) {
 		if response != "confirm" {
@@ -540,6 +543,9 @@ func (uh *UserHome) confirmHomebrewUninstall(
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("uninstall", "Uninstall")
 	dialog.SetResponseAppearance("uninstall", adw.ResponseDestructiveValue)
+	// Escape and the default both cancel: nothing happens unless asked.
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
 
 	uh.confirmations.connect(dialog, func(response string) {
 		if response != "uninstall" {

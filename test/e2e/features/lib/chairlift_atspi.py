@@ -220,13 +220,26 @@ def main_window(app):
     raise TreeError(f"no main window; top-level children are {describe(children(app))}")
 
 
+def titled(app, title):
+    """A showing top-level window, or in-window dialog, named title.
+
+    Libadwaita presents an AdwDialog (the shortcuts and About dialogs among
+    them) inside its parent window when it fits, as a "dialog" node rather
+    than a top-level frame, and as a separate frame when it does not.
+    """
+    for window in children(app):
+        if name(window) == title and showing(window):
+            return window
+    for node in descendants(app, only_showing=True):
+        if role(node) in ("dialog", "alert") and name(node) == title:
+            return node
+    return None
+
+
 def top_level(app, title, timeout=DEFAULT_TIMEOUT):
     """A showing top-level window or dialog named title."""
     def lookup():
-        for window in children(app):
-            if name(window) == title and showing(window):
-                return window
-        return None
+        return titled(app, title)
 
     found = poll(lookup, timeout=timeout)
     if found is None:
