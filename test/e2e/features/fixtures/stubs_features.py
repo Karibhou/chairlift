@@ -56,7 +56,8 @@ def _recorder(context):
     return f'printf "%s\\n" "$(basename "$0") $*" >> "{log}"\n'
 
 
-# The branch Steam's runtime is on, which MangoHud is installed in.
+# The runtime branch the stubbed `flatpak info`/`remote-info` report for any
+# app (Steam or Protontricks), which MangoHud is installed in.
 STEAM_PLATFORM_BRANCH = "26.08"
 
 
