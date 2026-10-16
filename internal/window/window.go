@@ -20,6 +20,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/version"
 	"github.com/projectbluefin/chairlift/internal/views"
+	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 
 	"github.com/frostyard/snowkit/gobj"
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -681,9 +682,9 @@ func (w *Window) SetUpdateBadge(count int) {
 
 	if count > 0 {
 		w.updateBadge.SetLabel(fmt.Sprintf("%d", count))
-		// A bare number means nothing read aloud; the row is announced as
-		// "Updates", then this.
-		w.updateBadge.UpdateProperty(gtk.AccessiblePropertyLabelValue, fmt.Sprintf("%d updates available", count), -1)
+		// A bare number means nothing read aloud: the badge keeps the
+		// number as its name and says what it counts as its description.
+		w.updateBadge.UpdateProperty(gtk.AccessiblePropertyDescriptionValue, updatepresent.BadgeDescription(count), -1)
 		w.updateBadge.SetVisible(true)
 	} else {
 		w.updateBadge.SetVisible(false)

@@ -788,3 +788,11 @@ func TestSourceIconsAreDistinct(t *testing.T) {
 		seen[icon] = id
 	}
 }
+
+func TestBadgeDescriptionCountsUpdates(t *testing.T) {
+	for count, want := range map[int]string{1: "1 update available", 3: "3 updates available"} {
+		if got := BadgeDescription(count); got != want {
+			t.Errorf("BadgeDescription(%d) = %q, want %q", count, got, want)
+		}
+	}
+}

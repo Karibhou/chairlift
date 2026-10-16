@@ -448,3 +448,10 @@ func sourceTitle(id updateflow.SourceID) string {
 		return gotext.Get("Updates")
 	}
 }
+
+// BadgeDescription is the accessible description of the sidebar's update
+// count. The badge's name stays the bare number it shows; a screen reader
+// reads this after it, so "3" is announced with what it counts.
+func BadgeDescription(count int) string {
+	return gotext.GetN("%d update available", "%d updates available", count, count)
+}

@@ -15,9 +15,9 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
               <object class="GtkButton" id="refresh">
                 <property name="icon-name">view-refresh-symbolic</property>
                 <property name="action-name">win.check</property>
-                <property name="tooltip-text" translatable="yes">Check for Updates</property>
+                <property name="tooltip-text" translatable="yes">Refresh</property>
                 <accessibility>
-                  <property name="label" translatable="yes">Check for Updates</property>
+                  <property name="label" translatable="yes">Refresh</property>
                 </accessibility>
               </object>
             </child>
