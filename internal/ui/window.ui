@@ -108,7 +108,6 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
   </object>
   <object class="AdwBreakpoint" id="narrow_breakpoint">
     <condition>max-width: 550sp</condition>
-    <setter object="split_view" property="collapsed">true</setter>
   </object>
   <menu id="primary_menu">
     <section>

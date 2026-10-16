@@ -34,7 +34,6 @@ shopt -s nullglob
 sources=("$UI"/*.blp)
 [ "${#sources[@]}" -gt 0 ] || { echo "no blueprints under $UI" >&2; exit 1; }
 
-chmod 0777 "$out"
 podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
     -v "$UI:$UI:ro" -v "$out:$out" -w "$UI" "$IMAGE" \
     blueprint-compiler batch-compile "$out" "$UI" "${sources[@]}"

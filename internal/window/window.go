@@ -55,26 +55,26 @@ type Window struct {
 	contentPage  *adw.NavigationPage // Content navigation page for dynamic title
 	toasts       *adw.ToastOverlay
 
-	pages             map[string]*adw.ToolbarView
-	navRows           map[string]*gtk.ListBoxRow // Store references to nav rows for badges
-	config            *config.Config
-	capabilities      capability.Set // Resolved once; the policy floor for every entry path
-	configError       *config.LoadError
-	views             *views.UserHome
-	updateShell       *views.UpdateShell
-	updateSettings    *settings.Store // The one updates-preference store: the shell reads it, Preferences binds to it
-	firstRunSteps     []string
-	firstRunIndex     int
-	firstRunActive    bool
-	firstRunCollapsed bool
-	firstRunContent   *gtk.Stack
-	firstRunFooter    *adw.ToolbarView // Reveals the setup flow's bottom bar
-	firstRunBack      *gtk.Button
-	firstRunNext      *gtk.Button
-	updateBadge       *gtk.Label        // Noninteractive badge for the updates count
-	navItems          []navigation.Item // Visible primaries: the sidebar rows, actions, and shortcuts
-	navRoutes         []navigation.Item // navItems plus the details they offer; the Resolve inventory
-	backRoute         string            // The primary the shown detail's Back returns to; "" on a primary
+	pages           map[string]*adw.ToolbarView
+	navRows         map[string]*gtk.ListBoxRow // Store references to nav rows for badges
+	config          *config.Config
+	capabilities    capability.Set // Resolved once; the policy floor for every entry path
+	configError     *config.LoadError
+	views           *views.UserHome
+	updateShell     *views.UpdateShell
+	updateSettings  *settings.Store // The one updates-preference store: the shell reads it, Preferences binds to it
+	firstRunSteps   []string
+	firstRunIndex   int
+	firstRunActive  bool
+	narrow          bool // The narrow breakpoint is applied; see syncCollapsed
+	firstRunContent *gtk.Stack
+	firstRunFooter  *adw.ToolbarView // Reveals the setup flow's bottom bar
+	firstRunBack    *gtk.Button
+	firstRunNext    *gtk.Button
+	updateBadge     *gtk.Label        // Noninteractive badge for the updates count
+	navItems        []navigation.Item // Visible primaries: the sidebar rows, actions, and shortcuts
+	navRoutes       []navigation.Item // navItems plus the details they offer; the Resolve inventory
+	backRoute       string            // The primary the shown detail's Back returns to; "" on a primary
 }
 
 func init() {
@@ -238,10 +238,31 @@ func (w *Window) buildUI() {
 	w.ui.AppSection.Append("_About "+branding.AppName, "win.show-about")
 
 	// Collapse the split view on a narrow window, as GNOME Settings does.
+	// The breakpoint only reports the width; syncCollapsed owns the
+	// property, because the setup flow collapses the split view too and a
+	// breakpoint setter would snapshot and later restore the setup flow's
+	// value. Connected once, here.
+	narrowApplied := func(adw.Breakpoint) {
+		w.narrow = true
+		w.syncCollapsed()
+	}
+	narrowUnapplied := func(adw.Breakpoint) {
+		w.narrow = false
+		w.syncCollapsed()
+	}
+	w.ui.NarrowBreakpoint.ConnectApply(&narrowApplied)
+	w.ui.NarrowBreakpoint.ConnectUnapply(&narrowUnapplied)
 	w.AddBreakpoint(w.ui.NarrowBreakpoint)
 
 	// Set window content
 	w.SetContent(&w.toasts.Widget)
+}
+
+// syncCollapsed is the one writer of the split view's collapsed property:
+// collapsed on a narrow window (internal/ui/window.blp's narrow_breakpoint)
+// and while the setup flow, which hides the sidebar, runs.
+func (w *Window) syncCollapsed() {
+	w.splitView.SetCollapsed(w.narrow || w.firstRunActive)
 }
 
 // bindSidebar fills the blueprint's navigation list and connects its two
@@ -670,12 +691,11 @@ func (w *Window) PresentFirstRun() {
 	}
 	w.firstRunIndex = -1
 	w.firstRunActive = true
-	w.firstRunCollapsed = w.splitView.GetCollapsed()
 	w.sidebarList.SetSensitive(false)
 	// The collapsed split view's native Back goes to the sidebar, not the
 	// previous setup step. Disable that route while the wizard owns navigation.
 	w.contentPage.SetCanPop(false)
-	w.splitView.SetCollapsed(true)
+	w.syncCollapsed()
 	w.splitView.SetShowContent(true)
 	w.firstRunFooter.SetRevealBottomBars(true)
 	w.showFirstRunStep()
@@ -782,7 +802,7 @@ func (w *Window) finishFirstRun(completed bool) {
 		w.firstRunContent.SetVisibleChildName("pages")
 		w.sidebarList.SetSensitive(true)
 		w.contentPage.SetCanPop(true)
-		w.splitView.SetCollapsed(w.firstRunCollapsed)
+		w.syncCollapsed()
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
 			defer cancel()
@@ -799,7 +819,7 @@ func (w *Window) finishFirstRun(completed bool) {
 	w.firstRunContent.SetVisibleChildName("pages")
 	w.sidebarList.SetSensitive(true)
 	w.contentPage.SetCanPop(true)
-	w.splitView.SetCollapsed(w.firstRunCollapsed)
+	w.syncCollapsed()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
 		defer cancel()

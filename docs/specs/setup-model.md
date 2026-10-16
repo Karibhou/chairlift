@@ -28,7 +28,7 @@ Preferences step.
 
 The main window keeps the same built page controls, widgets, and action owners.
 Setup does not reparent pages, create duplicate feature/install/model/livery
-controls, or add a settings actor. A footer built once offers Dismiss setup,
+controls, or add a settings actor. A bottom bar built once offers Dismiss Setup,
 Back and Next, with **Finish** on the conclusion. Back is
 insensitive on Welcome and returns there from the first selection page.
 Selection navigation passes through `Window.navigateToPage`; bookends use the

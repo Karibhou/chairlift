@@ -825,9 +825,10 @@ a manual Refresh; a snapshot still in `PhaseChecking` belongs to a newer
 check and is left alone.
 
 Everything else the Updates page owns is built by `buildUpdatesPage` into
-`UserHome.updatesPrefsPage`; `Window.buildContentArea` mounts it below the
-shell's source rows with `UpdateShell.SetSecondaryContent`. The secondary
-groups, in order, are Automatic Updates, System Version, System Update Details
+`UserHome.updatesPrefsPage`, which is the shell's own preferences page
+(`UpdateShell.PreferencesPage`, handed to `views.New` by the window): one
+`AdwPreferencesPage` with one scroller, whose first groups are the shell's
+hero and source groups. The groups that follow, in order, are Automatic Updates, System Version, System Update Details
 (dedicated download and Compare), Manage Source Trust, and Advanced
 channel/graphics controls. Application/tool source rows and item actions belong
 to the shell rather than duplicated preference groups. Configuration,

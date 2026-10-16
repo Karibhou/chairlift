@@ -98,14 +98,13 @@ Adw.ToastOverlay toasts {
   };
 }
 
-// Collapses the split view on a narrow window, as GNOME Settings does, so
-// the sidebar and the page are shown one at a time.
+// A narrow window, below GNOME Settings' own 550sp: the sidebar and the page
+// are shown one at a time. internal/window collapses the split view from the
+// breakpoint's apply and unapply signals rather than a setter here, because
+// the setup flow also collapses it and a setter would restore the value it
+// saw when it applied.
 Adw.Breakpoint narrow_breakpoint {
   condition ("max-width: 550sp")
-
-  setters {
-    split_view.collapsed: true;
-  }
 }
 
 menu primary_menu {

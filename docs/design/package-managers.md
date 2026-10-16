@@ -114,8 +114,9 @@ pulses one reusable GLib timer while checking/updating, independent of provider
 output, and removes the timer at idle/disposal. Its visible toast overlay
 announces each phase's one status line, which sits under the primary action.
 `Presentation.ShowStatus` hides an empty header.
-`SetSecondaryContent` mounts the existing Updates preferences beneath the
-source rows; automatic updates, system version, unverified sources and
+`buildUpdatesPage` appends the rest of the Updates page to the shell's own
+preferences page (`UpdateShell.PreferencesPage`), beneath the source rows;
+automatic updates, system version, unverified sources and
 Advanced channel/driver controls are not a second unreachable page.
 The completion notification is the one long-running update notification, not
 a notification per toggle.
