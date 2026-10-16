@@ -431,7 +431,14 @@ An agent must not break these:
   than a pixel comparison: font hinting and GTK point releases move pixels, so
   regenerating and diffing per push would churn the repository for no signal.
   Adding a page or a user-facing feature means running `make screenshots` and
-  extending `docs/walkthrough.md` in the same change. One capture is not a
+  extending `docs/walkthrough.md` in the same change. A maintainer's
+  `/screenshots` comment on a pull request does the first half in CI
+  (`.github/workflows/pr-screenshots.yml`): a read-only job captures from the
+  head commit, and a second job, which runs no pull request code, commits
+  the PNGs to the branch with the MergeRaptor app token (a `GITHUB_TOKEN`
+  push would never trigger "Tests Passed"). It is on request, never per
+  push, for the drift reason below, and skips a branch that moved during
+  capture. One capture is not a
   page: `0-setup.png`, the explicit setup flow's Welcome start, which the
   runner takes first by launching with `--dry-run --setup` and dismisses
   with Escape before the page walk; the orphan check counts it beside the

@@ -372,5 +372,13 @@ runs after a successful `goreleaser` workflow (or a manual dispatch), builds
 from the selected release tag, and opens a `release-screenshots` pull request
 against `main` with changed PNGs. The release-completion trigger is
 `workflow_run`, not `release: published`. That pull request goes through the merge queue
-like any other and still needs one approval. `make ci` checks
+like any other and still needs one approval.
+
+A pull request that changes the UI can get its own screenshots without a
+local podman: a maintainer comments `/screenshots` on it (or runs
+[the pull request screenshot workflow](../.github/workflows/pr-screenshots.yml)
+by hand with its number). That workflow captures from the pull request's head
+commit with `make screenshots` and commits any changed PNGs to its branch;
+the push re-runs CI. It runs on request rather than per push for the same
+drift reason, and handles branches in this repository only. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.

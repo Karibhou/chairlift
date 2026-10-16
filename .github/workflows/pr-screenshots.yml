@@ -1,0 +1,195 @@
+name: PR screenshots
+
+# Regenerates docs/screenshots/*.png from a pull request's own head with
+# `make screenshots` and commits the result to that pull request's branch, so
+# a change to the UI lands with pictures of itself. AGENTS.md requires
+# exactly that ("Adding a page or a user-facing feature means running `make
+# screenshots` ... in the same change"); this does it without a contributor's
+# podman.
+#
+# On request, not per push: the captures are not byte-stable (the Updates
+# status line prints the check time, and font hinting moves pixels), so a
+# per-push run would add a commit to every push for no signal. A maintainer
+# asks for it with a `/screenshots` comment on the pull request, or runs the
+# workflow by hand with the pull request's number.
+#
+# Two jobs, so pull request code never runs beside a write token:
+# - capture checks out the head commit, runs `make screenshots` (inside the
+#   pinned Dakota image, through test/e2e/dakota.sh), and uploads the PNGs.
+#   Its token can only read.
+# - commit runs no pull request code. It mints the MergeRaptor app token,
+#   checks the branch out, replaces docs/screenshots with the uploaded PNGs
+#   (validated by name), and pushes. The app token, not GITHUB_TOKEN, makes
+#   the push: a commit GITHUB_TOKEN pushes never triggers workflow runs, so
+#   the required "Tests Passed" check would never report on it.
+# Only branches in this repository are handled; a fork's branch cannot be
+# pushed to.
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request number"
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: pr-screenshots-${{ github.event.issue.number || inputs.pr }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    # A comment on a pull request (not an issue) whose body is the command,
+    # from someone with write access to this repository.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.body == '/screenshots' &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      ref: ${{ steps.pr.outputs.ref }}
+      sha: ${{ steps.pr.outputs.sha }}
+    steps:
+      - name: Resolve the pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.issue.number || inputs.pr }}
+        run: |
+          case "$PR" in
+              ''|*[!0-9]*) echo "pull request number must be digits, got '$PR'" >&2; exit 1 ;;
+          esac
+          info="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR")"
+          state="$(jq -r .state <<<"$info")"
+          head_repo="$(jq -r .head.repo.full_name <<<"$info")"
+          ref="$(jq -r .head.ref <<<"$info")"
+          sha="$(jq -r .head.sha <<<"$info")"
+          if [ "$state" != "open" ]; then
+              echo "pull request #$PR is $state" >&2; exit 1
+          fi
+          if [ "$head_repo" != "$GITHUB_REPOSITORY" ]; then
+              echo "pull request #$PR comes from $head_repo; only branches in $GITHUB_REPOSITORY can be pushed to" >&2; exit 1
+          fi
+          {
+              echo "number=$PR"
+              echo "ref=$ref"
+              echo "sha=$sha"
+          } >>"$GITHUB_OUTPUT"
+
+  capture:
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.6"
+
+      # Captures inside the pinned Dakota image under a private headless
+      # Mutter session (test/e2e/dakota.sh); the runner supplies podman and Go.
+      - name: Regenerate walkthrough screenshots
+        run: make screenshots
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr-screenshots
+          path: docs/screenshots/*.png
+          if-no-files-found: error
+          retention-days: 3
+
+  commit:
+    needs: [resolve, capture]
+    runs-on: ubuntu-latest
+    # The job's own token only reads; the push and the comment go through
+    # the app token.
+    permissions:
+      contents: read
+    steps:
+      - name: Mint MergeRaptor token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.MERGERAPTOR_APP_ID }}
+          private-key: ${{ secrets.MERGERAPTOR_PRIVATE_KEY }}
+
+      # The branch, not the captured commit: the push must fast-forward it.
+      # Nothing below runs code from the checkout.
+      - name: Checkout the pull request branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Download screenshots
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pr-screenshots
+          path: ${{ runner.temp }}/pr-screenshots
+
+      - name: Commit and push changed screenshots
+        id: push
+        env:
+          CAPTURED_SHA: ${{ needs.resolve.outputs.sha }}
+          BRANCH: ${{ needs.resolve.outputs.ref }}
+          SOURCE: ${{ runner.temp }}/pr-screenshots
+        run: |
+          # The branch moved since capture: these pictures are of an older
+          # commit, so pushing them would describe the wrong code.
+          if [ "$(git rev-parse HEAD)" != "$CAPTURED_SHA" ]; then
+              echo "result=moved" >>"$GITHUB_OUTPUT"
+              exit 0
+          fi
+          shopt -s nullglob
+          files=("$SOURCE"/*.png)
+          [ "${#files[@]}" -gt 0 ] || { echo "no screenshots were captured" >&2; exit 1; }
+          for file in "${files[@]}"; do
+              name="$(basename "$file")"
+              # Only the walkthrough's own names: <index>-<page>.png.
+              [[ "$name" =~ ^[0-9]+-[a-z-]+\.png$ ]] || { echo "unexpected file $name" >&2; exit 1; }
+          done
+          find docs/screenshots -maxdepth 1 -name '*.png' -delete
+          cp "${files[@]}" docs/screenshots/
+          git add -A docs/screenshots
+          if git diff --cached --quiet; then
+              echo "result=unchanged" >>"$GITHUB_OUTPUT"
+              exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "docs: regenerate walkthrough screenshots" \
+              -m "Captured from ${CAPTURED_SHA} by make screenshots (pr-screenshots.yml)."
+          git push origin "HEAD:refs/heads/${BRANCH}"
+          echo "result=pushed" >>"$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+
+      - name: Report on the pull request
+        if: always() && steps.push.outputs.result != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ needs.resolve.outputs.number }}
+          RESULT: ${{ steps.push.outputs.result }}
+          COMMIT: ${{ steps.push.outputs.commit }}
+          CAPTURED_SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          case "$RESULT" in
+              pushed) body="Screenshots regenerated from ${CAPTURED_SHA} and committed in ${COMMIT}." ;;
+              unchanged) body="Screenshots regenerated from ${CAPTURED_SHA}; nothing changed." ;;
+              moved) body="The branch moved past ${CAPTURED_SHA} while the screenshots were captured, so nothing was committed. Comment /screenshots again." ;;
+          esac
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
