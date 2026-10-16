@@ -105,6 +105,12 @@ jobs:
       - name: Prepare the Dakota suite environment
         uses: ./.github/actions/dakota-venv
 
+      # internal/ui/*.ui is committed blueprint-compiler output, embedded by
+      # the pure-Go build. Recompile every .blp in the pinned Dakota image
+      # and fail if a committed .ui is stale.
+      - name: Check compiled blueprints
+        run: make blueprints-check
+
       # Every E2E test that needs a display runs inside
       # ghcr.io/projectbluefin/dakota:testing (test/e2e/dakota.sh) under a
       # private headless Mutter Wayland session: the GTK, Libadwaita and

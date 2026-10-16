@@ -109,7 +109,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				`"Roll Back"`,
 				`"Check for updates"`,
 				`"Checking for updates…"`,
-				`"The update could not be downloaded. Open Details to see what happened."`,
+				`"The update couldn't be downloaded. Open Details to see what happened."`,
 				"ShortDigest(",
 				// The tap-trust dialog's count is pluralized in pageview.
 				"installed programs from %s at once",
@@ -408,7 +408,7 @@ func TestChangelogRefreshDiscardsOldImagePair(t *testing.T) {
 }
 
 // The OS source row owns the restart action now (#439): the source row
-// builds a "Restart now" suffix on the Operating system source and toggles
+// builds a "Restart Now" suffix on the Operating system source and toggles
 // its visibility as RestartRequired changes, so the page-level status
 // panel does not carry the restart state.
 func TestOperatingSystemRowOwnsRestartButton(t *testing.T) {
@@ -423,7 +423,7 @@ func TestOperatingSystemRowOwnsRestartButton(t *testing.T) {
 	text := string(source)
 	for _, fragment := range []string{
 		`state.ID == updateflow.OperatingSystem`,
-		`"Restart now"`,
+		`"Restart Now"`,
 		`SetVisible(state.RestartRequired)`,
 		`state.RestartRequired != r.restartShown`,
 		`shell.StartRestart()`,
@@ -432,7 +432,7 @@ func TestOperatingSystemRowOwnsRestartButton(t *testing.T) {
 		`if r.restartButton != nil && restartInFlight`,
 	} {
 		if !strings.Contains(text, fragment) {
-			t.Errorf("source_row.go no longer wires the Operating system row's Restart now button: %q", fragment)
+			t.Errorf("source_row.go no longer wires the Operating System row's Restart Now button: %q", fragment)
 		}
 	}
 }

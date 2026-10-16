@@ -9,7 +9,7 @@
 # nothing, silently, for as long as AGENTS.md documented it as `go test ./...`.
 # The others worked only because no directory happens to share their names.
 .PHONY: all deps tidy
-.PHONY: schemas
+.PHONY: schemas blueprints blueprints-check
 .PHONY: build
 .PHONY: build-linux-amd64 build-linux-arm64
 .PHONY: run dev clean
@@ -281,6 +281,18 @@ schemas:
 		glib-compile-schemas $(BUILD_DIR)/schemas && \
 		echo "==> schemas compiled to $(BUILD_DIR)/schemas"; \
 	fi
+
+# Compile internal/ui/*.blp into the GtkBuilder XML the binary embeds. The
+# compiled .ui files are committed so `go build` stays pure Go; the compiler
+# runs only inside the pinned Dakota image, like every E2E target, so its
+# output is byte-identical everywhere. Run after editing any .blp.
+blueprints:
+	scripts/blueprints.sh
+
+# Fail when a committed .ui differs from what its .blp compiles to. CI runs
+# this in the E2E job (it needs podman, so it cannot join `make ci`).
+blueprints-check:
+	scripts/blueprints.sh --check
 
 # Uninstall the application
 uninstall:

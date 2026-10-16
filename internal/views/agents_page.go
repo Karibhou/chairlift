@@ -95,7 +95,7 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	group.Add(&manageRow.Widget)
 
 	address := adw.NewActionRow()
-	address.SetTitle("Local connection")
+	address.SetTitle("Local Connection")
 	address.SetSubtitle("http://" + aistack.Address + "/v1")
 	address.SetSubtitleSelectable(true)
 	group.Add(&address.Widget)
@@ -245,7 +245,7 @@ func (uh *UserHome) onAgentModelSelected() {
 			setActivitySpinner(uh.agentModelSpinner, false)
 			if err != nil {
 				log.Printf("views: configure active model failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not select the model.")
+				uh.toastAdder.ShowErrorToast("Couldn't select the model.")
 			} else if dryrun.Enabled() {
 				uh.toastAdder.ShowToast(fmt.Sprintf("[DRY-RUN] Would switch to %s", targetModel))
 			} else {

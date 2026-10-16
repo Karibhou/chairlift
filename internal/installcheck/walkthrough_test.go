@@ -178,7 +178,7 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"agents_group":          "Agents",
 		"troubleshooting_group": "**Troubleshooting**",
 		// updates_page
-		"automatic_updates_group": "Automatic updates",
+		"automatic_updates_group": "Automatic Updates",
 		"bootc_updates_group":     "System Updates",
 		"flatpak_updates_group":   "Flatpak",
 		"brew_updates_group":      "Homebrew",
@@ -189,14 +189,14 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"bootc_status_group": "queued for the next",
 		// applications_page
 		"brew_group":         "packages Homebrew manages",
-		"brew_bundles_group": "App collections",
+		"brew_bundles_group": "App Collections",
 		// maintenance_page
-		"maintenance_cleanup_group":   "Maintenance tasks",
-		"maintenance_freespace_group": "Free up space",
+		"maintenance_cleanup_group":   "Maintenance Tasks",
+		"maintenance_freespace_group": "Free Up Space",
 		"reset_group":                 "Powerwash",
 		// features_page
 		"features_group":             "feature manager",
-		"desktop_integrations_group": "Desktop integrations",
+		"desktop_integrations_group": "Desktop Integrations",
 		"dx_group":                   "Developer tools",
 		"gaming_group":               "**Gaming**",
 		"printers_group":             "**Printers**",

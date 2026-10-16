@@ -74,6 +74,8 @@ authoritative for cross-repository policy.
 
 ## Runtime, build, and supply chain
 
+- [blueprint-ui](blueprint-ui/SKILL.md) — describe static widget trees in
+  Blueprint, bind them from Go, and audit against the GNOME HIG.
 - [bounded-stream-rendering](bounded-stream-rendering/SKILL.md) — cap both
   queued callbacks and retained widgets for streamed output.
 - [multi-arch-digest-pinning](multi-arch-digest-pinning/SKILL.md) — pin the

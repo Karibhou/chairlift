@@ -368,6 +368,8 @@ func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
 	grid.SetSelectionMode(gtk.SelectionNoneValue)
 	grid.SetMinChildrenPerLine(2)
 	grid.SetMaxChildrenPerLine(5)
+	grid.SetRowSpacing(6)
+	grid.SetColumnSpacing(6)
 	grid.SetSensitive(false)
 	uh.liveryFoundationGrid = grid
 	uh.liveryFoundationImages = make(map[string]*gtk.Image)
@@ -677,7 +679,11 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 			images[result.ID] = image
 		}
 		if result.Selected {
-			row.AddSuffix(&gtk.NewImageFromIconName("object-select-symbolic").Widget)
+			// The check is the only sign of the current mark; say so to
+			// assistive technology too, as the foundation grid does.
+			check := gtk.NewImageFromIconName("object-select-symbolic")
+			SetAccessibleLabel(check, "Selected")
+			row.AddSuffix(&check.Widget)
 		}
 		list.Append(&row.Widget)
 	}

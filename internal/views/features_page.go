@@ -99,7 +99,10 @@ func (uh *UserHome) buildFeaturesPage() {
 	// empty state starts hidden and is revealed only once nothing is known
 	// to be on offer.
 	emptyState := adw.NewStatusPage()
-	emptyState.SetIconName("preferences-other-symbolic")
+	emptyState.SetIconName("application-x-addon-symbolic")
+	// Compact: it sits inside the page's own scroller and clamp, so the
+	// full-page status layout's large icon and margins do not apply.
+	emptyState.AddCssClass("compact")
 	emptyGroup := adw.NewPreferencesGroup()
 	emptyGroup.Add(&emptyState.Widget)
 	emptyGroup.SetVisible(false)
@@ -120,7 +123,7 @@ func (uh *UserHome) buildFeaturesPage() {
 	if featuresEnabled {
 		// Build the features group (hidden once updex reports none)
 		uh.featuresGroup = adw.NewPreferencesGroup()
-		uh.featuresGroup.SetTitle("Optional features")
+		uh.featuresGroup.SetTitle("Optional Features")
 		uh.featuresGroup.SetDescription("Checking what this computer offers…")
 
 		// Add Update button as header suffix (disabled until features are listed)
@@ -423,7 +426,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	uh.gamingSpinner = newActivitySpinner()
 	row.AddSuffix(&uh.gamingSpinner.Widget)
 	uh.gamingInstall = gtk.NewButtonWithLabel("Install Selected")
-	uh.gamingRemove = gtk.NewButtonWithLabel("Remove Selected")
+	uh.gamingRemove = gtk.NewButtonWithLabel("Remove Selected…")
 	for _, button := range []*gtk.Button{uh.gamingInstall, uh.gamingRemove} {
 		button.SetValign(gtk.AlignCenterValue)
 		button.SetSensitive(false)
@@ -434,6 +437,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group.Add(&row.Widget)
 	for _, component := range gaming.Components() {
 		item := &gamingComponentRow{component: component, row: adw.NewActionRow(), choice: gtk.NewCheckButton()}
+		item.row.SetUseMarkup(false)
 		item.row.SetTitle(component.Name)
 		item.row.SetSubtitle(component.Description + " — Checking…")
 		item.choice.SetValign(gtk.AlignCenterValue)
@@ -502,7 +506,7 @@ func (uh *UserHome) confirmGamingRemoval() {
 		return
 	}
 	uh.setGamingSensitive(false)
-	dialog := adw.NewAlertDialog("Remove selected gaming apps?", "The selected apps are removed wherever they are installed: system-wide copies for every account on this computer, and copies installed only for your account. Apps that came with the system are left in place. Game data is kept.")
+	dialog := adw.NewAlertDialog("Remove Selected Gaming Apps?", "The selected apps are removed wherever they are installed: system-wide copies for every account on this computer, and copies installed only for your account. Apps that came with the system are left in place. Game data is kept.")
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("remove", "Remove")
 	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)

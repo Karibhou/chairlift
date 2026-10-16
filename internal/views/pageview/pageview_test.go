@@ -143,7 +143,7 @@ func TestTapTrustConfirmationMatchesTheRemainingCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			title, body := TapTrustConfirmation("vendor/tap", tt.count)
-			if title != "Trust software from vendor/tap?" {
+			if title != "Trust Software from vendor/tap?" {
 				t.Errorf("title = %q", title)
 			}
 			if body != tt.body {
@@ -225,7 +225,7 @@ func TestBootcUpdateSubtitlesCoverEveryState(t *testing.T) {
 
 	// The Details row is hidden while it holds no line, so a failure with
 	// no output must not send anyone to it.
-	if got := BootcStageFailureSubtitle(true); got != "The update could not be downloaded. Open Details to see what happened." {
+	if got := BootcStageFailureSubtitle(true); got != "The update couldn't be downloaded. Open Details to see what happened." {
 		t.Fatalf("BootcStageFailureSubtitle(true) = %q", got)
 	}
 	if got := BootcStageFailureSubtitle(false); strings.Contains(got, "Details") {
@@ -274,15 +274,15 @@ func TestFeatureRowsAndDescriptions(t *testing.T) {
 func TestHelpResourcesPreserveConfiguredOrder(t *testing.T) {
 	got := HelpResources("https://example.test", "", "https://chat.example.test")
 	want := []HelpResource{
-		{Title: "Browse documentation", URL: "https://example.test"},
-		{Title: "Ask for help", URL: "https://chat.example.test"},
+		{Title: "Browse Documentation", URL: "https://example.test"},
+		{Title: "Ask for Help", URL: "https://chat.example.test"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("HelpResources() = %#v, want %#v", got, want)
 	}
 
 	all := HelpResources("website", "issues", "chat")
-	if len(all) != 3 || all[1] != (HelpResource{Title: "Report a problem", URL: "issues"}) {
+	if len(all) != 3 || all[1] != (HelpResource{Title: "Report a Problem", URL: "issues"}) {
 		t.Fatalf("HelpResources(all configured) = %#v, want all three resources in display order", all)
 	}
 	if none := HelpResources("", "", ""); len(none) != 0 {
@@ -374,8 +374,8 @@ func TestSystemVersionRowStaysReadable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			row := SystemVersionRow(tt.version, tt.released, tt.staged, tt.stagedVersion)
-			if row.Title != "System version" {
-				t.Fatalf("SystemVersionRow().Title = %q, want %q", row.Title, "System version")
+			if row.Title != "System Version" {
+				t.Fatalf("SystemVersionRow().Title = %q, want %q", row.Title, "System Version")
 			}
 			if row.Subtitle != tt.want {
 				t.Fatalf("SystemVersionRow(%q, %q, %v, %q).Subtitle = %q, want %q",
@@ -500,12 +500,12 @@ func TestPackageListExportSubtitleNamesWhatItReplaces(t *testing.T) {
 // (W2-APPS-5).
 func TestHomebrewPackageButtonNameCarriesThePackage(t *testing.T) {
 	for label, want := range map[string]string{
-		"Uninstall":     "Uninstall jq",
+		"Uninstall…":    "Uninstall jq",
 		"Uninstalling…": "Uninstalling jq",
 		"Uninstalled":   "Uninstalled jq",
-		"Pin":           "Pin jq",
+		"Pin…":          "Pin jq",
 		"Pinning…":      "Pinning jq",
-		"Unpin":         "Unpin jq",
+		"Unpin…":        "Unpin jq",
 	} {
 		if got := HomebrewPackageButtonName(label, "jq"); got != want {
 			t.Errorf("HomebrewPackageButtonName(%q, jq) = %q, want %q", label, got, want)

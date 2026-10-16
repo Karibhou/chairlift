@@ -187,17 +187,17 @@ func LiveryNoResultsRow(surface livery.Surface, query string) Row {
 	switch surface {
 	case livery.AppGrid:
 		return Row{
-			Title:    "No matching brand",
+			Title:    "No Matching Brand",
 			Subtitle: fmt.Sprintf("No brand matches %q.", query),
 		}
 	case livery.Panel:
 		return Row{
-			Title:    "No matching mark",
+			Title:    "No Matching Mark",
 			Subtitle: fmt.Sprintf("No mark matches %q.", query),
 		}
 	default:
 		return Row{
-			Title:    "No matching project",
+			Title:    "No Matching Project",
 			Subtitle: fmt.Sprintf("No project matches %q.", query),
 		}
 	}
@@ -331,7 +331,7 @@ func LiverySelectedFoundationRow(id, customPath string) Row {
 const LiveryFileChooserTitle = "Choose an SVG"
 
 // LiveryFileChooserFilterName labels its file filter.
-const LiveryFileChooserFilterName = "SVG images"
+const LiveryFileChooserFilterName = "SVG Images"
 
 // LiveryCustomRowTitle labels the row that opens the chooser.
 const LiveryCustomRowTitle = "Custom SVG…"

@@ -26,6 +26,10 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   `TestMakefilePhonyCoversEveryTarget` now holds the full target inventory in
   both directions, so adding a target without declaring it fails CI.
 - `make fmt` — `gofmt -s -w .`.
+- `make blueprints` / `make blueprints-check` — compile `internal/ui/*.blp`
+  to the committed `.ui` files, or fail if one is stale; both run
+  `blueprint-compiler` inside the pinned Dakota image (see the Blueprint
+  invariant below).
 - `make lint` — `golangci-lint run`.
 - `make ci` — runs every **host-independent** CI gate, in CI's order (go.mod
   tidy check, `go vet`, gofmt check, lint, unit tests, race detector, build).
@@ -186,8 +190,13 @@ The separately invoked tests under `test/e2e/` are outside the
 workflow's explicit `make e2e` step; do not assume adding a test outside
 `internal/` is enough without that dedicated gate.
 
-There are no generated files and no codegen step; everything under version
-control is hand-written Go, YAML, and data assets.
+There is one generated artifact and no build-time codegen step: each
+`internal/ui/*.ui` is `blueprint-compiler` output from the `.blp` beside it,
+committed so the pure-Go build embeds it (ADR-0022). `make blueprints`
+regenerates them inside the pinned Dakota image (it needs podman, so it is not
+part of `make ci`), and the E2E CI job runs `make blueprints-check`, which
+fails on a stale `.ui`. Never edit a `.ui` by hand. Everything else under
+version control is hand-written Go, YAML, Blueprint, and data assets.
 
 ## Repository invariants
 
@@ -316,10 +325,13 @@ An agent must not break these:
   administrator". Do not collapse them back into one boolean map. The rest
   of the Updates page — automatic updates, system version, dedicated staging
   and Compare, unverified sources, and Advanced channel/driver controls — is
-  `buildUpdatesPage`'s preferences page, mounted by `buildContentArea` beneath
-  the shell's source rows through `UpdateShell.SetSecondaryContent`. Per-source
-  rows belong to the shell; without the mount none of the secondary controls
-  is reachable.
+  built by `buildUpdatesPage` as groups of the shell's own preferences page
+  (`UpdateShell.PreferencesPage`, which the window hands to `views.New`), after
+  the shell's hero and source groups: the Updates destination is one
+  `AdwPreferencesPage` with one scroller, as every GNOME Settings panel is.
+  Per-source rows belong to the shell. Do not reintroduce a second, nested
+  preferences page or reach into libadwaita's private widget tree to unclamp
+  one.
   A provider that learns only during `Check` that the host cannot back it
   (the operating-system source finding bootc not booted) wraps
   `updateflow.ErrUnavailable`; the coordinator then shows the source as not
@@ -330,15 +342,15 @@ An agent must not break these:
   `bootc upgrade` route to `chairlift-helper` would break both the
   staging-ownership invariant below and the fixed-path contract an OS image
   relies on when it installs the helpers. The run's only privileged surface of its own is
-  `restart`, offered only from the Operating system row once the snapshot
+  `restart`, offered only from the Operating System row once the snapshot
   reaches `PhaseRestartRequired` (whose page-level action is
   `updateflow.ActionNone`), where the header's one status line reads
   "Restart to finish updating". A header with nothing to show is hidden
   through `updatepresent.Presentation.ShowStatus`, not merely cleared, so it
   adds no spacing. Phase announcements (each phase's status line) come from
   the shell's visible toast overlay.
-  The Operating system row carries a "Deployment staged" subtitle and a
-  "Restart now" suffix that calls `UpdateShell.StartRestart` and in turn
+  The Operating System row carries a "Deployment staged" subtitle and a
+  "Restart Now" suffix that calls `UpdateShell.StartRestart` and in turn
   `ublue.Restart`. That
   phase is reached only when a source genuinely reports a restart is
   required — staging an already-current system completes without staging
@@ -414,12 +426,19 @@ An agent must not break these:
   in `config.SchemaGroups` has no walkthrough entry. That last check is the
   forcing function: the group-to-phrase table is hand-written but its
   completeness is derived from the config schema, so a feature added to an
-  *existing* page — which is how the unified update shell, Automatic updates,
+  *existing* page — which is how the unified update shell, Automatic Updates,
   and Roll Back all landed — cannot slip through undocumented. The check is deliberately referential rather
   than a pixel comparison: font hinting and GTK point releases move pixels, so
   regenerating and diffing per push would churn the repository for no signal.
   Adding a page or a user-facing feature means running `make screenshots` and
-  extending `docs/walkthrough.md` in the same change. One capture is not a
+  extending `docs/walkthrough.md` in the same change. A maintainer's
+  `/screenshots` comment on a pull request does the first half in CI
+  (`.github/workflows/pr-screenshots.yml`): a read-only job captures from the
+  head commit, and a second job, which runs no pull request code, commits
+  the PNGs to the branch with the MergeRaptor app token (a `GITHUB_TOKEN`
+  push would never trigger "Tests Passed"). It is on request, never per
+  push, for the drift reason below, and skips a branch that moved during
+  capture. One capture is not a
   page: `0-setup.png`, the explicit setup flow's Welcome start, which the
   runner takes first by launching with `--dry-run --setup` and dismisses
   with Escape before the page walk; the orphan check counts it beside the
@@ -468,7 +487,7 @@ An agent must not break these:
   The same package owns what a dismissed authentication looks like
   (`IsAuthDismissed`, `MessageIsAuthDismissed`: exit 126 or pkexec's
   "Request dismissed"; 127 is a real failure) and the brief
-  `pkexec.CancelledMessage` ("Authentication cancelled") shown in its place.
+  `pkexec.CancelledMessage` ("Authentication canceled") shown in its place.
   `Window.ShowErrorToast` turns a message carrying that text into the brief
   toast instead of a persistent raw-stderr error. A view whose failure toast
   is fixed text without the helper's output — Download, early updates, and
@@ -488,6 +507,30 @@ An agent must not break these:
   `bootc_updates_group`; ChairLift ships no OS staging implementation. Do not
   make the privileged path configurable from ChairLift's user-writable
   configuration.
+- **Static widget trees are Blueprint; Go binds them by struct tag.** The
+  window shell, its sidebar rows (`nav-row.blp`, GNOME Settings' panel-row
+  shape and spacing: a plain list row, not an `AdwActionRow`), every page
+  skeleton (`page.blp`: a header bar over an
+  `AdwPreferencesPage`, with no `GtkScrolledWindow` around the page, which
+  scrolls itself), the Updates destination, the first-run bookends, and the
+  About, shortcuts, and avatar dialogs are `internal/ui/*.blp`, compiled to
+  the committed `.ui` files the binary embeds (ADR-0022). Go binds one with
+  `ui.Bind` into a struct of `ui:"<id>"`-tagged fields plus a blank
+  `ui.File` field naming the blueprint, then connects every signal in Go,
+  once, at build time; a blueprint names no handler, because GtkBuilder
+  cannot find a Go function and puregotk cannot build templates. Content
+  that depends on data or configuration stays in Go and is added to bound
+  containers. `internal/installcheck`'s blueprint tests hold, without GTK,
+  that each tagged field names an id of the same class in its blueprint,
+  each blueprint is compiled, each action a blueprint names is registered by
+  `internal/window` or `internal/app`, no blueprint spells the product name
+  (set it from `branding.AppName`), and no blueprint uses a class newer than
+  libadwaita 1.6 — the Bluefin LTS floor; GtkBuilder aborts the process on an
+  unknown class — unless it is listed as version gated with a fallback
+  (`shortcuts.blp`, AdwShortcutsDialog on 1.8, else `shortcuts-legacy.blp`).
+  The main window collapses its split view below 550sp through
+  `window.blp`'s breakpoint and requests the HIG's 360×294 minimum.
+  `docs/skills/blueprint-ui/SKILL.md` carries the traps.
 - **GTK main-thread safety.** All external tool calls run in goroutines; every
   UI update marshals back to the GTK main thread via
   `snowkit`'s `sgtk.RunOnMainThread(...)`. Never touch a widget directly from a
@@ -528,7 +571,8 @@ An agent must not break these:
   group configuration: omit a functional page when all of its builder-backed
   groups are disabled, always retain Help, and compact Alt+number over visible
   pages. Mouse activation, window navigation actions, and the Powerwash
-  detail's entry row and Back button must all call `Window.navigateToPage`,
+  detail's entry row, Back button, and `win.go-back` (Alt+Left) must all
+  call `Window.navigateToPage`,
   which applies the complete `navigation.Resolve` transition against
   `Window.navRoutes` (`navigation.VisibleRoutes`: the visible primaries plus
   the details they offer) — visible-row index, visible child, title,
@@ -669,14 +713,14 @@ An agent must not break these:
   snapshot.) Roll Back is
   different: `bootc rollback` toggles the selected deployment, so a successful
   live click completes its gate and leaves its button insensitive; only a
-  failure or preview resets it. A live success then swaps in a **Restart now**
+  failure or preview resets it. A live success then swaps in a **Restart Now**
   button (when the helper supports `restart`), because a queued rollback is
   not a staged deployment and the Updates page offers no restart for it
   (#520). `internal/views/actionstate`'s wiring tests guard both lifetimes.
   Dedicated staging, a live unified run whose operating-system source
   completed, and a live channel or driver switch refresh the changelog's
   Compare references from observed status (a switch also re-checks, so the
-  Operating system row offers Restart now).
+  Operating System row offers Restart Now).
   `UserHome.OnUpdateFinished` refreshes the installed Homebrew inventory when
   its source completed and Compare when the OS source completed — after a
   unified run and after a live single-row update alike; the coordinator
@@ -825,7 +869,7 @@ An agent must not break these:
 - **Troubleshooting runs Goose in ChairLift's own profile, never the user's.**
   The Agents page's **Troubleshooting** group (`agents_page`
   `troubleshooting_group`, floored on Homebrew; `internal/views/troubleshoot.go`)
-  holds the Goose row and the "Show Ask Bluefin in menu" switch; the Ask
+  holds the Goose row and the "Show Ask Bluefin in Menu" switch; the Ask
   Bluefin menu entry and `--ask-bluefin` are paths into it, not its name. It is the
   one Goose surface: Help no longer has an Troubleshooting group,
   and `help_page.troubleshooting_group` is still accepted and migrated to
@@ -1220,7 +1264,7 @@ An agent must not break these:
   still resolved under dry-run so a missing custom file or unknown brand is
   still reported.
 - **Routine cleanup has one key and one owner.** The Maintenance page offers
-  a single "Free up space" action, gated by `maintenance_freespace_group`.
+  a single "Free Up Space" action, gated by `maintenance_freespace_group`.
   That key is `internal/updateproviders.CleanupGroup`, the same constant
   gating the update run's post-update maintenance step
   (`updateproviders.NewMaintenance`), so one configuration switch

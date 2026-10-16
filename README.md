@@ -69,12 +69,12 @@ so they cost nothing on any other host.
 ### 🔄 Unified Updates
 
 The Updates page leads with the system's status — "System is up to date", or
-how many updates are waiting — above an **Update sources** list of the four
-things that can be updated: Applications, Developer tools, System components,
-and Operating system. One primary action covers all of them: **Check again**
-when nothing is pending, **Update all** when something is, and **Retry failed**
+how many updates are waiting — above an **Update Sources** list of the four
+things that can be updated: Applications, Developer Tools, System Components,
+and Operating System. One primary action covers all of them: **Check Again**
+when nothing is pending, **Update All** when something is, and **Retry Failed**
 when a source did not finish. Once an OS image is staged, the **Operating
-system** row carries its own **Restart now** suffix instead.
+System** row carries its own **Restart Now** suffix instead.
 A source that fails does not stop the others, and the restart prompt appears
 only when an image was actually staged, so a system that was already current
 never asks for a reboot.
@@ -282,7 +282,7 @@ chairlift
 5. **Livery**: Choose the icons shown on the app-grid button, the top-bar menu,
    and Files — a personal brand from Simple Icons, a foundation mark, or a CNCF
    project's artwork, optionally advancing at each login
-6. **Maintenance**: Free up space, run administrator-configured maintenance
+6. **Maintenance**: Free Up Space, run administrator-configured maintenance
    scripts, and — where an administrator has opted in — Powerwash or Factory
    Reset
 7. **Help**: Documentation and support resources

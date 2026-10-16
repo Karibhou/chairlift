@@ -122,9 +122,9 @@ Feature: Livery
     And I activate the "Project" row in the Livery "Files Icon" section
     Then the Livery chooser titled "Choose a Project" is shown
     When I search the Livery chooser for "zzqxnothing"
-    Then the Livery chooser offers only "No matching project"
+    Then the Livery chooser offers only "No Matching Project"
     And the Livery chooser says "No project matches"
-    When I pick "No matching project" in the Livery chooser
+    When I pick "No Matching Project" in the Livery chooser
     Then the Livery chooser is still open
     And the Livery dry run would not set dock-foundation
     And the "Project" row in the Livery "Files Icon" section says "Certified Kubernetes"
@@ -136,7 +136,7 @@ Feature: Livery
     And I activate the "Brand" row in the Livery "App Launcher Icon" section
     Then the Livery chooser titled "Choose a Brand" is shown
     When I search the Livery chooser for "zzqxnothing"
-    Then the Livery chooser offers only "No matching brand"
+    Then the Livery chooser offers only "No Matching Brand"
     And the Livery chooser does not say "cncf/artwork"
 
   @stub.livery-tools @stub.livery-app-grid-on @stub.livery-offline
@@ -185,7 +185,7 @@ Feature: Livery
   Scenario: A profile picture previews while the artwork services are unreachable
     Given ChairLift is running
     When I open the "Livery" page
-    Then the "No picture set" row in the Livery "Profile Picture" section says "Choose a dinosaur from Project Bluefin's artwork"
+    Then the "No Picture Set" row in the Livery "Profile Picture" section says "Choose a dinosaur from Project Bluefin's artwork"
     When I press the "Choose…" button in the Livery "Profile Picture" section
     Then the Livery chooser titled "Choose a Profile Picture" is shown
     And the Livery "Apply" button is insensitive

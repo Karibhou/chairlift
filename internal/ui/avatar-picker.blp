@@ -1,0 +1,77 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The profile-picture chooser on the Livery page. Its copy comes from
+// internal/views/pageview (avatar.go) and its rows from the catalog, so
+// internal/views/profile_picture.go fills both after binding. It is an
+// action dialog: Cancel and Apply replace the close button, as the HIG asks
+// of a dialog whose affirmative button commits a change.
+Adw.Dialog dialog {
+  content-width: 420;
+  content-height: 620;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      [start]
+      Button cancel {
+        label: _("_Cancel");
+        use-underline: true;
+      }
+
+      [end]
+      Button apply {
+        sensitive: false;
+        use-underline: true;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+    }
+
+    // Beneath the header bar, so a failed preview is on screen however far
+    // the list is scrolled.
+    [top]
+    Adw.Banner banner {
+      revealed: false;
+    }
+
+    content: ScrolledWindow {
+      hscrollbar-policy: never;
+      vexpand: true;
+
+      child: Box {
+        orientation: vertical;
+        spacing: 6;
+
+        Adw.Avatar preview {
+          size: 128;
+          show-initials: false;
+          margin-top: 12;
+        }
+
+        Label prompt {
+          styles [
+            "dim-label",
+          ]
+        }
+
+        ListBox list {
+          selection-mode: none;
+          margin-top: 12;
+          margin-bottom: 12;
+          margin-start: 12;
+          margin-end: 12;
+
+          styles [
+            "boxed-list",
+          ]
+        }
+      };
+    };
+  };
+}

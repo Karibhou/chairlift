@@ -144,7 +144,7 @@ var routes = []Item{
 	{
 		Name:  "applications",
 		Title: "Apps",
-		Icon:  "application-x-executable-symbolic",
+		Icon:  "view-grid-symbolic",
 		Kind:  KindPrimary,
 		Refs: refsOn("applications_page",
 			"brew_group",
@@ -154,7 +154,7 @@ var routes = []Item{
 	{
 		Name:  "agents",
 		Title: "Agents",
-		Icon:  "starred-symbolic",
+		Icon:  "emoji-objects-symbolic",
 		Kind:  KindPrimary,
 		Refs:  refsOn("agents_page", "agents_group", "troubleshooting_group"),
 	},
@@ -186,7 +186,7 @@ var routes = []Item{
 	{
 		Name:  "maintenance",
 		Title: "Maintenance",
-		Icon:  "emblem-system-symbolic",
+		Icon:  "preferences-system-symbolic",
 		Kind:  KindPrimary,
 		Refs: refsOn("maintenance_page",
 			"maintenance_cleanup_group",
@@ -231,6 +231,9 @@ var generalShortcuts = []Shortcut{
 	{Action: "win.show-shortcuts", Accelerator: "<Primary>question", Display: "Ctrl+?", Title: "Keyboard Shortcuts", Group: GroupGeneral},
 	{Action: "app.quit", Accelerator: "<Primary>q", Display: "Ctrl+Q", Title: "Quit", Group: GroupGeneral},
 	{Action: "win.navigate-help", Accelerator: "F1", Display: "F1", Title: "Help", Group: GroupGeneral},
+	{Action: "win.check", Accelerator: "<Primary>r", Display: "Ctrl+R", Title: "Check for Updates", Group: GroupGeneral},
+	{Action: "win.go-back", Accelerator: "<Alt>Left", Display: "Alt+Left", Title: "Go Back", Group: GroupNavigation},
+	{Action: "win.close", Accelerator: "<Primary>w", Display: "Ctrl+W", Title: "Close Window", Group: GroupGeneral},
 }
 
 // refsOn pairs one configuration page with the groups a route consumes on it.

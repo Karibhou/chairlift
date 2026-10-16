@@ -63,18 +63,18 @@ func Uninstall(dryRun bool, name string) string {
 
 // UninstallFailure returns the error toast for a failed Homebrew uninstall.
 // When Homebrew refused because installed packages still need it,
-// dependents names them: a bare "Could not uninstall" left a retry that
+// dependents names them: a bare "Couldn't uninstall" left a retry that
 // fails the same way as the only thing to try. Any other failure keeps its
 // detail in the log.
 func UninstallFailure(name string, dependents []string) string {
 	switch len(dependents) {
 	case 0:
-		return fmt.Sprintf("Could not uninstall %s", name)
+		return fmt.Sprintf("Couldn't uninstall %s", name)
 	case 1:
-		return fmt.Sprintf("Could not uninstall %s because %s needs it", name, dependents[0])
+		return fmt.Sprintf("Couldn't uninstall %s because %s needs it", name, dependents[0])
 	default:
 		last := len(dependents) - 1
-		return fmt.Sprintf("Could not uninstall %s because %s and %s need it",
+		return fmt.Sprintf("Couldn't uninstall %s because %s and %s need it",
 			name, strings.Join(dependents[:last], ", "), dependents[last])
 	}
 }
@@ -257,7 +257,7 @@ func MaintenanceScript(dryRun bool, title string) ScriptDecision {
 // MaintenanceScriptFailure words a failed configured maintenance script.
 // A sudo script runs through pkexec, and pkexec exits 126 when the user
 // dismissed the authentication prompt; the script never ran, so that is the
-// brief "Authentication cancelled" toast (isError false) every other
+// brief "Authentication canceled" toast (isError false) every other
 // privileged view shows, not a pinned "failed: exit status 126". The script
 // runner captures no stderr, so the exit status is the only signal. A script
 // run without pkexec owns its own exit statuses, so its 126 stays a failure.
@@ -742,11 +742,11 @@ type AskBluefinMenuDecision struct {
 func AskBluefinMenu(dryRun, requested, observed bool, err, readErr error) AskBluefinMenuDecision {
 	switch {
 	case readErr != nil && err != nil:
-		return AskBluefinMenuDecision{Active: !requested, Toast: "Could not update the Ask Bluefin menu entry.", Error: true}
+		return AskBluefinMenuDecision{Active: !requested, Toast: "Couldn't update the Ask Bluefin menu entry.", Error: true}
 	case readErr != nil:
-		return AskBluefinMenuDecision{Active: !requested, Toast: "Could not verify the Ask Bluefin menu entry.", Error: true}
+		return AskBluefinMenuDecision{Active: !requested, Toast: "Couldn't verify the Ask Bluefin menu entry.", Error: true}
 	case err != nil:
-		return AskBluefinMenuDecision{Active: observed, Toast: "Could not update the Ask Bluefin menu entry.", Error: true}
+		return AskBluefinMenuDecision{Active: observed, Toast: "Couldn't update the Ask Bluefin menu entry.", Error: true}
 	case dryRun:
 		return AskBluefinMenuDecision{Active: observed, Toast: "Preview only — the menu entry was not changed."}
 	case observed != requested:

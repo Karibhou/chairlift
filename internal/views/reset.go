@@ -52,7 +52,7 @@ const (
 // buildResetGroup builds the Powerwash and Factory Reset rows. It is the
 // last group on the Maintenance page and reads as its own section: these
 // are recovery actions, not routine maintenance, and grouping them beside
-// "Free up space" would invite a person looking for disk space to press one
+// "Free Up Space" would invite a person looking for disk space to press one
 // of them.
 func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
@@ -106,6 +106,9 @@ func (uh *UserHome) onPowerwashClicked(button *gtk.Button, row *adw.ActionRow) {
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("confirm", "Remove Apps and Containers")
 	dialog.SetResponseAppearance("confirm", adw.ResponseDestructiveValue)
+	// Escape and the default both cancel: nothing happens unless asked.
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {
 		if response != "confirm" {
@@ -167,8 +170,11 @@ func (uh *UserHome) onFactoryResetClicked(button *gtk.Button, row *adw.ActionRow
 	title, body := pageview.FactoryResetConfirmation()
 	dialog := adw.NewAlertDialog(title, body)
 	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("confirm", "Factory Reset")
+	dialog.AddResponse("confirm", "Reset")
 	dialog.SetResponseAppearance("confirm", adw.ResponseDestructiveValue)
+	// Escape and the default both cancel: nothing happens unless asked.
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {
 		if response != "confirm" {

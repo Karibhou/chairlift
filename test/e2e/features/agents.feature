@@ -28,7 +28,7 @@ Feature: Agents page
     And I do not see "Manage Models"
     And the "Goose" row says "Set up Goose to start troubleshooting."
     And the "Set Up" button in the "Goose" row is sensitive
-    And the "Local connection" row says "http://127.0.0.1:17434/v1"
+    And the "Local Connection" row says "http://127.0.0.1:17434/v1"
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias
   Scenario: Only a responding daemon makes model controls available
@@ -265,13 +265,13 @@ Feature: Agents page
     And the "Contribute" button in the "Contribute to Bluefin" row is sensitive
 
   @stub.agents.devmenu
-  Scenario: Show Ask Bluefin in menu dry-run toggle previews and restores without writing dconf
+  Scenario: Show Ask Bluefin in Menu dry-run toggle previews and restores without writing dconf
     Given ChairLift is running
     When I open the "Agents" page
-    Then the switch in the "Show Ask Bluefin in menu" row is on
-    When I toggle the switch in the "Show Ask Bluefin in menu" row
+    Then the switch in the "Show Ask Bluefin in Menu" row is on
+    When I toggle the switch in the "Show Ask Bluefin in Menu" row
     Then the application log contains "[DRY-RUN] would set Custom Command Menu command11 visible=false"
-    And the switch in the "Show Ask Bluefin in menu" row is on
+    And the switch in the "Show Ask Bluefin in Menu" row is on
     And I see "Preview only — the menu entry was not changed."
     And dconf was never asked to "write"
     And dconf was never asked to "reset"
@@ -305,10 +305,10 @@ Feature: Agents page
   Scenario: The distro's chairlift-wrapper Ask Bluefin entry is the one the switch shows and hides
     Given ChairLift is running
     When I open the "Agents" page
-    Then the switch in the "Show Ask Bluefin in menu" row is on
-    When I toggle the switch in the "Show Ask Bluefin in menu" row
+    Then the switch in the "Show Ask Bluefin in Menu" row is on
+    When I toggle the switch in the "Show Ask Bluefin in Menu" row
     Then the application log contains "[DRY-RUN] would set Custom Command Menu command11 visible=false"
-    And the switch in the "Show Ask Bluefin in menu" row is on
+    And the switch in the "Show Ask Bluefin in Menu" row is on
     And dconf was never asked to "write"
     And dconf was never asked to "reset"
 
@@ -316,9 +316,9 @@ Feature: Agents page
   Scenario: An Ask Bluefin slot missing from command-order reads off and showing it lists the slot
     Given ChairLift is running
     When I open the "Agents" page
-    Then the switch in the "Show Ask Bluefin in menu" row is off
-    When I toggle the switch in the "Show Ask Bluefin in menu" row
+    Then the switch in the "Show Ask Bluefin in Menu" row is off
+    When I toggle the switch in the "Show Ask Bluefin in Menu" row
     Then the application log contains "[DRY-RUN] would set Custom Command Menu command-order to [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]"
-    And the switch in the "Show Ask Bluefin in menu" row is off
+    And the switch in the "Show Ask Bluefin in Menu" row is off
     And dconf was never asked to "write"
     And dconf was never asked to "reset"

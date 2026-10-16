@@ -31,7 +31,7 @@ var codeNameExemptions = map[string]string{
 	"ChairLift activated": "E2E readiness log marker; a public contract polled by exact literal in " +
 		"test/e2e/e2e_test.go and test/e2e/capture_walkthrough.sh (ADR-0008)",
 	"10-chairlift-llmman.conf": "environment.d fragment file name Agent Mode owns (ADR-0015); a path component, never shown as prose",
-	"ChairLift Contributors":   "About-dialog credit naming contributors to the project, which is the code name",
+	"ChairLift Contributors":   "About-dialog credit (internal/ui/about.blp) naming contributors to the project, which is the code name",
 	"CONFIGURATION ERROR: %s; all feature groups were disabled; fix the configuration file and restart ChairLift":                       "log line, not the toast; internal/config.LoadError.ToastMessage is the user-facing counterpart and uses branding.AppName",
 	"sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift) (line %d)":                        "user-visible validation error, but the code name appears only as the two trusted configuration directories, which are filesystem paths fixed by ADR-0002",
 	"group %q enables sudo action %q; sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift)": "same: the code name appears only as filesystem paths the user must actually navigate to",
@@ -147,6 +147,18 @@ func TestDisplayNameHasOneOwner(t *testing.T) {
 		}
 	}
 
+	// Blueprints carry user-visible strings too; GtkBuilder shows them as
+	// written, so they answer to the same rules as Go literals.
+	for _, lit := range blueprintStringLiterals(t, root) {
+		if !strings.Contains(strings.ToLower(lit.value), "chairlift") || exemptStructurally(lit.value) != "" {
+			continue
+		}
+		if _, exempt := codeNameExemptions[lit.value]; exempt {
+			continue
+		}
+		offenders = append(offenders, lit.path+":"+strconv.Itoa(lit.line)+" "+strconv.Quote(lit.value))
+	}
+
 	if len(offenders) > 0 {
 		t.Errorf("string literals spell the code name where a user may read them; "+
 			"use branding.AppName (%q), or add an entry to codeNameExemptions stating why no user sees it:\n  %s",
@@ -193,12 +205,80 @@ func TestCodeNameExemptionsAreAllLive(t *testing.T) {
 			t.Fatalf("walking %s: %v", dir, err)
 		}
 	}
+	for _, lit := range blueprintStringLiterals(t, root) {
+		if _, listed := codeNameExemptions[lit.value]; listed {
+			found[lit.value] = true
+		}
+	}
 
 	for value, reason := range codeNameExemptions {
 		if !found[value] {
 			t.Errorf("codeNameExemptions has a stale entry %q (%s); no source file contains it", value, reason)
 		}
 	}
+}
+
+// blueprintLiteral is one quoted string in a Blueprint source.
+type blueprintLiteral struct {
+	path  string
+	line  int
+	value string
+}
+
+// blueprintStringLiterals returns every quoted string in internal/ui/*.blp,
+// skipping // and /* */ comments. Blueprint strings take either quote and
+// backslash escapes; an escape keeps the character after the backslash, which
+// is enough to test for the code name.
+func blueprintStringLiterals(t *testing.T, root string) []blueprintLiteral {
+	t.Helper()
+	var literals []blueprintLiteral
+	for _, name := range blueprintNames(t, root, ".blp") {
+		rel := filepath.Join(blueprintDir, name+".blp")
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("reading %s: %v", rel, err)
+		}
+		src := string(data)
+		line := 1
+		for i := 0; i < len(src); i++ {
+			switch c := src[i]; {
+			case c == '\n':
+				line++
+			case strings.HasPrefix(src[i:], "//"):
+				for i < len(src) && src[i] != '\n' {
+					i++
+				}
+				line++
+			case strings.HasPrefix(src[i:], "/*"):
+				end := strings.Index(src[i+2:], "*/")
+				if end < 0 {
+					t.Fatalf("%s:%d: unterminated comment", rel, line)
+				}
+				line += strings.Count(src[i:i+2+end], "\n")
+				i += end + 3
+			case c == '"' || c == '\'':
+				start := line
+				var value strings.Builder
+				for i++; i < len(src) && src[i] != c; i++ {
+					if src[i] == '\\' && i+1 < len(src) {
+						i++
+					}
+					if src[i] == '\n' {
+						line++
+					}
+					value.WriteByte(src[i])
+				}
+				if i >= len(src) {
+					t.Fatalf("%s:%d: unterminated string", rel, start)
+				}
+				literals = append(literals, blueprintLiteral{path: rel, line: start, value: value.String()})
+			}
+		}
+	}
+	if len(literals) == 0 {
+		t.Fatal("found no string literals in internal/ui/*.blp; the blueprint scan is not reading the sources")
+	}
+	return literals
 }
 
 // TestDesktopEntryMatchesTheDisplayName keeps the shell's name for the

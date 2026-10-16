@@ -65,7 +65,7 @@ func (uh *UserHome) buildMaintenancePage() {
 		recoveryRow.SetTitle("Powerwash")
 		uh.recoveryEntryRow = recoveryRow
 		recoveryRow.SetActivatable(true)
-		icon := gtk.NewImageFromIconName("pan-end-symbolic")
+		icon := gtk.NewImageFromIconName("go-next-symbolic")
 		recoveryRow.AddSuffix(&icon.Widget)
 		recoveryActivatedCb := func(row adw.ActionRow) {
 			if uh.openRecoveryDetail != nil {
@@ -200,7 +200,7 @@ func (uh *UserHome) buildConfiguredTasksGroup(page *adw.PreferencesPage) {
 
 		button := gtk.NewButtonWithLabel(cleanupview.ScriptsButtonLabel)
 		button.SetValign(gtk.AlignCenterValue)
-		button.AddCssClass("suggested-action")
+		describeFor(button, action.Title)
 
 		script := action.Script
 		sudo := action.Sudo

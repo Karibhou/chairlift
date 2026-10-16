@@ -50,8 +50,8 @@ func TestGraphicsDriverRowCoversEveryState(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			row := GraphicsDriverRow(test.current, test.hardware, test.recommended)
-			if row.Title != "Graphics driver" {
-				t.Errorf("GraphicsDriverRow().Title = %q, want %q", row.Title, "Graphics driver")
+			if row.Title != "Graphics Driver" {
+				t.Errorf("GraphicsDriverRow().Title = %q, want %q", row.Title, "Graphics Driver")
 			}
 			if !strings.Contains(row.Subtitle, test.wantHas) {
 				t.Errorf("GraphicsDriverRow(%q, %q, %q).Subtitle = %q, want it to contain %q",

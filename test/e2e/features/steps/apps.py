@@ -175,12 +175,12 @@ def step_open_row(context, title):
 # An app collection's expander is the same widget across rows, so the row
 # containing its title is the same node every other helper already finds;
 # its child rows are the packages the Brewfile would install. The expander
-# is the only one of its kind inside "App collections" — Features uses
+# is the only one of its kind inside "App Collections" — Features uses
 # another, but a different title — so the row_containing lookup is exact.
 @then('the "{title}" list shows exactly')
 def step_expander_rows_exact(context, title):
     want = [row["title"] for row in context.table]
-    header = expander_header(context, title, "App collections", timeout=1)
+    header = expander_header(context, title, "App Collections", timeout=1)
     assert atspi.poll(lambda: expander_rows(header) == want, timeout=2.0), \
         f"the {title!r} list shows {expander_rows(header)}, want {want}"
 

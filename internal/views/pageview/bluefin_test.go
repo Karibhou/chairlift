@@ -22,8 +22,8 @@ func TestChannelRowExplainsEveryState(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			row := ChannelRow(test.onTesting, test.switchable)
-			if row.Title != "Get updates early" {
-				t.Errorf("ChannelRow().Title = %q, want %q", row.Title, "Get updates early")
+			if row.Title != "Get Updates Early" {
+				t.Errorf("ChannelRow().Title = %q, want %q", row.Title, "Get Updates Early")
 			}
 			if !strings.Contains(row.Subtitle, test.wantHas) {
 				t.Errorf("ChannelRow().Subtitle = %q, want it to contain %q", row.Subtitle, test.wantHas)

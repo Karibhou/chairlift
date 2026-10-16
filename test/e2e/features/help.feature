@@ -19,9 +19,9 @@ Feature: Help destination
     When I press "F1"
     Then the Help resources are, in order
       | title                | url                                     |
-      | Browse documentation | https://example.test/docs/#start        |
-      | Report a problem     | https://example.test/issues?labels=help |
-      | Ask for help         | https://example.test/ask/               |
+      | Browse Documentation | https://example.test/docs/#start        |
+      | Report a Problem     | https://example.test/issues?labels=help |
+      | Ask for Help         | https://example.test/ask/               |
 
   @config.help-links-markup
   Scenario: A support URL containing "&" is shown exactly as configured
@@ -29,15 +29,15 @@ Feature: Help destination
     When I press "F1"
     Then the Help resources are, in order
       | title                | url                                                |
-      | Browse documentation | https://example.test/docs/                         |
-      | Report a problem     | https://example.test/issues?labels=help&state=open |
-      | Ask for help         | https://example.test/ask/                          |
+      | Browse Documentation | https://example.test/docs/                         |
+      | Report a Problem     | https://example.test/issues?labels=help&state=open |
+      | Ask for Help         | https://example.test/ask/                          |
 
   @config.help-links-markup @stub.help-xdg-open
   Scenario: A support URL containing "&" still opens verbatim
     Given ChairLift is running
     When I press "F1"
-    And I open the "Report a problem" Help link
+    And I open the "Report a Problem" Help link
     Then xdg-open was asked to open "https://example.test/issues?labels=help&state=open"
 
   @config.help-links-partial
@@ -46,8 +46,8 @@ Feature: Help destination
     When I press "F1"
     Then the Help resources are, in order
       | title                | url                        |
-      | Browse documentation | https://example.test/docs/ |
-      | Ask for help         | https://example.test/ask/  |
+      | Browse Documentation | https://example.test/docs/ |
+      | Ask for Help         | https://example.test/ask/  |
 
   @config.help-links @stub.help-xdg-open
   Scenario Outline: Opening a support link hands its exact URL to xdg-open
@@ -62,15 +62,15 @@ Feature: Help destination
 
     Examples:
       | title                | url                                     |
-      | Browse documentation | https://example.test/docs/#start        |
-      | Report a problem     | https://example.test/issues?labels=help |
-      | Ask for help         | https://example.test/ask/               |
+      | Browse Documentation | https://example.test/docs/#start        |
+      | Report a Problem     | https://example.test/issues?labels=help |
+      | Ask for Help         | https://example.test/ask/               |
 
   @stub.help-xdg-open-fails
   Scenario: A link with no URL handler reports the failure and keeps the page
     Given ChairLift is running
     When I press "F1"
-    And I open the "Report a problem" Help link
+    And I open the "Report a Problem" Help link
     Then xdg-open was asked to open "https://github.com/projectbluefin/dakota/issues"
     And I see "Couldn't open https://github.com/projectbluefin/dakota/issues."
     And the Help page is still responsive
@@ -79,9 +79,9 @@ Feature: Help destination
   Scenario: A new failure is visible without dismissing the previous error
     Given ChairLift is running
     When I press "F1"
-    And I open the "Browse documentation" Help link
+    And I open the "Browse Documentation" Help link
     Then a toast says "Couldn't open https://example.test/docs/#start."
-    When I open the "Ask for help" Help link
+    When I open the "Ask for Help" Help link
     Then a toast says "Couldn't open https://example.test/ask/."
     And the Help page is still responsive
 
@@ -91,7 +91,7 @@ Feature: Help destination
     When I select "Help" in the sidebar
     Then the Help page has no resource links
     And I do not see "Troubleshooting"
-    And I see "System diagnostics"
+    And I see "System Diagnostics"
     When I open the "Updates" page
     And I press "F1"
     Then the "Help" page is shown
@@ -99,7 +99,7 @@ Feature: Help destination
   Scenario: Copying diagnostics confirms and re-enables the button
     Given ChairLift is running
     When I press "F1"
-    And I click the "Copy" button in the "System diagnostics" row
+    And I click the "Copy" button in the "System Diagnostics" row
     Then I see "Copied to the clipboard."
-    And the "Copy" button in the "System diagnostics" row is sensitive
+    And the "Copy" button in the "System Diagnostics" row is sensitive
     And the action journal is empty

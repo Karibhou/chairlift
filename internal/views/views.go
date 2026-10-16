@@ -11,6 +11,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/livery"
+	"github.com/projectbluefin/chairlift/internal/ui"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/liverystate"
@@ -351,7 +352,11 @@ type UserHome struct {
 // when its configuration enables it and the host supports it. A nil caps is
 // treated as an empty set, which lets callers that cannot resolve capabilities
 // still construct views (they simply render nothing capability-gated).
-func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder) *UserHome {
+//
+// updates is the Updates destination's preferences page, which the update
+// shell owns (UpdateShell.PreferencesPage): buildUpdatesPage appends its
+// groups after the shell's. A nil updates builds a page of its own.
+func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates *adw.PreferencesPage) *UserHome {
 	start := time.Now()
 
 	uh := &UserHome{
@@ -362,7 +367,11 @@ func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder) *UserHo
 
 	// Create pages - createPage returns both ToolbarView and PreferencesPage
 	uh.agentsPage, uh.agentsPrefsPage = uh.createPage()
-	uh.updatesPage, uh.updatesPrefsPage = uh.createPage()
+	if updates != nil {
+		uh.updatesPrefsPage = updates
+	} else {
+		uh.updatesPage, uh.updatesPrefsPage = uh.createPage()
+	}
 	uh.applicationsPage, uh.applicationsPrefsPage = uh.createPage()
 	uh.maintenancePage, uh.maintenancePrefsPage = uh.createPage()
 	uh.featuresPage, uh.featuresPrefsPage = uh.createPage()
@@ -425,17 +434,6 @@ func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
 	}
 }
 
-// UpdatesPreferencesPage returns the preferences page buildUpdatesPage
-// filled, for the window to mount as the update shell's secondary content.
-// It is always constructed by New; a group configuration or the capability
-// floor disables leaves it without that group, never nil.
-func (uh *UserHome) UpdatesPreferencesPage() *adw.PreferencesPage {
-	if uh == nil {
-		return nil
-	}
-	return uh.updatesPrefsPage
-}
-
 // GetPage returns a page by name
 func (uh *UserHome) GetPage(name string) *adw.ToolbarView {
 	switch name {
@@ -467,29 +465,25 @@ func (uh *UserHome) ScrollPageToTop(name string) {
 	}
 }
 
-// createPage creates a page with toolbar view and scrolled content
+// pageUI is one content destination: internal/ui/page.blp.
+type pageUI struct {
+	_           ui.File              `ui:"page"`
+	Page        *adw.ToolbarView     `ui:"page"`
+	Header      *adw.HeaderBar       `ui:"header"`
+	BackButton  *gtk.Button          `ui:"back_button"`
+	Preferences *adw.PreferencesPage `ui:"preferences"`
+}
+
+// createPage binds one content destination: a header bar over a
+// preferences page that scrolls and clamps itself.
 func (uh *UserHome) createPage() (*adw.ToolbarView, *adw.PreferencesPage) {
-	toolbarView := adw.NewToolbarView()
-
-	// Add header bar
-	headerBar := adw.NewHeaderBar()
-	toolbarView.AddTopBar(&headerBar.Widget)
-
-	// Create scrolled window with preferences page
-	scrolled := gtk.NewScrolledWindow()
-	scrolled.SetPolicy(gtk.PolicyNeverValue, gtk.PolicyAutomaticValue)
-	scrolled.SetVexpand(true)
-
-	prefsPage := adw.NewPreferencesPage()
-	scrolled.SetChild(&prefsPage.Widget)
-
-	toolbarView.SetContent(&scrolled.Widget)
+	var view pageUI
+	ui.Bind(&view)
 	if uh.pageContents == nil {
 		uh.pageContents = map[*adw.ToolbarView]*adw.PreferencesPage{}
 	}
-	uh.pageContents[toolbarView] = prefsPage
-
-	return toolbarView, prefsPage
+	uh.pageContents[view.Page] = view.Preferences
+	return view.Page, view.Preferences
 }
 
 // AttachUpdateShell shares the unified mutation owner with secondary actions.

@@ -61,7 +61,7 @@ func TestSummarizeReportsOnlyWhatHappened(t *testing.T) {
 			name:    "a cancelled authentication is reported as cancelled",
 			results: []updateproviders.StepResult{step(updateproviders.StepOldDownloads, updateproviders.OutcomeCleaned), step(updateproviders.StepUnusedSupport, updateproviders.OutcomeCancelled)},
 			space:   unmeasured,
-			want:    "Removed old downloads. Removing unused app parts was cancelled.",
+			want:    "Removed old downloads. Removing unused app parts was canceled.",
 			isError: true,
 		},
 		{

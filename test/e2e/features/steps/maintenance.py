@@ -21,7 +21,7 @@ MAINTENANCE = "Maintenance"
 RECOVERY = "Powerwash"
 # The Powerwash entry on the Maintenance page is a plain activatable
 # AdwActionRow; the free-space row is what tells the two pages apart.
-MAINTENANCE_ONLY_ROW = "Free up space"
+MAINTENANCE_ONLY_ROW = "Free Up Space"
 MAX_TAB_STOPS = 40
 
 

@@ -15,10 +15,12 @@ import (
 	"github.com/projectbluefin/chairlift/internal/navigation"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/settings"
+	"github.com/projectbluefin/chairlift/internal/ui"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/version"
 	"github.com/projectbluefin/chairlift/internal/views"
+	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 
 	"github.com/frostyard/snowkit/gobj"
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -45,6 +47,11 @@ const notificationID = "io.projectbluefin.chairlift.background-task"
 // Window represents the main application window
 type Window struct {
 	adw.ApplicationWindow
+	ui windowUI // The bound internal/ui/window.blp tree
+
+	// Built on first use and re-presented; see onShowShortcuts.
+	shortcutsDialog *adw.Dialog
+	aboutDialog     *adw.Dialog
 
 	splitView    *adw.NavigationSplitView
 	sidebarList  *gtk.ListBox
@@ -53,26 +60,26 @@ type Window struct {
 	contentPage  *adw.NavigationPage // Content navigation page for dynamic title
 	toasts       *adw.ToastOverlay
 
-	pages             map[string]*adw.ToolbarView
-	navRows           map[string]*adw.ActionRow // Store references to nav rows for badges
-	config            *config.Config
-	capabilities      capability.Set // Resolved once; the policy floor for every entry path
-	configError       *config.LoadError
-	views             *views.UserHome
-	updateShell       *views.UpdateShell
-	updateSettings    *settings.Store // The one updates-preference store: the shell reads it, Preferences binds to it
-	firstRunSteps     []string
-	firstRunIndex     int
-	firstRunActive    bool
-	firstRunCollapsed bool
-	firstRunContent   *gtk.Stack
-	firstRunFooter    *gtk.Box
-	firstRunBack      *gtk.Button
-	firstRunNext      *gtk.Button
-	updateBadge       *gtk.Label        // Noninteractive badge for the updates count
-	navItems          []navigation.Item // Visible primaries: the sidebar rows, actions, and shortcuts
-	navRoutes         []navigation.Item // navItems plus the details they offer; the Resolve inventory
-	backRoute         string            // The primary the shown detail's Back returns to; "" on a primary
+	pages           map[string]*adw.ToolbarView
+	navRows         map[string]*gtk.ListBoxRow // Store references to nav rows for badges
+	config          *config.Config
+	capabilities    capability.Set // Resolved once; the policy floor for every entry path
+	configError     *config.LoadError
+	views           *views.UserHome
+	updateShell     *views.UpdateShell
+	updateSettings  *settings.Store // The one updates-preference store: the shell reads it, Preferences binds to it
+	firstRunSteps   []string
+	firstRunIndex   int
+	firstRunActive  bool
+	narrow          bool // The narrow breakpoint is applied; see syncCollapsed
+	firstRunContent *gtk.Stack
+	firstRunFooter  *adw.ToolbarView // Reveals the setup flow's bottom bar
+	firstRunBack    *gtk.Button
+	firstRunNext    *gtk.Button
+	updateBadge     *gtk.Label        // Noninteractive badge for the updates count
+	navItems        []navigation.Item // Visible primaries: the sidebar rows, actions, and shortcuts
+	navRoutes       []navigation.Item // navItems plus the details they offer; the Resolve inventory
+	backRoute       string            // The primary the shown detail's Back returns to; "" on a primary
 }
 
 func init() {
@@ -97,7 +104,7 @@ func init() {
 				w := &Window{
 					ApplicationWindow: parent,
 					pages:             make(map[string]*adw.ToolbarView),
-					navRows:           make(map[string]*adw.ActionRow),
+					navRows:           make(map[string]*gtk.ListBoxRow),
 					config:            cfg,
 					configError:       configErr,
 				}
@@ -105,6 +112,9 @@ func init() {
 				reg.Pin(o, unsafe.Pointer(w))
 
 				w.SetDefaultSize(900, 700)
+				// The HIG's smallest supported window: the narrow
+				// breakpoint collapses the split view well above it.
+				w.SetSizeRequest(360, 294)
 				w.SetTitle(branding.AppName)
 				w.buildUI()
 				if w.configError != nil {
@@ -159,17 +169,9 @@ func (w *Window) buildUI() {
 	w.navItems = navigation.VisibleItems(w.effectiveEnabled)
 	w.navRoutes = navigation.VisibleRoutes(w.effectiveEnabled)
 
-	// Create views manager
-	w.views = views.New(w.config, w.capabilities, w)
-	// Wire the Recovery detail navigation before any page can open it. Both
-	// directions go through navigateToPage: the Maintenance row activates the
-	// detail route and Recovery's back button returns to the primary the
-	// transition named, so neither callback derives a route of its own.
-	w.views.SetOpenRecoveryDetail(w.showRecoveryDetail)
-	w.views.SetCloseRecoveryDetail(w.navigateBack)
-	log.Printf("window: views built in %s", time.Since(start))
-
-	// Initialize unified updates engine
+	// Initialize unified updates engine. The shell is built before the views
+	// because its preferences page is the Updates destination's only page:
+	// views.New appends the Updates page's own groups to it.
 	providers := []updateflow.Provider{
 		updateproviders.NewFlatpak(),
 		updateproviders.NewHomebrew(),
@@ -202,64 +204,77 @@ func (w *Window) buildUI() {
 		},
 		w,
 	)
+
+	// Create views manager
+	w.views = views.New(w.config, w.capabilities, w, w.updateShell.PreferencesPage())
+	// Wire the Recovery detail navigation before any page can open it. Both
+	// directions go through navigateToPage: the Maintenance row activates the
+	// detail route and Recovery's back button returns to the primary the
+	// transition named, so neither callback derives a route of its own.
+	w.views.SetOpenRecoveryDetail(w.showRecoveryDetail)
+	w.views.SetCloseRecoveryDetail(w.navigateBack)
+	log.Printf("window: views built in %s", time.Since(start))
+
 	w.updateShell.SetOnUpdateFinished(w.views.OnUpdateFinished)
 	// Connected once, here: a source toggled in Preferences (or by
 	// gsettings) re-checks the shell instead of waiting for Refresh.
 	store.OnSourceChanged(w.updateShell.PreferencesChanged)
 	w.views.AttachUpdateShell(w.updateShell)
-	// Create the navigation split view
-	w.splitView = adw.NewNavigationSplitView()
 
-	// Create sidebar
-	sidebarPage := w.buildSidebar()
-	w.splitView.SetSidebar(sidebarPage)
+	// The window's widget tree is internal/ui/window.blp.
+	ui.Bind(&w.ui)
+	w.splitView = w.ui.SplitView
+	w.toasts = w.ui.Toasts
+	w.firstRunContent = w.ui.SetupStack
+	w.bindSidebar()
+	w.bindContentArea()
+	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
+		"Welcome to",
+		"Your system is set up and ready to go. Customize your developer tools, set up troubleshooting, and change other system defaults.",
+		"Be the one who moves, not the one who is moved.", "Zavala"), "welcome")
+	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
+		"You Are Ready",
+		"You can return to this app at any time by choosing "+branding.AppName+" in your app menu.",
+		"There are two ways of spreading light: to be the candle or the mirror that reflects it.", "Edith Wharton"), "conclusion")
+	w.bindFirstRunFooter()
 
-	// Create content area
-	contentPage := w.buildContentArea()
-	w.splitView.SetContent(contentPage)
+	// The product name has one owner, so the About item is added here rather
+	// than spelled in the blueprint.
+	w.ui.AppSection.Append("_About "+branding.AppName, "win.show-about")
 
-	// Create toast overlay for notifications
-	w.toasts = adw.NewToastOverlay()
-	root := gtk.NewBox(gtk.OrientationVerticalValue, 0)
-	w.firstRunContent = gtk.NewStack()
-	w.firstRunContent.SetVexpand(true)
-	w.firstRunContent.SetTransitionType(gtk.StackTransitionTypeCrossfadeValue)
-	w.firstRunContent.AddNamed(&w.splitView.Widget, "pages")
-	w.firstRunContent.AddNamed(w.buildFirstRunBookend("Welcome to", "Your system is set up and ready to go. Feel free to customize your developer tools, set up troubleshooting, and customize other system defaults.", "Be the one who moves, not the one who is moved.", "Zavala"), "welcome")
-	w.firstRunContent.AddNamed(w.buildFirstRunBookend("You are ready", "You can return to this app by choosing "+branding.AppName+" in your menu. You have become legend.", "There are two ways of spreading light: to be the candle or the mirror that reflects it.", "Edith Wharton"), "conclusion")
-	root.Append(&w.firstRunContent.Widget)
-	w.buildFirstRunFooter(root)
-	w.toasts.SetChild(&root.Widget)
+	// Collapse the split view on a narrow window, as GNOME Settings does.
+	// The breakpoint only reports the width; syncCollapsed owns the
+	// property, because the setup flow collapses the split view too and a
+	// breakpoint setter would snapshot and later restore the setup flow's
+	// value. Connected once, here.
+	narrowApplied := func(adw.Breakpoint) {
+		w.narrow = true
+		w.syncCollapsed()
+	}
+	narrowUnapplied := func(adw.Breakpoint) {
+		w.narrow = false
+		w.syncCollapsed()
+	}
+	w.ui.NarrowBreakpoint.ConnectApply(&narrowApplied)
+	w.ui.NarrowBreakpoint.ConnectUnapply(&narrowUnapplied)
+	w.AddBreakpoint(w.ui.NarrowBreakpoint)
 
 	// Set window content
 	w.SetContent(&w.toasts.Widget)
 }
 
-// buildSidebar creates the sidebar navigation
-func (w *Window) buildSidebar() *adw.NavigationPage {
-	// Create toolbar view for sidebar
-	toolbarView := adw.NewToolbarView()
+// syncCollapsed is the one writer of the split view's collapsed property:
+// collapsed on a narrow window (internal/ui/window.blp's narrow_breakpoint)
+// and while the setup flow, which hides the sidebar, runs.
+func (w *Window) syncCollapsed() {
+	w.splitView.SetCollapsed(w.narrow || w.firstRunActive)
+}
 
-	// Add header bar with menu button
-	headerBar := adw.NewHeaderBar()
-	headerBar.SetShowEndTitleButtons(false)
-
-	// Create hamburger menu button
-	menuButton := w.buildMenuButton()
-	headerBar.PackEnd(&menuButton.Widget)
-
-	toolbarView.AddTopBar(&headerBar.Widget)
-
-	// Create scrolled window for the list
-	scrolled := gtk.NewScrolledWindow()
-	scrolled.SetPolicy(gtk.PolicyNeverValue, gtk.PolicyAutomaticValue)
-	scrolled.SetVexpand(true)
-
-	// Create list box for navigation
-	w.sidebarList = gtk.NewListBox()
-	views.SetAccessibleLabel(w.sidebarList, "Navigation")
-	w.sidebarList.SetSelectionMode(gtk.SelectionSingleValue)
-	w.sidebarList.AddCssClass("navigation-sidebar")
+// bindSidebar fills the blueprint's navigation list and connects its two
+// handlers, once.
+func (w *Window) bindSidebar() {
+	w.sidebarList = w.ui.SidebarList
+	w.ui.SidebarPage.SetTitle(branding.AppName)
 
 	// Add navigation items
 	for _, item := range w.navItems {
@@ -290,33 +305,25 @@ func (w *Window) buildSidebar() *adw.NavigationPage {
 		}
 	}
 	w.sidebarList.ConnectRowSelected(&rowSelectedCb)
-
-	scrolled.SetChild(&w.sidebarList.Widget)
-	toolbarView.SetContent(&scrolled.Widget)
-
-	// Create navigation page
-	navPage := adw.NewNavigationPage(&toolbarView.Widget, branding.AppName)
-
-	return navPage
 }
 
-// createNavRow creates a navigation row for the sidebar
-func (w *Window) createNavRow(item navigation.Item) *adw.ActionRow {
-	row := adw.NewActionRow()
-	row.SetTitle(item.Title)
-	row.SetActivatable(true)
-
-	// Add icon
-	icon := gtk.NewImageFromIconName(item.Icon)
-	row.AddPrefix(&icon.Widget)
+// createNavRow binds one sidebar row from internal/ui/nav-row.blp, the
+// shape GNOME Settings gives its panel rows.
+func (w *Window) createNavRow(item navigation.Item) *gtk.ListBoxRow {
+	var view navRowUI
+	ui.Bind(&view)
+	view.Icon.SetFromIconName(item.Icon)
+	view.Title.SetLabel(item.Title)
+	row := view.Row
 
 	// Add badge for updates row (hidden by default)
 	if item.Name == "updates" {
 		w.updateBadge = gtk.NewLabel("")
 		w.updateBadge.AddCssClass("circular")
 		w.updateBadge.AddCssClass("warning")
+		w.updateBadge.SetValign(gtk.AlignCenterValue)
 		w.updateBadge.SetVisible(false)
-		row.AddSuffix(&w.updateBadge.Widget)
+		view.Content.Append(&w.updateBadge.Widget)
 	}
 
 	// Store the page name in the row (using SetName for identification)
@@ -328,12 +335,10 @@ func (w *Window) createNavRow(item navigation.Item) *adw.ActionRow {
 	return row
 }
 
-// buildContentArea creates the content stack
-func (w *Window) buildContentArea() *adw.NavigationPage {
-	// Create stack for content pages
-	w.contentStack = gtk.NewStack()
-	w.contentStack.SetTransitionType(gtk.StackTransitionTypeCrossfadeValue)
-
+// bindContentArea adds every built page to the blueprint's content stack.
+func (w *Window) bindContentArea() {
+	w.contentStack = w.ui.ContentStack
+	w.contentPage = w.ui.ContentPage
 	// Add pages to the stack
 	items := w.navItems
 	for _, item := range items {
@@ -342,11 +347,10 @@ func (w *Window) buildContentArea() *adw.NavigationPage {
 			w.pages[item.Name] = page
 		}
 		if item.Name == "updates" && w.updateShell != nil && w.updateShell.Widget() != nil {
-			// The Updates destination is the status-first shell; everything
-			// else the Updates page owns — automatic updates, the system
-			// version, per-source groups, and the Advanced controls — mounts
-			// beneath its sources. See UpdateShell.SetSecondaryContent.
-			w.updateShell.SetSecondaryContent(w.views.UpdatesPreferencesPage())
+			// The Updates destination is the status-first shell, whose one
+			// preferences page also holds everything else the Updates page
+			// owns. See UpdateShell.PreferencesPage.
+			w.pages[item.Name] = w.updateShell.ToolbarView()
 			w.contentStack.AddNamed(w.updateShell.Widget(), item.Name)
 			continue
 		}
@@ -365,12 +369,10 @@ func (w *Window) buildContentArea() *adw.NavigationPage {
 		w.contentStack.AddNamed(&recovery.Widget, "recovery")
 	}
 
-	// Create navigation page with initial title from first nav item
-	initialTitle := "Content"
+	// The content page takes its title from the first nav item.
 	if len(items) > 0 {
-		initialTitle = items[0].Title
+		w.contentPage.SetTitle(items[0].Title)
 	}
-	w.contentPage = adw.NewNavigationPage(&w.contentStack.Widget, initialTitle)
 
 	// Select first item by default
 	if len(items) > 0 {
@@ -380,8 +382,6 @@ func (w *Window) buildContentArea() *adw.NavigationPage {
 			w.contentStack.SetVisibleChildName(items[0].Name)
 		}
 	}
-
-	return w.contentPage
 }
 
 // onSidebarRowActivated handles sidebar row activation
@@ -401,41 +401,15 @@ func (w *Window) onSidebarRowActivated(row gtk.ListBoxRow) {
 	w.navigateToPage(name)
 }
 
-// buildMenuButton creates the hamburger menu button
-func (w *Window) buildMenuButton() *gtk.MenuButton {
-	// Create menu model
-	menu := gio.NewMenu()
-
-	// Add menu items
-	menu.Append("Preferences", "win.show-preferences")
-	menu.Append("Setup Assistant…", "win.show-setup")
-	menu.Append("Keyboard Shortcuts", "win.show-shortcuts")
-	menu.Append("About "+branding.AppName, "win.show-about")
-	// Create menu button
-	menuButton := gtk.NewMenuButton()
-	menuButton.SetIconName("open-menu-symbolic")
-	menuButton.SetMenuModel(&menu.MenuModel)
-	// The primary menu: F10 opens it, as in every GNOME app.
-	menuButton.SetPrimary(true)
-	menuButton.SetTooltipText("Main Menu")
-	views.SetAccessibleLabel(menuButton, "Main Menu")
-
-	return menuButton
-}
-
 // setupActions sets up window actions
 func (w *Window) setupActions() {
-	// Preferences action (win.preferences and win.show-preferences)
+	// Preferences action (win.show-preferences)
 	prefsAction := gio.NewSimpleAction("show-preferences", nil)
 	prefsActivateCb := func(action gio.SimpleAction, param uintptr) {
 		w.onShowPreferences()
 	}
 	prefsAction.ConnectActivate(&prefsActivateCb)
 	w.AddAction(prefsAction)
-
-	winPrefsAction := gio.NewSimpleAction("preferences", nil)
-	winPrefsAction.ConnectActivate(&prefsActivateCb)
-	w.AddAction(winPrefsAction)
 
 	// Check action (win.check)
 	checkAction := gio.NewSimpleAction("check", nil)
@@ -447,20 +421,25 @@ func (w *Window) setupActions() {
 	checkAction.ConnectActivate(&checkActivateCb)
 	w.AddAction(checkAction)
 
-	// Help action (win.help)
-	helpAction := gio.NewSimpleAction("help", nil)
-	helpActivateCb := func(action gio.SimpleAction, param uintptr) {
-		group := w.config.GetGroupConfig("help_page", "help_resources_group")
-		if group != nil && group.Website != "" {
-			website := group.Website
-			callback := gio.AsyncReadyCallback(func(_, resultPtr, _ uintptr) {
-				_, _ = gio.AppInfoLaunchDefaultForUriFinish(&gio.AsyncResultBase{Ptr: resultPtr})
-			})
-			gio.AppInfoLaunchDefaultForUriAsync(website, nil, nil, &callback, 0)
-		}
+	// Back action (win.go-back): Alt+Left returns from a detail to
+	// the primary it was opened from, as from any libadwaita navigation
+	// page. It moves nothing while a primary is shown.
+	backAction := gio.NewSimpleAction("go-back", nil)
+	backActivateCb := func(action gio.SimpleAction, param uintptr) {
+		w.navigateBack()
 	}
-	helpAction.ConnectActivate(&helpActivateCb)
-	w.AddAction(helpAction)
+	backAction.ConnectActivate(&backActivateCb)
+	w.AddAction(backAction)
+
+	// Close action (win.close): Ctrl+W, through close-request, so the
+	// update guard and the setup flow's dismissal still apply.
+	closeAction := gio.NewSimpleAction("close", nil)
+	closeActivateCb := func(action gio.SimpleAction, param uintptr) {
+		w.Close()
+	}
+	closeAction.ConnectActivate(&closeActivateCb)
+	w.AddAction(closeAction)
+
 	// Setup assistant action
 	setupAction := gio.NewSimpleAction("show-setup", nil)
 	setupActivateCb := func(action gio.SimpleAction, param uintptr) {
@@ -551,88 +530,50 @@ func (w *Window) navigateBack() {
 	w.navigateToPage(w.backRoute)
 }
 
-// onShowShortcuts shows the keyboard shortcuts window
+// onShowShortcuts presents the keyboard shortcuts dialog, filled from
+// internal/navigation's one shortcut inventory. libadwaita 1.8 brings
+// AdwShortcutsDialog, which draws real keycaps and searches; older releases
+// cannot parse it, so they get an AdwDialog of the same entries instead.
+// The inventory is fixed for the session, so the dialog is built on first
+// use and re-presented after: a dialog built per open would be one more
+// that nothing frees.
 func (w *Window) onShowShortcuts() {
-	// Create a dialog to show shortcuts since GtkShortcutsWindow isn't available in puregotk
-	dialog := adw.NewWindow()
-	dialog.SetTransientFor(&w.Window)
-	dialog.SetModal(true)
-	dialog.SetTitle("Keyboard Shortcuts")
-	dialog.SetDefaultSize(400, 450)
+	if w.shortcutsDialog == nil {
+		w.shortcutsDialog = w.buildShortcutsDialog()
+	}
+	w.shortcutsDialog.Present(&w.Widget)
+}
 
-	// Create toolbar view
-	toolbarView := adw.NewToolbarView()
-
-	// Add header bar
-	headerBar := adw.NewHeaderBar()
-	toolbarView.AddTopBar(&headerBar.Widget)
-
-	// Create scrolled window
-	scrolled := gtk.NewScrolledWindow()
-	scrolled.SetPolicy(gtk.PolicyNeverValue, gtk.PolicyAutomaticValue)
-	scrolled.SetVexpand(true)
-
-	// Create main box
-	mainBox := gtk.NewBox(gtk.OrientationVerticalValue, 0)
-	mainBox.SetMarginTop(12)
-	mainBox.SetMarginBottom(12)
-	mainBox.SetMarginStart(12)
-	mainBox.SetMarginEnd(12)
-
-	// Create clamp for content width
-	clamp := adw.NewClamp()
-	clamp.SetMaximumSize(400)
-
-	// Navigation shortcuts group
-	navGroup := adw.NewPreferencesGroup()
-	navGroup.SetTitle("Navigation")
-
-	for _, shortcut := range navigation.Shortcuts(w.navItems) {
-		if shortcut.Group != navigation.GroupNavigation {
-			continue
+func (w *Window) buildShortcutsDialog() *adw.Dialog {
+	if ui.SupportsShortcutsDialog() {
+		var view shortcutsUI
+		ui.Bind(&view)
+		for _, shortcut := range navigation.Shortcuts(w.navItems) {
+			item := adw.NewShortcutsItem(shortcut.Title, shortcut.Accelerator)
+			if shortcut.Group == navigation.GroupNavigation {
+				view.Navigation.Add(item)
+			} else {
+				view.General.Add(item)
+			}
 		}
+		return &view.Dialog.Dialog
+	}
+
+	var view legacyShortcutsUI
+	ui.Bind(&view)
+	for _, shortcut := range navigation.Shortcuts(w.navItems) {
 		row := adw.NewActionRow()
 		row.SetTitle(shortcut.Title)
-
 		label := gtk.NewLabel(shortcut.Display)
 		label.AddCssClass("dim-label")
 		row.AddSuffix(&label.Widget)
-
-		navGroup.Add(&row.Widget)
-	}
-
-	mainBox.Append(&navGroup.Widget)
-
-	// General shortcuts group
-	generalGroup := adw.NewPreferencesGroup()
-	generalGroup.SetTitle("General")
-
-	for _, shortcut := range navigation.Shortcuts(w.navItems) {
-		if shortcut.Group != navigation.GroupGeneral {
-			continue
+		if shortcut.Group == navigation.GroupNavigation {
+			view.Navigation.Add(&row.Widget)
+		} else {
+			view.General.Add(&row.Widget)
 		}
-		row := adw.NewActionRow()
-		row.SetTitle(shortcut.Title)
-
-		label := gtk.NewLabel(shortcut.Display)
-		label.AddCssClass("dim-label")
-		row.AddSuffix(&label.Widget)
-
-		generalGroup.Add(&row.Widget)
 	}
-
-	mainBox.Append(&generalGroup.Widget)
-
-	clamp.SetChild(&mainBox.Widget)
-	scrolled.SetChild(&clamp.Widget)
-	toolbarView.SetContent(&scrolled.Widget)
-
-	dialog.SetContent(&toolbarView.Widget)
-	// An AdwWindow, unlike AdwDialog, does not close on Escape by itself.
-	escape := gtk.NewShortcutController()
-	escape.AddShortcut(gtk.NewShortcut(gtk.ShortcutTriggerParseString("Escape"), &gtk.NewNamedAction("window.close").ShortcutAction))
-	dialog.AddController(&escape.EventController)
-	dialog.Present()
+	return view.Dialog
 }
 
 // NavigationItems returns the visible, compacted page inventory used by this
@@ -641,20 +582,18 @@ func (w *Window) NavigationItems() []navigation.Item {
 	return append([]navigation.Item(nil), w.navItems...)
 }
 
-// onShowAbout shows the about dialog
+// onShowAbout presents the About dialog. Its static credits live in
+// internal/ui/about.blp; the name and version are set here.
+// Built on first use and re-presented, like the shortcuts dialog.
 func (w *Window) onShowAbout() {
-	about := adw.NewAboutWindow()
-	about.SetTransientFor(&w.Window)
-	about.SetApplicationName(branding.AppName)
-	about.SetApplicationIcon("io.projectbluefin.chairlift")
-	about.SetVersion(version.Version)
-	about.SetDeveloperName("Project Bluefin")
-	about.SetWebsite("https://github.com/projectbluefin/chairlift")
-	about.SetIssueUrl("https://github.com/projectbluefin/chairlift/issues")
-	about.SetLicenseType(gtk.LicenseGpl30Value)
-	about.SetCopyright("© 2024-2026 Project Bluefin")
-	about.SetDevelopers([]string{"Brian Ketelsen", "ChairLift Contributors"})
-	about.Present()
+	if w.aboutDialog == nil {
+		var view aboutUI
+		ui.Bind(&view)
+		view.Dialog.SetApplicationName(branding.AppName)
+		view.Dialog.SetVersion(version.Version)
+		w.aboutDialog = &view.Dialog.Dialog
+	}
+	w.aboutDialog.Present(&w.Widget)
 }
 
 // AddToast adds a toast notification
@@ -743,6 +682,9 @@ func (w *Window) SetUpdateBadge(count int) {
 
 	if count > 0 {
 		w.updateBadge.SetLabel(fmt.Sprintf("%d", count))
+		// A bare number means nothing read aloud: the badge keeps the
+		// number as its name and says what it counts as its description.
+		w.updateBadge.UpdateProperty(gtk.AccessiblePropertyDescriptionValue, updatepresent.BadgeDescription(count), -1)
 		w.updateBadge.SetVisible(true)
 	} else {
 		w.updateBadge.SetVisible(false)
@@ -767,14 +709,13 @@ func (w *Window) PresentFirstRun() {
 	}
 	w.firstRunIndex = -1
 	w.firstRunActive = true
-	w.firstRunCollapsed = w.splitView.GetCollapsed()
 	w.sidebarList.SetSensitive(false)
 	// The collapsed split view's native Back goes to the sidebar, not the
 	// previous setup step. Disable that route while the wizard owns navigation.
 	w.contentPage.SetCanPop(false)
-	w.splitView.SetCollapsed(true)
+	w.syncCollapsed()
 	w.splitView.SetShowContent(true)
-	w.firstRunFooter.SetVisible(true)
+	w.firstRunFooter.SetRevealBottomBars(true)
 	w.showFirstRunStep()
 }
 
@@ -802,22 +743,13 @@ func (w *Window) CheckFirstRun(explicitSetup bool) {
 	}
 }
 
-func (w *Window) buildFirstRunFooter(root *gtk.Box) {
-	w.firstRunFooter = gtk.NewBox(gtk.OrientationHorizontalValue, 12)
-	w.firstRunFooter.SetMarginTop(12)
-	w.firstRunFooter.SetMarginBottom(12)
-	w.firstRunFooter.SetMarginStart(12)
-	w.firstRunFooter.SetMarginEnd(12)
-	cancel := gtk.NewButtonWithLabel("Dismiss setup")
-	w.firstRunBack = gtk.NewButtonWithLabel("Back")
-	w.firstRunNext = gtk.NewButtonWithLabel("Next")
-	w.firstRunNext.AddCssClass("suggested-action")
-	spacer := gtk.NewBox(gtk.OrientationHorizontalValue, 0)
-	spacer.SetHexpand(true)
-	w.firstRunFooter.Append(&cancel.Widget)
-	w.firstRunFooter.Append(&spacer.Widget)
-	w.firstRunFooter.Append(&w.firstRunBack.Widget)
-	w.firstRunFooter.Append(&w.firstRunNext.Widget)
+// bindFirstRunFooter connects the setup flow's bottom bar, once. The bar is
+// internal/ui/window.blp's setup_footer: an action bar beneath the whole
+// window, revealed only while the flow runs.
+func (w *Window) bindFirstRunFooter() {
+	w.firstRunFooter = w.ui.SetupToolbar
+	w.firstRunBack = w.ui.SetupBack
+	w.firstRunNext = w.ui.SetupNext
 	back := func(gtk.Button) {
 		if w.firstRunActive && w.firstRunIndex >= 0 {
 			w.firstRunIndex--
@@ -845,7 +777,7 @@ func (w *Window) buildFirstRunFooter(root *gtk.Box) {
 	}
 	w.firstRunBack.ConnectClicked(&back)
 	w.firstRunNext.ConnectClicked(&next)
-	cancel.ConnectClicked(&dismiss)
+	w.ui.SetupDismiss.ConnectClicked(&dismiss)
 	w.ConnectCloseRequest(&closeRequest)
 	keys := gtk.NewEventControllerKey()
 	keyPressed := func(_ gtk.EventControllerKey, keyval, _ uint32, _ gdk.ModifierType) bool {
@@ -857,8 +789,6 @@ func (w *Window) buildFirstRunFooter(root *gtk.Box) {
 	}
 	keys.ConnectKeyPressed(&keyPressed)
 	w.AddController(&keys.EventController)
-	w.firstRunFooter.SetVisible(false)
-	root.Append(&w.firstRunFooter.Widget)
 }
 
 func (w *Window) showFirstRunStep() {
@@ -886,11 +816,11 @@ func (w *Window) finishFirstRun(completed bool) {
 	}
 	if completed {
 		w.firstRunActive = false
-		w.firstRunFooter.SetVisible(false)
+		w.firstRunFooter.SetRevealBottomBars(false)
 		w.firstRunContent.SetVisibleChildName("pages")
 		w.sidebarList.SetSensitive(true)
 		w.contentPage.SetCanPop(true)
-		w.splitView.SetCollapsed(w.firstRunCollapsed)
+		w.syncCollapsed()
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
 			defer cancel()
@@ -903,11 +833,11 @@ func (w *Window) finishFirstRun(completed bool) {
 		return
 	}
 	w.firstRunActive = false
-	w.firstRunFooter.SetVisible(false)
+	w.firstRunFooter.SetRevealBottomBars(false)
 	w.firstRunContent.SetVisibleChildName("pages")
 	w.sidebarList.SetSensitive(true)
 	w.contentPage.SetCanPop(true)
-	w.splitView.SetCollapsed(w.firstRunCollapsed)
+	w.syncCollapsed()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
 		defer cancel()
@@ -921,49 +851,16 @@ func (w *Window) finishFirstRun(completed bool) {
 }
 
 func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author string) *gtk.Widget {
-	toolbar := adw.NewToolbarView()
-	header := adw.NewHeaderBar()
-	header.SetShowStartTitleButtons(false)
-	header.SetShowEndTitleButtons(false)
-	toolbar.AddTopBar(&header.Widget)
+	var view bookendUI
+	ui.Bind(&view)
+	view.Eyebrow.SetLabel(eyebrowText)
+	view.Message.SetLabel(message)
+	view.Message.SetVisible(message != "")
+	// The conclusion quote is from projectbluefin.io's Mission section.
+	view.Quote.SetLabel("“" + quotation + "”")
+	view.Attribution.SetLabel("— " + author)
 
-	scrolled := gtk.NewScrolledWindow()
-	scrolled.SetPolicy(gtk.PolicyNeverValue, gtk.PolicyAutomaticValue)
-	scrolled.SetVexpand(true)
-
-	clamp := adw.NewClamp()
-	clamp.SetMaximumSize(620)
-	clamp.SetTighteningThreshold(480)
-	clamp.SetMarginTop(36)
-	clamp.SetMarginBottom(36)
-	clamp.SetMarginStart(24)
-	clamp.SetMarginEnd(24)
-
-	box := gtk.NewBox(gtk.OrientationVerticalValue, 18)
-	box.SetHalign(gtk.AlignCenterValue)
-	box.SetValign(gtk.AlignCenterValue)
-
-	eyebrow := gtk.NewLabel(eyebrowText)
-	eyebrow.AddCssClass("title-4")
-	eyebrow.AddCssClass("dim-label")
-	eyebrow.SetHalign(gtk.AlignCenterValue)
-	box.Append(&eyebrow.Widget)
-
-	wordmark := gtk.NewPicture()
-	wordmark.SetCanShrink(true)
-	wordmark.SetKeepAspectRatio(true)
-	wordmark.SetContentFit(gtk.ContentFitContainValue)
-	wordmark.SetHalign(gtk.AlignCenterValue)
-	wordmark.SetSizeRequest(260, 106)
-	views.SetAccessibleLabel(wordmark, "Bluefin")
-
-	wordmarkClamp := adw.NewClamp()
-	wordmarkClamp.SetMaximumSize(260)
-	wordmarkClamp.SetTighteningThreshold(260)
-	wordmarkClamp.SetHalign(gtk.AlignCenterValue)
-	wordmarkClamp.SetChild(&wordmark.Widget)
-	box.Append(&wordmarkClamp.Widget)
-
+	wordmark := view.Wordmark
 	styleManager := adw.StyleManagerGetDefault()
 	lightPath, lightErr := firstrun.AssetPath(firstrun.AssetWordmarkLight)
 	darkPath, darkErr := firstrun.AssetPath(firstrun.AssetWordmarkDark)
@@ -987,49 +884,7 @@ func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author st
 		changed := func(gobject.Object, uintptr) { applyWordmark() }
 		styleManager.ConnectNotify(&changed)
 	}
-
-	body := gtk.NewLabel(message)
-	body.AddCssClass("body")
-	body.AddCssClass("dim-label")
-	body.SetWrap(true)
-	body.SetJustify(gtk.JustifyCenterValue)
-	body.SetMaxWidthChars(54)
-	body.SetMarginTop(12)
-	body.SetVisible(message != "")
-	box.Append(&body.Widget)
-
-	quoteCard := gtk.NewBox(gtk.OrientationVerticalValue, 8)
-	quoteCard.AddCssClass("card")
-	quoteCard.SetMarginTop(12)
-	quoteCard.SetMarginBottom(12)
-	quoteCard.SetMarginStart(18)
-	quoteCard.SetMarginEnd(18)
-
-	// The conclusion quote is from projectbluefin.io's Mission section.
-	quote := gtk.NewLabel("“" + quotation + "”")
-	quote.AddCssClass("body")
-	quote.SetWrap(true)
-	quote.SetJustify(gtk.JustifyCenterValue)
-	quote.SetMaxWidthChars(48)
-	quote.SetMarginTop(12)
-	quote.SetMarginStart(16)
-	quote.SetMarginEnd(16)
-	quoteCard.Append(&quote.Widget)
-
-	attribution := gtk.NewLabel("— " + author)
-	attribution.AddCssClass("caption")
-	attribution.AddCssClass("dim-label")
-	attribution.SetHalign(gtk.AlignEndValue)
-	attribution.SetMarginBottom(12)
-	attribution.SetMarginEnd(20)
-	quoteCard.Append(&attribution.Widget)
-
-	box.Append(&quoteCard.Widget)
-
-	clamp.SetChild(&box.Widget)
-	scrolled.SetChild(&clamp.Widget)
-	toolbar.SetContent(&scrolled.Widget)
-	return &toolbar.Widget
+	return &view.Bookend.Widget
 }
 
 // RefuseCloseWhileUpdating reports whether an update run must keep the window

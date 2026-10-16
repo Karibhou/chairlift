@@ -1,0 +1,111 @@
+using Gtk 4.0;
+using Adw 1;
+
+// A first-run bookend: the Welcome start and the conclusion of the explicit
+// setup flow. internal/window binds this twice and fills the text from Go,
+// because the conclusion names the product (internal/branding owns it).
+Adw.ToolbarView bookend {
+  [top]
+  Adw.HeaderBar {
+    show-title: false;
+  }
+
+  content: ScrolledWindow {
+    hscrollbar-policy: never;
+    vexpand: true;
+
+    child: Adw.Clamp {
+      maximum-size: 620;
+      tightening-threshold: 480;
+      margin-top: 24;
+      margin-bottom: 24;
+      margin-start: 24;
+      margin-end: 24;
+
+      child: Box {
+        orientation: vertical;
+        spacing: 18;
+        halign: center;
+        valign: center;
+
+        Label eyebrow {
+          halign: center;
+          wrap: true;
+          justify: center;
+
+          styles [
+            "title-4",
+            "dim-label",
+          ]
+        }
+
+        Adw.Clamp {
+          maximum-size: 260;
+          tightening-threshold: 260;
+          halign: center;
+
+          child: Picture wordmark {
+            can-shrink: true;
+            content-fit: contain;
+            halign: center;
+            width-request: 260;
+            height-request: 106;
+
+            accessibility {
+              label: "Bluefin";
+            }
+          };
+        }
+
+        Label message {
+          wrap: true;
+          justify: center;
+          max-width-chars: 54;
+          margin-top: 12;
+
+          styles [
+            "body",
+            "dim-label",
+          ]
+        }
+
+        Box {
+          orientation: vertical;
+          spacing: 6;
+          margin-top: 12;
+          margin-bottom: 12;
+          margin-start: 18;
+          margin-end: 18;
+
+          styles [
+            "card",
+          ]
+
+          Label quote {
+            wrap: true;
+            justify: center;
+            max-width-chars: 48;
+            margin-top: 18;
+            margin-start: 18;
+            margin-end: 18;
+
+            styles [
+              "body",
+            ]
+          }
+
+          Label attribution {
+            halign: end;
+            margin-bottom: 18;
+            margin-end: 18;
+
+            styles [
+              "caption",
+              "dim-label",
+            ]
+          }
+        }
+      };
+    };
+  };
+}

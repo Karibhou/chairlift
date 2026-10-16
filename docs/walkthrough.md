@@ -23,7 +23,7 @@ Bluefin wordmark, introduction and Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform every action. **Back** and **Next** only
 navigate. The matching conclusion quotes Edith Wharton. **Finish** saves
 completion and returns to Control Center; a save failure reports an
-error toast. **Dismiss setup**
+error toast. **Dismiss Setup**
 (or Escape) records a skip without undoing previous completion.
 
 ---
@@ -36,8 +36,8 @@ The Bluefin wordmark leads the page, with the one action button directly
 under it and a single line of status under the button: **Up to date ·
 checked at** a time, how many updates are available, or **Restart to finish
 updating**. If something went wrong, a second line says what. **System
-updates** groups System components and Operating system; **Apps and tools**
-groups Applications and Developer tools. Each row shows its own state, so you
+Updates** groups System Components and Operating System; **Apps and Tools**
+groups Applications and Developer Tools. Each row shows its own state, so you
 can see which source is holding you up without opening anything. A source
 your administrator turned off says **Disabled by administrator**; one this
 computer has no software for says **Not available on this computer** instead.
@@ -46,10 +46,10 @@ says **Disabled in preferences** as soon as you change it, and a source you
 cannot turn on shows its switch off, greyed out, with the same words as its row
 here.
 
-One button covers all of them. It reads **Check again** when nothing is
-pending, **Update all** when something is, and **Retry failed** if a source
-didn't finish. A staged system version adds its own **Restart now** to the
-right of the **Operating system** row, so the header offers no button then;
+One button covers all of them. It reads **Check Again** when nothing is
+pending, **Update All** when something is, and **Retry Failed** if a source
+didn't finish. A staged system version adds its own **Restart Now** to the
+right of the **Operating System** row, so the header offers no button then;
 the source that fails does not stop the others. A run long enough that you
 wandered off finishes with a desktop notification.
 While checking or installing, an animated activity bar takes the button's
@@ -59,35 +59,35 @@ does not claim a percentage.
 Everything else on the page sits below the sources, each part only where it
 applies (not all of it fits in the shot above).
 
-**Automatic updates** is the one switch for whether this system keeps itself
+**Automatic Updates** is the one switch for whether this system keeps itself
 up to date in the background. It appears only on systems that ship the
 unattended-update timer, and it's a choice about the future — updating right
 now is the button above.
 
-**Your system** is a compact line saying what's installed now and what's
+**Your System** is a compact line saying what's installed now and what's
 queued for the next restart; the exact build identifiers sit behind
 **Details** for when you need to quote them in a bug report.
 
-On systems that update as a whole, **Operating system** holds
+On systems that update as a whole, **Operating System** holds
 **System Updates**, which downloads the next system version by itself, and
-**What's changing**, which lists exactly what software a pending update will
+**What's Changing**, which lists exactly what software a pending update will
 add, remove, or upgrade once you press **Compare**. **Roll Back** — returning to
 the previous version if an update went badly — lives under **Powerwash**, and
 only appears where a previous deployment actually exists.
 
 Each other source keeps its own group for when you want to update just one
-thing: **Apps** lists the Flatpak updates waiting, and **Developer tools**
+thing: **Apps** lists the Flatpak updates waiting, and **Developer Tools**
 lists the command-line tools you installed with Homebrew, with a button to
 check for new versions. If a Homebrew package came from an unofficial source,
-**Manage source trust** asks you to trust that source before it will keep
+**Manage Source Trust** asks you to trust that source before it will keep
 updating it, with one row per source that opens to show each program with
 its own Trust button, and a Trust Tap button that trusts every program you
 installed from that source.
 
 **Advanced** sits last and holds the two choices that replace the operating
 system itself, because both land through an update and both need a restart.
-The Release Channel switch, **Get updates early**, moves between the stable
-version and the early one, and **Graphics driver** switches you to the NVIDIA
+The Release Channel switch, **Get Updates Early**, moves between the stable
+version and the early one, and **Graphics Driver** switches you to the NVIDIA
 driver if your card wants it. Neither offers a change unless there is
 actually something to switch to.
 
@@ -101,7 +101,7 @@ duplicate it.
 
 ![Apps](screenshots/2-applications.png)
 
-**App collections** lead the page: curated collections can be selected with
+**App Collections** lead the page: curated collections can be selected with
 checkboxes and installed in one step using the **Install** button. Expanding a
 collection reveals the names and kinds of the apps and tools inside, so you can
 read what an install will add before pressing the button. Installs show native
@@ -110,7 +110,7 @@ in the explicit setup flow. A collection whose apps and tools are all already on
 the system reads **(Installed)** when the page loads, not only after an install
 in the same session.
 
-**Installed apps** and **Command line tools** follow: installed casks first,
+**Installed Apps** and **Command-Line Tools** follow: installed casks first,
 then explicitly requested formulae (the packages Homebrew manages).
 Dependency-only formulae do not crowd the inventory. Removing a package asks
 first; formulae also offer pin and unpin actions. There is no Flatpak inventory,
@@ -153,7 +153,7 @@ profile Control Center writes for it on every launch, so your own Goose
 configuration is never read or changed, and one session runs at a time. The
 desktop shortcut and `chairlift --ask-bluefin` launch Goose Desktop directly
 when ready, or open Control Center to the Agents page naming the missing
-requirement. **Show Ask Bluefin in menu** toggles the distribution's shortcut
+requirement. **Show Ask Bluefin in Menu** toggles the distribution's shortcut
 in GNOME's top panel menu, and reads on only when the menu actually lists it. Apps and terminals opened
 after Agent Mode is on receive `OLLAMA_HOST`; already-open ones need restarting.
 Everything here runs in your own account, without an administrator password.
@@ -173,7 +173,7 @@ without opening a terminal.
 
 ![Features](screenshots/4-features.png)
 
-**Desktop integrations** offers **Tailscale Integration** and **Sync Folder
+**Desktop Integrations** offers **Tailscale Integration** and **Sync Folder
 Integration** switches for GNOME Quick Settings. Tailscale's initial switch
 position is on and Sync Folder's is off; once GNOME answers, the switches show
 its actual saved choices. Sync Folder is labelled experimental. A missing
@@ -200,7 +200,7 @@ and **Enable Docker**. WSL needs hardware virtualization and access to
 image's daemon and a socket this session can actually access; installing CLI
 tools is not readiness. Missing installed helper actions leave the affected
 switch visible but locked with its prerequisite explained.
-Use **Virtual machine engine** to choose the built-in engine or Lima;
+Use **Virtual Machine Engine** to choose the built-in engine or Lima;
 both run Ubuntu. An existing Lima Ubuntu machine is kept as the choice when no
 built-in machine exists, rather than creating a second one. Likewise, a Debian
 machine the built-in engine made in an earlier release keeps being used, and
@@ -224,10 +224,10 @@ journal logs, and container images to diagnose and surface actionable failures
 — device access permissions, image availability, plugin verification, or
 service crashes — rather than displaying a false enabled or running state.
 Printing through a real device has not yet been verified against hardware.
-**Optional features** is the distribution's own feature manager; it is hidden
+**Optional Features** is the distribution's own feature manager; it is hidden
 where the distribution ships none. When a computer offers none of these —
 no Developer tools, no Gaming, no Printers, no optional features — the page
-says **Nothing to set up here** rather than showing an empty screen.
+says **Nothing to Set Up Here** rather than showing an empty screen.
 
 Agent Mode and Troubleshooting have their own **Agents** page.
 Developer and Gaming actions show an activity spinner while their changes
@@ -307,11 +307,11 @@ default; an applet changed to another icon is left alone.
 
 ![Maintenance](screenshots/6-maintenance.png)
 
-One button. **Free up space** deletes old downloads and app parts nothing uses,
+One button. **Free Up Space** deletes old downloads and app parts nothing uses,
 and leaves your apps, files, and containers alone. It
 tells you how much it reclaimed only when it could measure it. An activity
 spinner remains visible while cleanup is running. Below it sit any
-**Maintenance tasks** whoever set up this computer added. **Powerwash**
+**Maintenance Tasks** whoever set up this computer added. **Powerwash**
 holds the actions you can't undo (under **Maintenance → Powerwash**): **Roll Back**
 returns to the previous version if an update caused problems, **Powerwash**
 removes your Flatpak apps and Distrobox containers (everything on the Apps page
@@ -329,11 +329,11 @@ when the reset actions are off the detail says so at the top.
 
 **Troubleshooting**, the AI troubleshooting assistant, is on the Agents page.
 
-Three links, each shown only when it is configured: **Browse documentation**
-(the `website` URL), **Report a problem** (the `issues` URL, where bug reports
-go), and **Ask for help** (the `chat` URL, Ask Bluefin on Bluefin).
+Three links, each shown only when it is configured: **Browse Documentation**
+(the `website` URL), **Report a Problem** (the `issues` URL, where bug reports
+go), and **Ask for Help** (the `chat` URL, Ask Bluefin on Bluefin).
 
-A **Diagnostics** group offers a **System diagnostics** row that copies
+A **Diagnostics** group offers a **System Diagnostics** row that copies
 details about this computer — OS, image, system version, full build digest,
 kernel, desktop, and GPU, without your user name or home folder — to the
 clipboard for a help request.
@@ -342,7 +342,7 @@ Updates page's Details row, and are omitted where no deployment is readable.
 
 When the configuration turns on something this computer cannot run — Flatpak
 or Homebrew is absent, or the machine is not a native A/B install — **Feature
-availability** appears with one collapsed row, **Why is something missing?**,
+Availability** appears with one collapsed row, **Why Is Something Missing?**,
 that names each such feature and what it needs.
 
 ---
@@ -372,5 +372,13 @@ runs after a successful `goreleaser` workflow (or a manual dispatch), builds
 from the selected release tag, and opens a `release-screenshots` pull request
 against `main` with changed PNGs. The release-completion trigger is
 `workflow_run`, not `release: published`. That pull request goes through the merge queue
-like any other and still needs one approval. `make ci` checks
+like any other and still needs one approval.
+
+A pull request that changes the UI can get its own screenshots without a
+local podman: a maintainer comments `/screenshots` on it (or runs
+[the pull request screenshot workflow](../.github/workflows/pr-screenshots.yml)
+by hand with its number). That workflow captures from the pull request's head
+commit with `make screenshots` and commits any changed PNGs to its branch;
+the push re-runs CI. It runs on request rather than per push for the same
+drift reason, and handles branches in this repository only. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.

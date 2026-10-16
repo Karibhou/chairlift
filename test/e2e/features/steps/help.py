@@ -132,8 +132,8 @@ def step_still_responsive(context):
 
 # ---------------------------------------------------------------- feature availability
 
-AVAILABILITY_GROUP = "Feature availability"
-AVAILABILITY_EXPANDER = "Why is something missing?"
+AVAILABILITY_GROUP = "Feature Availability"
+AVAILABILITY_EXPANDER = "Why Is Something Missing?"
 
 
 def _availability(context):

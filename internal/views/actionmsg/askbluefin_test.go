@@ -40,24 +40,24 @@ func TestAskBluefinMenuReportsEveryOutcome(t *testing.T) {
 				name:     "write failed",
 				observed: !requested,
 				err:      writeErr,
-				want:     AskBluefinMenuDecision{Active: !requested, Toast: "Could not update the Ask Bluefin menu entry.", Error: true},
+				want:     AskBluefinMenuDecision{Active: !requested, Toast: "Couldn't update the Ask Bluefin menu entry.", Error: true},
 			},
 			{
 				name:    "read-back failed after a successful write",
 				readErr: readErr,
-				want:    AskBluefinMenuDecision{Active: !requested, Toast: "Could not verify the Ask Bluefin menu entry.", Error: true},
+				want:    AskBluefinMenuDecision{Active: !requested, Toast: "Couldn't verify the Ask Bluefin menu entry.", Error: true},
 			},
 			{
 				name:    "write and read-back failed",
 				err:     writeErr,
 				readErr: readErr,
-				want:    AskBluefinMenuDecision{Active: !requested, Toast: "Could not update the Ask Bluefin menu entry.", Error: true},
+				want:    AskBluefinMenuDecision{Active: !requested, Toast: "Couldn't update the Ask Bluefin menu entry.", Error: true},
 			},
 			{
 				name:    "dry run with a failed read-back",
 				dryRun:  true,
 				readErr: readErr,
-				want:    AskBluefinMenuDecision{Active: !requested, Toast: "Could not verify the Ask Bluefin menu entry.", Error: true},
+				want:    AskBluefinMenuDecision{Active: !requested, Toast: "Couldn't verify the Ask Bluefin menu entry.", Error: true},
 			},
 		}
 		for _, tc := range tests {

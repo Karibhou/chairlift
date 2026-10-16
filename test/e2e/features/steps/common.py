@@ -431,13 +431,13 @@ def menu_items(context):
     return [n for n in atspi.descendants(app(context), only_showing=True) if atspi.role(n) == "menu item"]
 
 
-# The main menu's items in model order, as internal/window/window.go's
-# buildMenuButton appends them. A #347 workaround, to delete when that issue
+# The main menu's items in model order: internal/ui/window.blp's two
+# sections, then the About item internal/window appends to the second. A #347 workaround, to delete when that issue
 # is fixed: GTK publishes the popover's items without names (the
 # @known_issue.347 scenario in shell.feature), so the keyshortcuts attribute
 # and then this order stand in. An item that has a name is always matched by
 # it instead, and a reordered menu with names would never reach this.
-MAIN_MENU_ORDER = ("Preferences", "Setup Assistant…", "Keyboard Shortcuts", "About Control Center")
+MAIN_MENU_ORDER = ("Setup Assistant…", "Preferences", "Keyboard Shortcuts", "About Control Center")
 MAIN_MENU_SHORTCUTS = {"Keyboard Shortcuts": "Control+?"}
 
 
@@ -489,9 +489,7 @@ def step_window_shown(context, title):
 
 @then('no window titled "{title}" is shown')
 def step_window_gone(context, title):
-    gone = atspi.poll(
-        lambda: not any(atspi.name(w) == title and atspi.showing(w) for w in atspi.children(app(context)))
-    )
+    gone = atspi.poll(lambda: atspi.titled(app(context), title) is None)
     assert gone, f"window {title!r} is still showing"
 
 
@@ -508,9 +506,7 @@ def step_close_window(context, title):
         atspi.activate(closers[0])
     else:
         atspi.press("Escape")
-    gone = atspi.poll(
-        lambda: not any(atspi.name(w) == title and atspi.showing(w) for w in atspi.children(app(context)))
-    )
+    gone = atspi.poll(lambda: atspi.titled(app(context), title) is None)
     assert gone, f"window {title!r} is still showing"
 
 

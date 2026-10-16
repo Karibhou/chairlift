@@ -1,0 +1,33 @@
+using Gtk 4.0;
+
+// One sidebar destination, shaped like GNOME Settings' panel rows
+// (shell/cc-panel-list.c): a plain list row, not a boxed-list AdwActionRow,
+// with 12px above and below, 6px at the sides, and 12px between the icon
+// and the title, inside the navigation-sidebar list's own row padding. The
+// row is named by its title. internal/window binds one per visible primary
+// and fills the icon and title from internal/navigation; it appends the
+// Updates row's count badge itself.
+ListBoxRow row {
+  accessibility {
+    labelled-by: title;
+  }
+
+  child: Box content {
+    spacing: 12;
+    margin-top: 12;
+    margin-bottom: 12;
+    margin-start: 6;
+    margin-end: 6;
+
+    Image icon {
+      accessible-role: presentation;
+    }
+
+    Label title {
+      xalign: 0;
+      hexpand: true;
+      wrap: true;
+      max-width-chars: 40;
+    }
+  };
+}

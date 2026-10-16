@@ -69,13 +69,13 @@ exists but the host is not bootc-booted.
 The coordinator owns `Snapshot.TotalUpdates`, source inventories and restart
 state. Generations reject stale publications. A failed check preserves the
 previous items and restart observation; a preview leaves inventory unchanged,
-and the shell answers a preview Update all with `actionmsg.UpdateAllPreview`
+and the shell answers a preview Update All with `actionmsg.UpdateAllPreview`
 instead of the completion notification.
 An apply with `Changed=false` and no preview preserves pending items and sets
 a retryable apply failure, not completion. Retry applies only failed sources;
 maintenance can be retried separately. `PhaseRestartRequired` has
-`ActionNone`: restart is the Operating system row's separately confirmed
-**Restart now** action, not a page-level automatic step.
+`ActionNone`: restart is the Operating System row's separately confirmed
+**Restart Now** action, not a page-level automatic step.
 
 Adapter completion is source-specific:
 
@@ -114,8 +114,9 @@ pulses one reusable GLib timer while checking/updating, independent of provider
 output, and removes the timer at idle/disposal. Its visible toast overlay
 announces each phase's one status line, which sits under the primary action.
 `Presentation.ShowStatus` hides an empty header.
-`SetSecondaryContent` mounts the existing Updates preferences beneath the
-source rows; automatic updates, system version, unverified sources and
+`buildUpdatesPage` appends the rest of the Updates page to the shell's own
+preferences page (`UpdateShell.PreferencesPage`), beneath the source rows;
+automatic updates, system version, unverified sources and
 Advanced channel/driver controls are not a second unreachable page.
 The completion notification is the one long-running update notification, not
 a notification per toggle.
@@ -324,7 +325,7 @@ shared check. A per-package success also drops the package from the tap's
 remaining `UntrustedTap` (`Without`), so the expander's count, the
 **Trust Tap** dialog (`pageview.TapTrustConfirmation`), and a later tap-wide
 trust cover only what is left. Preview restores Trust without removing a row. The
-configuration-gated **Manage source trust** group may not exist, so
+configuration-gated **Manage Source Trust** group may not exist, so
 `trustmsg.UpgradeMessage(name, trustGroupAvailable)` must not direct the user
 to a hidden control. Bundle failures use `trustmsg.BundleMessage` instead.
 
@@ -649,7 +650,7 @@ the executable paths and UI surface.
 [`updateproviders.Cleanup`](../../internal/updateproviders/maintenance.go)
 owns routine cleanup: Homebrew old downloads/versions and unused Flatpak
 supporting software in both scopes. `CleanupGroup=maintenance_freespace_group`
-gates both **Free up space** and post-update maintenance. `Run` stops at the
+gates both **Free Up Space** and post-update maintenance. `Run` stops at the
 first failure/cancellation; `RunSteps` attempts both independent steps and
 returns typed cleaned/skipped/failed/cancelled outcomes. An absent provider is
 skipped, not a success. Cleanup is not Powerwash and never absorbs an

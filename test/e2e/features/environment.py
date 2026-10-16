@@ -263,7 +263,7 @@ def launch_app(context, binary):
                 "Welcome to" in texts
                 and all(
                     atspi.find_all(root, lambda node: atspi.is_button(node, label))
-                    for label in ("Dismiss setup", "Back", "Next")
+                    for label in ("Dismiss Setup", "Back", "Next")
                 )
             )
 

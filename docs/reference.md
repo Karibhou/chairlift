@@ -75,7 +75,7 @@ checked separately after the page is built.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Automatic updates | `automatic_updates_group` | The switch deciding whether this system installs updates on its own schedule; hidden on a host with no unattended-update timer. Updating now is the Updates page's own action and has no config key. |
+| Automatic Updates | `automatic_updates_group` | The switch deciding whether this system installs updates on its own schedule; hidden on a host with no unattended-update timer. Updating now is the Updates page's own action and has no config key. |
 | bootc Updates | `bootc_updates_group` | Download and stage the next bootc system image update (applies on restart); shown only when bootc-booted and the fixed `/usr/libexec/bootc-update-stage` helper is present. A distribution must provide a trusted implementation there before enabling this group; ChairLift's release archive does not supply one. |
 | Flatpak Updates | `flatpak_updates_group` | Pending Flatpak application updates |
 | Homebrew Updates | `brew_updates_group` | Outdated Homebrew packages with upgrade buttons |
@@ -89,8 +89,8 @@ Its sidebar title is "Apps"; `applications_page` is the configuration key.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| App collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions; displayed first |
-| Homebrew packages | `brew_group` | Installed apps (installed casks), then Command line tools (explicitly requested formulae), then Backup containing the Export app list row (a Brewfile export); uninstall and formula pin/unpin actions |
+| App Collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions; displayed first |
+| Homebrew packages | `brew_group` | Installed Apps (installed casks), then Command-Line Tools (explicitly requested formulae), then Backup containing the Export app list row (a Brewfile export); uninstall and formula pin/unpin actions |
 
 Both groups are enabled in the shipped `config.yml`. Dependency-only formulae
 do not appear in the inventory. Apps has no Flatpak inventory, external catalog
@@ -128,13 +128,13 @@ to ChairLift's log, which is where to look when filing a bug report.
 | Group | Key | Description |
 |-------|-----|-------------|
 | Agent Mode | `agents_group` | llmman installed with Homebrew and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Offers a visible Active Model row that reads the `bluefin-active` alias back from llmman and a "Manage Models" row that opens llmman's models page at `http://127.0.0.1:17434/#/models` while it is ready, and Contribute to Bluefin via `ujust contribute`. When llmman is missing, enabling taps `llmmanorg/tap` and trusts exactly `llmmanorg/tap/llmman` before installing it. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
-| Troubleshooting | `troubleshooting_group` | The Goose row and the "Show Ask Bluefin in menu" shortcut preference. **Set Up** installs `ublue-os/tap/linux-mcp-server`, `cpio`, and the `ublue-os/tap/goose-linux` cask (x86_64 only) with Homebrew; **Launch** writes ChairLift's own Goose profile under `$XDG_DATA_HOME/chairlift/troubleshooting` — `linux-tools` with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the online Project Bluefin knowledge search, nothing else — then runs `llmman launch goose-desktop --model bluefin-active` inside it; if Goose is already running there, the request goes to that session and no second Goose starts (GNOME may show a "Goose is ready" notification instead of raising the window). `~/.config/goose` is never read or written. Crosses no privilege boundary. Hidden where Homebrew is absent. Formerly `help_page.troubleshooting_group`, still accepted |
+| Troubleshooting | `troubleshooting_group` | The Goose row and the "Show Ask Bluefin in Menu" shortcut preference. **Set Up** installs `ublue-os/tap/linux-mcp-server`, `cpio`, and the `ublue-os/tap/goose-linux` cask (x86_64 only) with Homebrew; **Launch** writes ChairLift's own Goose profile under `$XDG_DATA_HOME/chairlift/troubleshooting` — `linux-tools` with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the online Project Bluefin knowledge search, nothing else — then runs `llmman launch goose-desktop --model bluefin-active` inside it; if Goose is already running there, the request goes to that session and no second Goose starts (GNOME may show a "Goose is ready" notification instead of raising the window). `~/.config/goose` is never read or written. Crosses no privilege boundary. Hidden where Homebrew is absent. Formerly `help_page.troubleshooting_group`, still accepted |
 
 ### Features Page (`features_page`)
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Desktop integrations | `desktop_integrations_group` | User-session GNOME extension switches for Tailscale and Sync Folder; unavailable extensions are explained, and existing GNOME choices are preserved |
+| Desktop Integrations | `desktop_integrations_group` | User-session GNOME extension switches for Tailscale and Sync Folder; unavailable extensions are explained, and existing GNOME choices are preserved |
 | Features | `features_group` | Toggle system features managed by updex |
 | Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a group the image does not define is skipped and named in a warning rather than reported as granted. A confirmed live enable also opens one developer documentation page and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Gaming Mode | `gaming_group` | Selectively installs chosen Flatpak applications and runtime extensions system-wide (`flatpak install --system`) from the system Flathub remote Bluefin-family images configure, authorized by Flatpak's own PolicyKit rather than by ChairLift; reports user and system installed scopes and persistent partial failures. A copy an earlier release installed per-user counts as installed. Remove Selected removes each selected app from every scope it is installed in, after a confirmation that system-wide copies go for every account, except a system copy the OS image declares it ships (Flatpak `preinstall.d` or `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`), which is left in place; shown only when `/usr/share/ublue-os/image-info.json` is present |
@@ -153,7 +153,7 @@ the real daemon socket to be accessible, not just installed CLI tools. These
 privileged operations use only `kvm-enable`, `docker-enable`, and
 `docker-disable` with fixed argv and the account derived from `PKEXEC_UID`.
 
-The **Virtual machine engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting
+The **Virtual Machine Engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting
 YAML. `wsl_backend` supplies the initial choice; an existing Lima Ubuntu machine
 with no ChairLift nsl machine resolves the nsl default to Lima. nsl keeps using
 the `debian` machine an older ChairLift created instead of creating `ubuntu`
@@ -221,8 +221,8 @@ pair and unit file, and dry-run restores both switches without writes.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Storage | `maintenance_freespace_group` | The single "Free up space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the post-update maintenance step of an update run, so cleanup cannot be on in one place and off in the other; while it is disabled, Preferences locks "Run maintenance after updates" off |
-| Maintenance tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free up space" (disabled by default) |
+| Storage | `maintenance_freespace_group` | The single "Free Up Space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the post-update maintenance step of an update run, so cleanup cannot be on in one place and off in the other; while it is disabled, Preferences locks "Run maintenance after updates" off |
+| Maintenance Tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free Up Space" (disabled by default) |
 | Powerwash | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`), irreversible actions disabled by default. Roll Back is gated by `updates_page.bootc_updates_group`; the detail retains its `recovery` route identity |
 
 `maintenance_cleanup_group` supports:
@@ -255,15 +255,15 @@ Each action has:
 key, is still accepted and moved to `agents_page.troubleshooting_group`
 (below); a value set under `agents_page` wins.
 
-Help also shows a **Feature availability** group — not configurable, and absent when empty — whose collapsed "Why is something missing?" row lists each group the configuration enables but the host cannot back, with the missing tool or file (`pageview.UnavailableFeatures`, from the capability set resolved at startup; issue #209).
+Help also shows a **Feature Availability** group — not configurable, and absent when empty — whose collapsed "Why Is Something Missing?" row lists each group the configuration enables but the host cannot back, with the missing tool or file (`pageview.UnavailableFeatures`, from the capability set resolved at startup; issue #209).
 
 `help_resources_group` supports:
 
 | Field | Description |
 |-------|-------------|
-| `website` | Documentation URL, titled "Browse documentation" (default: `https://docs.projectbluefin.io/`) |
-| `issues` | Issue tracker URL, titled "Report a problem" (default: `https://github.com/projectbluefin/dakota/issues`) |
-| `chat` | Assistant or community help URL, titled "Ask for help" (default: `https://ask.projectbluefin.io/`) |
+| `website` | Documentation URL, titled "Browse Documentation" (default: `https://docs.projectbluefin.io/`) |
+| `issues` | Issue tracker URL, titled "Report a Problem" (default: `https://github.com/projectbluefin/dakota/issues`) |
+| `chat` | Assistant or community help URL, titled "Ask for Help" (default: `https://ask.projectbluefin.io/`) |
 
 ## Example
 

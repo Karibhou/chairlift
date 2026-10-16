@@ -106,6 +106,10 @@ are listed in [org-adrs.md](org-adrs.md).
 - [adr/0021-active-model-selection-from-downloaded-models.md](adr/0021-active-model-selection-from-downloaded-models.md)
   — Active Model selects among downloaded models in llmman via a live combo row,
   mapping `aliases.bluefin-active` in-app while retaining Manage Models for downloads
+- [adr/0022-describe-static-ui-in-blueprint.md](adr/0022-describe-static-ui-in-blueprint.md)
+  — static widget trees are Blueprint compiled in Dakota and committed as the
+  GtkBuilder XML the pure-Go binary embeds; Go binds them by struct tag and
+  connects signals; blueprints stay within the libadwaita 1.6 floor
 
 ### Design
 
@@ -116,6 +120,10 @@ are listed in [org-adrs.md](org-adrs.md).
 - [design/printer-applications.md](design/printer-applications.md) — the
   rootless printer-application quadlets: host-networking surface,
   authenticated-admin boundary, family inventory, and verified image state
+
+- [design/hig-conformance.md](design/hig-conformance.md) — the GNOME HIG
+  audit against gnome-gui-spec: what conforms, what was fixed, and the open
+  findings with their reasons
 
 - [design/destination-matrix.md](design/destination-matrix.md) — current
   seven-primary-page and Powerwash detail action ownership, with page-qualified

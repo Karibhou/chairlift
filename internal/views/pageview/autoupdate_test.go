@@ -12,8 +12,8 @@ func TestAutomaticUpdatesRowDistinguishesOnFromOff(t *testing.T) {
 	off := AutomaticUpdatesRow(false)
 
 	for _, row := range []Row{on, off} {
-		if row.Title != "Automatic updates" {
-			t.Errorf("AutomaticUpdatesRow().Title = %q, want %q", row.Title, "Automatic updates")
+		if row.Title != "Automatic Updates" {
+			t.Errorf("AutomaticUpdatesRow().Title = %q, want %q", row.Title, "Automatic Updates")
 		}
 	}
 	if on.Subtitle == off.Subtitle {

@@ -1,0 +1,132 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The Updates destination: one preferences page, as GNOME Settings builds a
+// panel. The hero (wordmark, then the primary action or the progress bar in
+// its place, then one status line) and the two source groups come first;
+// internal/views appends the Updates page's own groups (automatic updates,
+// system version, Advanced) after them, to this same page. Nothing walks
+// libadwaita's internal widget tree, and there is one scroller.
+//
+// internal/views/update_shell.go binds this and wires every signal in Go;
+// the copy comes from internal/views/updatepresent.
+Adw.ToastOverlay toast_overlay {
+  child: Adw.ToolbarView toolbar_view {
+    [top]
+    Adw.HeaderBar {
+      [start]
+      Button refresh {
+        icon-name: "view-refresh-symbolic";
+        action-name: "win.check";
+        tooltip-text: _("Refresh");
+
+        accessibility {
+          label: _("Refresh");
+        }
+      }
+    }
+
+    // A refused close reveals this beneath the header bar, so it is on
+    // screen however far the page is scrolled.
+    [top]
+    Adw.Banner banner {
+      revealed: false;
+    }
+
+    content: Adw.BreakpointBin breakpoint_bin {
+      // AdwBreakpointBin needs a minimum size, or its max-width condition
+      // never resolves; both values sit under the condition.
+      width-request: 360;
+      height-request: 200;
+
+      child: Adw.PreferencesPage page {
+        Adw.PreferencesGroup hero_group {
+          Box {
+            orientation: vertical;
+            spacing: 12;
+
+            Adw.Clamp {
+              maximum-size: 200;
+              tightening-threshold: 200;
+              halign: center;
+
+              child: Picture wordmark {
+                can-shrink: true;
+                content-fit: contain;
+                halign: center;
+                width-request: 200;
+                height-request: 82;
+
+                accessibility {
+                  label: "Bluefin";
+                }
+              };
+            }
+
+            Box header {
+              orientation: vertical;
+              spacing: 6;
+              halign: center;
+
+              Button primary {
+                visible: false;
+                halign: center;
+
+                styles [
+                  "pill",
+                ]
+              }
+
+              ProgressBar progress {
+                visible: false;
+                show-text: false;
+                width-request: 240;
+
+                accessibility {
+                  label: _("Update progress");
+                }
+              }
+
+              Label status_line {
+                wrap: true;
+                justify: center;
+
+                // Tells assistive technology, and the AT-SPI suite, the
+                // status line apart from a source row saying the same.
+                accessibility {
+                  description: _("Update status");
+                }
+              }
+
+              Label status_detail {
+                visible: false;
+                wrap: true;
+                justify: center;
+
+                styles [
+                  "caption",
+                  "dim-label",
+                ]
+              }
+            }
+          }
+        }
+
+        Adw.PreferencesGroup system_group {
+          title: _("System Updates");
+          description: _("Operating system updates take effect after a restart.");
+        }
+
+        Adw.PreferencesGroup apps_group {
+          title: _("Apps and Tools");
+          description: _("Updates to the software you use.");
+        }
+      };
+    };
+  };
+}
+
+// Narrow windows stack each source row's action under its text.
+Adw.Breakpoint compact_breakpoint {
+  condition ("max-width: 600sp")
+}

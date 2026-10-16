@@ -9,6 +9,7 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/ui"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -18,39 +19,28 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// createRecoveryPage builds the Powerwash detail page: a ToolbarView whose
-// header bar carries a back button (this is a detail, reached from Maintenance),
-// hosting the Powerwash preferences page.
+// createRecoveryPage binds the Powerwash detail page: page.blp with its back
+// button shown, because this is a detail reached from Maintenance. The header
+// bar's own back button is turned off: once the split view collapses it
+// would return to the sidebar, and two identical arrows leading to different
+// places is the confusion GNOME Settings' subpages avoid. Alt+Left returns
+// too (win.go-back), as it does from every libadwaita navigation page.
 func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage) {
-	toolbarView := adw.NewToolbarView()
-
-	// Header bar with a back button: Powerwash is a detail, so the user
-	// returns to Maintenance. The back button only fires once the window has
-	// wired closeRecoveryDetail, which it does right after New.
-	headerBar := adw.NewHeaderBar()
-	backButton := gtk.NewButtonFromIconName("go-previous-symbolic")
-	backButton.SetTooltipText("Back to Maintenance")
-	SetAccessibleLabel(backButton, "Back to Maintenance")
+	var view pageUI
+	ui.Bind(&view)
+	view.Header.SetShowBackButton(false)
+	view.BackButton.SetVisible(true)
+	view.BackButton.SetTooltipText("Back to Maintenance")
+	SetAccessibleLabel(view.BackButton, "Back to Maintenance")
 	backClickedCb := func(gtk.Button) {
+		// Fires only once the window has wired closeRecoveryDetail, which
+		// it does right after New.
 		if uh.closeRecoveryDetail != nil {
 			uh.closeRecoveryDetail()
 		}
 	}
-	backButton.ConnectClicked(&backClickedCb)
-	headerBar.PackStart(&backButton.Widget)
-
-	toolbarView.AddTopBar(&headerBar.Widget)
-
-	scrolled := gtk.NewScrolledWindow()
-	scrolled.SetPolicy(gtk.PolicyNeverValue, gtk.PolicyAutomaticValue)
-	scrolled.SetVexpand(true)
-
-	prefsPage := adw.NewPreferencesPage()
-	scrolled.SetChild(&prefsPage.Widget)
-
-	toolbarView.SetContent(&scrolled.Widget)
-
-	return toolbarView, prefsPage
+	view.BackButton.ConnectClicked(&backClickedCb)
+	return view.Page, view.Preferences
 }
 
 // Powerwash is the single named detail view a user opens deliberately to return
@@ -136,7 +126,7 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	}
 	uh.bootcRollbackBtn.ConnectClicked(&rollbackClickedCb)
 	uh.bootcRollbackRow.AddSuffix(&uh.bootcRollbackBtn.Widget)
-	uh.bootcRestartBtn = gtk.NewButtonWithLabel("Restart now")
+	uh.bootcRestartBtn = gtk.NewButtonWithLabel("Restart Now")
 	uh.bootcRestartBtn.SetValign(gtk.AlignCenterValue)
 	uh.bootcRestartBtn.AddCssClass("suggested-action")
 	uh.bootcRestartBtn.SetVisible(false)

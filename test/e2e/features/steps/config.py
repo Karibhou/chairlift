@@ -184,7 +184,7 @@ def step_source_row_lacks(context, row, text):
 
 @then('the feature availability list {verdict:w} "{title}"')
 def step_availability_verdict(context, verdict, title):
-    """includes/omits a row in Help's expanded "Why is something missing?" list.
+    """includes/omits a row in Help's expanded "Why Is Something Missing?" list.
 
     The expander must be open (a named row besides its header is showing), so
     "omits" cannot pass against a collapsed or unrendered list.
@@ -193,7 +193,7 @@ def step_availability_verdict(context, verdict, title):
         raise ValueError(f"verdict must be includes or omits, not {verdict!r}")
     group = atspi.find(
         _content(context),
-        lambda n: atspi.role(n) == "grouping" and atspi.name(n) == "Feature availability",
+        lambda n: atspi.role(n) == "grouping" and atspi.name(n) == "Feature Availability",
         "the Feature availability group",
     )
 

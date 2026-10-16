@@ -10,7 +10,7 @@ import (
 // before anything has been fetched. staged is false when there is no update
 // to compare against.
 func ChangelogRow(staged bool) Row {
-	row := Row{Title: "What's changing"}
+	row := Row{Title: "What's Changing"}
 	if !staged {
 		row.Subtitle = "Available once an update is downloaded."
 		return row
@@ -60,7 +60,7 @@ func ChangelogSections(result sbom.Result) []ChangelogSection {
 		{"Removed", result.Removed},
 		// "Changed" holds pairs whose order could not be established, so it
 		// is labelled for what it is rather than folded into Upgraded.
-		{"Changed (version order unknown)", result.Changed},
+		{"Changed (Version Order Unknown)", result.Changed},
 	} {
 		if len(candidate.changes) == 0 {
 			continue

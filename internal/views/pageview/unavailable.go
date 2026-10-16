@@ -11,17 +11,17 @@ import (
 // TestEveryCapabilityGatedGroupHasATitle holds the table total over
 // capability.Prerequisites.
 var featureTitles = map[[2]string]string{
-	{"updates_page", "bootc_updates_group"}:     "System updates",
-	{"updates_page", "flatpak_updates_group"}:   "App updates",
-	{"updates_page", "brew_updates_group"}:      "Developer tool updates",
-	{"updates_page", "brew_trust_group"}:        "Unverified sources",
-	{"updates_page", "channel_group"}:           "Early updates",
-	{"applications_page", "brew_group"}:         "Installed apps and tools",
-	{"applications_page", "brew_bundles_group"}: "App collections",
+	{"updates_page", "bootc_updates_group"}:     "System Updates",
+	{"updates_page", "flatpak_updates_group"}:   "App Updates",
+	{"updates_page", "brew_updates_group"}:      "Developer Tool Updates",
+	{"updates_page", "brew_trust_group"}:        "Unverified Sources",
+	{"updates_page", "channel_group"}:           "Early Updates",
+	{"applications_page", "brew_group"}:         "Installed Apps and Tools",
+	{"applications_page", "brew_bundles_group"}: "App Collections",
 	{"agents_page", "agents_group"}:             "Agent Mode",
 	{"agents_page", "troubleshooting_group"}:    "Troubleshooting",
-	{"features_page", "dx_group"}:               "Developer mode",
-	{"features_page", "gaming_group"}:           "Gaming mode",
+	{"features_page", "dx_group"}:               "Developer Mode",
+	{"features_page", "gaming_group"}:           "Gaming Mode",
 	{"features_page", "printers_group"}:         "Printers",
 	{"maintenance_page", "reset_group"}:         "Powerwash",
 }

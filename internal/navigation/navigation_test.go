@@ -1109,10 +1109,11 @@ func TestShortcutsAdvertisePrimariesOnly(t *testing.T) {
 		t.Fatalf("offered %d primaries, canonical inventory has %d", primaries, len(Items()))
 	}
 
+	// Alt+number is the page family; Alt+Left (win.go-back) is not a page.
 	alt := make(map[string]string)
 	for _, binding := range Bindings(routes) {
 		for _, accelerator := range binding.Accelerators {
-			if strings.HasPrefix(accelerator, "<Alt>") {
+			if strings.HasPrefix(accelerator, "<Alt>") && accelerator != "<Alt>Left" {
 				alt[accelerator] = binding.Action
 			}
 		}

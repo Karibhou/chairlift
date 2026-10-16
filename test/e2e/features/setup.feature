@@ -58,7 +58,7 @@ Feature: Explicit first-run software setup
   Scenario: Setup uses the same explicit wizard
     Given ChairLift is running
     Then the setup wizard shows "Welcome"
-    When I use the setup "Dismiss setup" button
+    When I use the setup "Dismiss Setup" button
     Then the setup wizard is not shown
     And the setup dry run would record disposition skipped
     And the action journal is empty

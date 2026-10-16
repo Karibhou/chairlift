@@ -56,6 +56,9 @@ func (r *dialogRoute) connect(dialog *adw.AlertDialog, action func(response stri
 
 func newIconButton(icon, label string) *gtk.Button {
 	button := gtk.NewButtonFromIconName(icon)
+	// Rows do not flatten their suffix buttons; a header bar does, so
+	// flat is right in both places.
+	button.AddCssClass("flat")
 	button.SetTooltipText(label)
 	button.UpdateProperty(gtk.AccessiblePropertyLabelValue, label, -1)
 	return button
@@ -65,6 +68,14 @@ func SetAccessibleLabel(widget interface {
 	UpdateProperty(gtk.AccessibleProperty, ...interface{})
 }, label string) {
 	widget.UpdateProperty(gtk.AccessiblePropertyLabelValue, label, -1)
+}
+
+// describeFor names what a repeated row button acts on. Every pending item
+// shows the same "Update", every untrusted package the same "Trust"; the
+// description lets a screen reader say which one, and unlike the button's
+// name it survives the label changing to a progress word.
+func describeFor(button *gtk.Button, subject string) {
+	button.UpdateProperty(gtk.AccessiblePropertyDescriptionValue, subject, -1)
 }
 
 func newActivitySpinner() *gtk.Spinner {

@@ -30,7 +30,7 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 	page.SetTitle("Updates")
 
 	sourcesGroup := adw.NewPreferencesGroup()
-	sourcesGroup.SetTitle("Update sources")
+	sourcesGroup.SetTitle("Update Sources")
 	states := w.updateSourceStates()
 	ready := w.updateSourcesReady()
 	for _, preference := range pageview.UpdateSourcePreferences {
@@ -59,7 +59,7 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 	maintenanceGroup := adw.NewPreferencesGroup()
 	maintenanceGroup.SetTitle("Maintenance")
 	maintenanceRow := adw.NewSwitchRow()
-	maintenanceRow.SetTitle("Run maintenance after updates")
+	maintenanceRow.SetTitle("Run Maintenance After Updates")
 	// The post-update phase skips every step when the administrator disabled
 	// routine cleanup, so its preference is locked off and left unbound, like
 	// a locked update source: an ON switch here would promise cleanup that

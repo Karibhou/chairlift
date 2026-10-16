@@ -75,9 +75,9 @@ func (uh *UserHome) buildHelpPage() {
 	// Collapsed behind one expander, and absent when nothing is missing.
 	if rows := pageview.UnavailableFeatures(uh.capabilities, uh.config.IsGroupEnabled); len(rows) > 0 {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("Feature availability")
+		group.SetTitle("Feature Availability")
 		expander := adw.NewExpanderRow()
-		expander.SetTitle("Why is something missing?")
+		expander.SetTitle("Why Is Something Missing?")
 		expander.SetSubtitle("Features this computer can't use right now.")
 		for _, r := range rows {
 			row := adw.NewActionRow()
@@ -99,11 +99,8 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 	diagRow := pageview.SystemDiagnosticsRow()
 	row.SetTitle(diagRow.Title)
 	row.SetSubtitle(diagRow.Subtitle)
-	row.SetActivatable(true)
-
 	copyBtn := gtk.NewButtonWithLabel("Copy")
 	copyBtn.SetValign(gtk.AlignCenterValue)
-	copyBtn.AddCssClass("suggested-action")
 	copyGate := &actionstate.Gate{}
 	onCopy := func() {
 		if !copyGate.TryStart() {
@@ -155,9 +152,10 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 
 	btnCb := func(_ gtk.Button) { onCopy() }
 	copyBtn.ConnectClicked(&btnCb)
-	rowCb := func(_ adw.ActionRow) { onCopy() }
-	row.ConnectActivated(&rowCb)
 
+	// Copy is the row's one control. The row itself is not activatable: an
+	// activatable row with its own handler was a second focus stop doing
+	// the same thing.
 	row.AddSuffix(&copyBtn.Widget)
 	group.Add(&row.Widget)
 	page.Add(group)

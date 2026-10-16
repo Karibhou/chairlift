@@ -61,23 +61,23 @@ func UpdateAllComplete(succeeded, failed int, restartRequired, maintenanceFailed
 	switch {
 	case failed > 0 && succeeded == 0:
 		return Notification{
-			Title:   "Update failed",
+			Title:   "Update Failed",
 			Body:    branding.AppName + " couldn't update this computer. Open it to see what went wrong.",
 			Urgency: UrgencyHigh,
 		}
 	case failed > 0:
 		body := fmt.Sprintf("%d part(s) updated, %d failed.", succeeded, failed) + restartSuffix
-		return Notification{Title: "Update finished with problems", Body: body, Urgency: UrgencyHigh}
+		return Notification{Title: "Update Finished with Problems", Body: body, Urgency: UrgencyHigh}
 	case succeeded == 0 && !maintenanceFailed:
-		return Notification{Title: "Nothing to update", Body: "No updates were installed."}
+		return Notification{Title: "Nothing to Update", Body: "No updates were installed."}
 	case maintenanceFailed:
 		return Notification{
-			Title: "Update finished with problems",
+			Title: "Update Finished with Problems",
 			Body:  "Updates were installed, but cleaning up afterwards failed. Open the app for details." + restartSuffix,
 		}
 	case restartRequired:
-		return Notification{Title: "Update complete", Body: "Restart to finish updating."}
+		return Notification{Title: "Update Complete", Body: "Restart to finish updating."}
 	default:
-		return Notification{Title: "Update complete", Body: "All updates were installed."}
+		return Notification{Title: "Update Complete", Body: "All updates were installed."}
 	}
 }

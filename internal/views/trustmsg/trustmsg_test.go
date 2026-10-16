@@ -11,7 +11,7 @@ func TestUpgradeMessage(t *testing.T) {
 		if !strings.Contains(got, "example") {
 			t.Errorf("UpgradeMessage must identify the affected package: %q", got)
 		}
-		for _, redirect := range []string{"Manage source trust", "below"} {
+		for _, redirect := range []string{"Manage Source Trust", "below"} {
 			if strings.Contains(got, redirect) != available {
 				t.Errorf("UpgradeMessage(group available=%v) = %q; redirect %q must only name an available section", available, got, redirect)
 			}
@@ -20,8 +20,8 @@ func TestUpgradeMessage(t *testing.T) {
 }
 
 func TestBundleMessage(t *testing.T) {
-	got := BundleMessage("Coding fonts")
-	if !strings.Contains(got, "Coding fonts") {
+	got := BundleMessage("Coding Fonts")
+	if !strings.Contains(got, "Coding Fonts") {
 		t.Errorf("BundleMessage must name the collection: %q", got)
 	}
 	// The person cannot run a command from here, so the message names no

@@ -1,0 +1,26 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The keyboard shortcuts dialog for libadwaita older than 1.8, which has no
+// AdwShortcutsDialog. An AdwDialog, unlike the AdwWindow it replaces, closes
+// on Escape and adapts to a narrow window by itself.
+Adw.Dialog shortcuts_dialog {
+  title: _("Keyboard Shortcuts");
+  content-width: 420;
+  content-height: 480;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Adw.PreferencesPage {
+      Adw.PreferencesGroup navigation_group {
+        title: _("Navigation");
+      }
+
+      Adw.PreferencesGroup general_group {
+        title: _("General");
+      }
+    };
+  };
+}

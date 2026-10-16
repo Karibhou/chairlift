@@ -45,10 +45,10 @@ func Present(count int, warning string) Presentation {
 
 	switch {
 	case count == 0 && warning == "":
-		result.PlaceholderTitle = "No collections available"
+		result.PlaceholderTitle = "No Collections Available"
 		result.PlaceholderSubtitle = "This computer has no app collections."
 	case count == 0:
-		result.PlaceholderTitle = "Couldn't load collections"
+		result.PlaceholderTitle = "Couldn't Load Collections"
 		result.PlaceholderSubtitle = "Try again later."
 	case warning != "":
 		result.Description += " Some collections couldn't be loaded."
@@ -99,14 +99,14 @@ var catalog = map[string]catalogEntry{
 		members:  []string{"dakota-fonts"},
 	},
 	"fonts-dev": {
-		title:    "Coding fonts",
+		title:    "Coding Fonts",
 		summary:  "Fixed-width fonts made for reading code.",
 		curated:  true,
 		order:    4,
 		defaults: true,
 	},
 	"ai-tools": {
-		title:    "AI tools",
+		title:    "AI Tools",
 		summary:  "AI assistants and model runners for the terminal.",
 		curated:  true,
 		order:    5,
@@ -424,7 +424,7 @@ func PresentContents(items []homebrew.BundleItem, total int) ContentsPresentatio
 		}
 		return ContentsPresentation{
 			EmptyTitle:    ContentsHiddenTitle,
-			EmptySubtitle: "This collection's Brewfile has no recognised entries.",
+			EmptySubtitle: "This collection's Brewfile has no recognized entries.",
 		}
 	}
 

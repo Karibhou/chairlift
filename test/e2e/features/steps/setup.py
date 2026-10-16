@@ -21,19 +21,19 @@ def wizard_page(context, title):
                 "Welcome to" in texts
                 and "Zavala" in " ".join(texts)
                 and "Your system is set up and ready to go." in " ".join(texts)
-                and atspi.find_all(root, lambda n: atspi.is_button(n, "Dismiss setup"))
+                and atspi.find_all(root, lambda n: atspi.is_button(n, "Dismiss Setup"))
             )
         if title == "Conclusion":
             return (
-                "You are ready" in texts
+                "You Are Ready" in texts
                 and "Edith Wharton" in " ".join(texts)
-                and "You have become legend." in " ".join(texts)
+                and "You can return to this app at any time" in " ".join(texts)
                 and atspi.find_all(root, lambda n: atspi.is_button(n, "Finish"))
             )
         return (
             title in texts
             and (title != "Features" or "Developer Mode" in texts)
-            and atspi.find_all(root, lambda n: atspi.is_button(n, "Dismiss setup"))
+            and atspi.find_all(root, lambda n: atspi.is_button(n, "Dismiss Setup"))
         )
     assert atspi.poll(visible), f"wizard never showed {title!r}"
 
@@ -57,7 +57,7 @@ def wizard_single_back(context):
 
 @then("the setup wizard is not shown")
 def wizard_absent(context):
-    assert atspi.poll(lambda: not atspi.find_all(context.app, lambda n: atspi.is_button(n, "Dismiss setup")))
+    assert atspi.poll(lambda: not atspi.find_all(context.app, lambda n: atspi.is_button(n, "Dismiss Setup")))
 
 
 @then("the setup dry run would record disposition {value:w}")

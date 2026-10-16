@@ -46,17 +46,17 @@ func Snapshot(state updateflow.Snapshot) Presentation {
 	case updateflow.PhaseCheckFailed:
 		presentation := Presentation{Status: gotext.Get("Couldn't check for updates"),
 			Detail: checkErrorDetail(state)}
-		addAction(&presentation, state.Action, gotext.Get("Try again"))
+		addAction(&presentation, state.Action, gotext.Get("Try Again"))
 		return presentation
 	case updateflow.PhaseUpdating:
 		return Presentation{Status: updatingStatus(state)}
 	case updateflow.PhasePartialFailure:
 		presentation := partialFailurePresentation(state)
-		addAction(&presentation, state.Action, gotext.Get("Retry failed"))
+		addAction(&presentation, state.Action, gotext.Get("Retry Failed"))
 		return presentation
 	case updateflow.PhaseRestartRequired:
 		// The restart action lives on the Operating system row ("Deployment
-		// staged" with a "Restart now" suffix, #439), so the header offers
+		// staged" with a "Restart Now" suffix, #439), so the header offers
 		// no primary action here: its one line says what is left to do.
 		return Presentation{Status: gotext.Get("Restart to finish updating")}
 	default:
@@ -151,15 +151,17 @@ func soleItemSubtitle(item updateflow.Item) string {
 	}
 }
 
-// SourceIcon returns the symbolic icon for a source row.
+// SourceIcon returns the symbolic icon for a source row. Each source has its
+// own, and Applications and System components match the sidebar's Apps and
+// Features, the pages that manage what they update.
 func SourceIcon(id updateflow.SourceID) string {
 	switch id {
 	case updateflow.Applications:
-		return "applications-system-symbolic"
+		return "view-grid-symbolic"
 	case updateflow.DeveloperTools:
 		return "package-x-generic-symbolic"
 	case updateflow.SystemComponents:
-		return "applications-system-symbolic"
+		return "application-x-addon-symbolic"
 	case updateflow.OperatingSystem:
 		return "drive-harddisk-system-symbolic"
 	default:
@@ -273,9 +275,9 @@ func readyPresentation(state updateflow.Snapshot) Presentation {
 	default:
 		presentation.Status = gotext.Get("Up to date")
 	}
-	addAction(&presentation, state.Action, gotext.Get("Check again"))
+	addAction(&presentation, state.Action, gotext.Get("Check Again"))
 	if state.Action == updateflow.ActionUpdateAll {
-		presentation.ActionLabel = gotext.Get("Update all")
+		presentation.ActionLabel = gotext.Get("Update All")
 	}
 	return presentation
 }
@@ -344,7 +346,7 @@ func logHint() string {
 // restart cannot be started. Restart is the one privileged update action with
 // no "Details" expander to point the user at, so the raw error is logged by
 // the caller (update_shell.go) for diagnostics but never shown. Like the
-// other privileged actions it carries a fixed "Try again" prompt rather than
+// other privileged actions it carries a fixed "Try Again" prompt rather than
 // a FailureHint: a raw %v here would reintroduce the exact failure chairlift#554
 // was filed for, so the message is deliberately not built from err.
 func RestartFailedMessage() string {
@@ -422,11 +424,11 @@ func addAction(presentation *Presentation, action updateflow.Action, checkLabel 
 		presentation.ShowAction = true
 		presentation.ActionStyle = "suggested-action"
 	case updateflow.ActionUpdateAll:
-		presentation.ActionLabel = gotext.Get("Update all")
+		presentation.ActionLabel = gotext.Get("Update All")
 		presentation.ShowAction = true
 		presentation.ActionStyle = "suggested-action"
 	case updateflow.ActionRetryFailed:
-		presentation.ActionLabel = gotext.Get("Retry failed")
+		presentation.ActionLabel = gotext.Get("Retry Failed")
 		presentation.ShowAction = true
 		presentation.ActionStyle = "suggested-action"
 	}
@@ -437,12 +439,19 @@ func sourceTitle(id updateflow.SourceID) string {
 	case updateflow.Applications:
 		return gotext.Get("Applications")
 	case updateflow.DeveloperTools:
-		return gotext.Get("Developer tools")
+		return gotext.Get("Developer Tools")
 	case updateflow.SystemComponents:
-		return gotext.Get("System components")
+		return gotext.Get("System Components")
 	case updateflow.OperatingSystem:
-		return gotext.Get("Operating system")
+		return gotext.Get("Operating System")
 	default:
 		return gotext.Get("Updates")
 	}
+}
+
+// BadgeDescription is the accessible description of the sidebar's update
+// count. The badge's name stays the bare number it shows; a screen reader
+// reads this after it, so "3" is announced with what it counts.
+func BadgeDescription(count int) string {
+	return gotext.GetN("%d update available", "%d updates available", count, count)
 }

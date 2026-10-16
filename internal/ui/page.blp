@@ -1,0 +1,20 @@
+using Gtk 4.0;
+using Adw 1;
+
+// One content destination: a header bar over a preferences page. The page
+// scrolls and clamps itself, so it is the toolbar's content directly; an
+// outer GtkScrolledWindow would nest a second scroller around it.
+// internal/views binds one copy per page. back_button is shown only by a
+// detail (Powerwash), which returns to the primary it was opened from.
+Adw.ToolbarView page {
+  [top]
+  Adw.HeaderBar header {
+    [start]
+    Button back_button {
+      visible: false;
+      icon-name: "go-previous-symbolic";
+    }
+  }
+
+  content: Adw.PreferencesPage preferences {};
+}

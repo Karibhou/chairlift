@@ -13,16 +13,16 @@ Feature: Apps destination
     When I open the "Apps" page
     Then the Apps groups are ordered exactly
       | title                 |
-      | App collections    |
-      | Installed apps     |
-      | Command line tools |
+      | App Collections    |
+      | Installed Apps     |
+      | Command-Line Tools |
       | Backup             |
     And I do not see "Firefox"
     And I do not see "Text Editor"
     And Flatpak was never asked to "list"
-    Then the "Command line tools" apps group says "2 installed"
-    And the "Installed apps" apps group says "1 installed"
-    Then the "Command line tools" apps group shows exactly
+    Then the "Command-Line Tools" apps group says "2 installed"
+    And the "Installed Apps" apps group says "1 installed"
+    Then the "Command-Line Tools" apps group shows exactly
       | title   |
       | jq      |
       | ripgrep |
@@ -31,7 +31,7 @@ Feature: Apps destination
     And the "Pin jq" button in the "jq" row is sensitive
     And the "Unpin ripgrep" button in the "ripgrep" row is sensitive
     And I do not see "libunistring"
-    Then the "Installed apps" apps group shows exactly
+    Then the "Installed Apps" apps group shows exactly
       | title              |
       | visual-studio-code |
 
@@ -63,8 +63,8 @@ Feature: Apps destination
 
     Examples:
       | list               | name               | count       | command                                  |
-      | Command line tools | jq                 | 2 installed | brew uninstall jq                        |
-      | Installed apps     | visual-studio-code | 1 installed | brew uninstall --cask visual-studio-code |
+      | Command-Line Tools | jq                 | 2 installed | brew uninstall jq                        |
+      | Installed Apps     | visual-studio-code | 1 installed | brew uninstall --cask visual-studio-code |
 
   @config.apps-bundles @stub.apps-brew
   Scenario Outline: <action> on <name> is confirmed, previewed, and restores both row controls
@@ -88,10 +88,10 @@ Feature: Apps destination
   Scenario: An unreadable Homebrew inventory leaves collections and export usable
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Command line tools" apps group says "Couldn't load this list."
-    And the "Installed apps" apps group says "Couldn't load this list."
-    And the "Install" button in the "Install selected collections" row is sensitive
-    And the "Export" button in the "Export package list" row is sensitive
+    Then the "Command-Line Tools" apps group says "Couldn't load this list."
+    And the "Installed Apps" apps group says "Couldn't load this list."
+    And the "Install" button in the "Install Selected Collections" row is sensitive
+    And the "Export" button in the "Export Package List" row is sensitive
 
   @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak
   Scenario: A host without Homebrew omits Apps even with Flatpak available
@@ -102,14 +102,14 @@ Feature: Apps destination
   Scenario: A confirmed app collection install is previewed and its button restored
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Coding fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
+    Then the "Coding Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool."
-    And the "Coding fonts" collection is checked
+    And the "Coding Fonts" collection is checked
     And the "Full Desktop Suite" collection is unchecked
-    When I click the "Install" button in the "Install selected collections" row
+    When I click the "Install" button in the "Install Selected Collections" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
     And a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
-    And the "Install" button in the "Install selected collections" row is sensitive
+    And the "Install" button in the "Install Selected Collections" row is sensitive
     And I do not see "Installing collections…"
     And Homebrew was asked to "bundle check"
     And Homebrew was never asked to "bundle install"
@@ -119,7 +119,7 @@ Feature: Apps destination
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool. (Installed)"
-    And the "Install" button in the "Install selected collections" row is sensitive
+    And the "Install" button in the "Install Selected Collections" row is sensitive
     And Homebrew was asked to "bundle check"
     And Homebrew was never asked to "bundle install"
 
@@ -144,30 +144,30 @@ Feature: Apps destination
   Scenario: A system with no app collections says none are offered
     Given ChairLift is running
     When I open the "Apps" page
-    Then I see "No collections available"
+    Then I see "No Collections Available"
     And I see "This computer has no app collections."
 
   @config.apps-collections-only @stub.apps-brew @stub.apps-collections
-  Scenario: App collections install without the Homebrew package groups
+  Scenario: App Collections install without the Homebrew package groups
     Given ChairLift is running
     When I open the "Apps" page
     Then the Apps page does not show the "Backup" group
-    And the Apps page does not show the "Command line tools" group
-    And the Apps page does not show the "Installed apps" group
-    When I click the "Install" button in the "Install selected collections" row
+    And the Apps page does not show the "Command-Line Tools" group
+    And the Apps page does not show the "Installed Apps" group
+    When I click the "Install" button in the "Install Selected Collections" row
     Then the application log contains "/bundles/team-tools.Brewfile"
-    And the "Install" button in the "Install selected collections" row is sensitive
+    And the "Install" button in the "Install Selected Collections" row is sensitive
     And I do not see "Installing collections…"
     And the application log does not contain "panic"
 
   @config.apps-bundles @stub.apps-brew
   Scenario: Exporting the app list is previewed and writes nothing
     When I open the "Apps" page
-    Then the "Export package list" row says "Replaces any Brewfile already there."
-    When I click the "Export" button in the "Export package list" row
+    Then the "Export Package List" row says "Replaces any Brewfile already there."
+    When I click the "Export" button in the "Export Package List" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle dump --file="
     And the application log contains "/home/Brewfile --force"
-    And the "Export" button in the "Export package list" row is sensitive
+    And the "Export" button in the "Export Package List" row is sensitive
     And the home directory has no "Brewfile"
     And Homebrew was never asked to "bundle"
 
@@ -176,9 +176,9 @@ Feature: Apps destination
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Pin jq" button in the "jq" row is sensitive
-    And the "Install" button in the "Install selected collections" row is sensitive
+    And the "Install" button in the "Install Selected Collections" row is sensitive
     And the "Uninstall visual-studio-code" button in the "visual-studio-code" row is sensitive
-    And the "Export" button in the "Export package list" row is sensitive
+    And the "Export" button in the "Export Package List" row is sensitive
     And every visible action control has an accessible name and an action
 
   @config.apps-bundles @stub.apps-brew @stub.apps-collections
@@ -186,13 +186,13 @@ Feature: Apps destination
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool."
-    When I expand the "Team tools" list under "App collections"
+    When I expand the "Team tools" list under "App Collections"
     Then the "Team tools" list shows exactly
       | title |
       | just  |
     And the "just" row says "Command-line tool"
-    When I expand the "Coding fonts" list under "App collections"
-    Then the "Coding fonts" list shows exactly
+    When I expand the "Coding Fonts" list under "App Collections"
+    Then the "Coding Fonts" list shows exactly
       | title            |
       | font-fira-code   |
       | font-jetbrains-mono |
@@ -202,8 +202,8 @@ Feature: Apps destination
   Scenario: Collections install with the group Install button without expanding
     Given ChairLift is running
     When I open the "Apps" page
-    And I click the "Install" button in the "Install selected collections" row
+    And I click the "Install" button in the "Install Selected Collections" row
     Then the application log contains "/bundles/fonts-dev.Brewfile"
-    And the "Install" button in the "Install selected collections" row is sensitive
+    And the "Install" button in the "Install Selected Collections" row is sensitive
     And I do not see "Installing collections…"
     And the application log does not contain "panic"
