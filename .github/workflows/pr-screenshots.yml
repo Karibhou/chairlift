@@ -42,7 +42,9 @@ concurrency:
 jobs:
   resolve:
     # A comment on a pull request (not an issue) whose body is the command,
-    # from someone with write access to this repository.
+    # from an owner, member or collaborator; the resolve step then requires
+    # that commenter to hold write access to this repository, which a
+    # member's association alone does not prove.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.issue.pull_request &&
@@ -62,7 +64,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.issue.number || inputs.pr }}
+          COMMENTER: ${{ github.event.comment.user.login }}
         run: |
+          # A manual run is already limited to people who can dispatch it;
+          # a comment needs the commenter's own permission checked.
+          if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
+              permission="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$COMMENTER/permission" --jq .permission)"
+              case "$permission" in
+                  admin|maintain|write) ;;
+                  *) echo "$COMMENTER has $permission access; /screenshots needs write" >&2; exit 1 ;;
+              esac
+          fi
           case "$PR" in
               ''|*[!0-9]*) echo "pull request number must be digits, got '$PR'" >&2; exit 1 ;;
           esac

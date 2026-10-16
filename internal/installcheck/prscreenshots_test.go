@@ -28,7 +28,8 @@ type prScreenshotsWorkflow struct {
 // pull request screenshot workflow to its security shape. It runs on a
 // comment, so anyone could ask; it pushes, so a write token exists. The
 // shape that keeps the two apart:
-//   - only a comment from someone with write access starts it;
+//   - only a comment from someone whose repository permission is write or
+//     above starts it, checked through the API, not the association;
 //   - every job's GITHUB_TOKEN is read-only, and the top level grants nothing;
 //   - capture, the one job that runs pull request code (`make screenshots`),
 //     never sees the app token and keeps no checkout credentials;
@@ -57,10 +58,23 @@ func TestPRScreenshotsNeverRunsPullRequestCodeBesideAWriteToken(t *testing.T) {
 	if !ok {
 		t.Fatal("pr-screenshots.yml has no resolve job")
 	}
-	for _, want := range []string{"github.event.comment.author_association", `"OWNER","MEMBER","COLLABORATOR"`, "github.event.issue.pull_request"} {
+	for _, want := range []string{"github.event.comment.author_association", "github.event.issue.pull_request"} {
 		if !strings.Contains(resolve.If, want) {
 			t.Errorf("resolve job's condition does not check %s", want)
 		}
+	}
+	// An association is not a permission: MEMBER is any member of the
+	// owning organization. The resolve step must ask for the commenter's
+	// permission on this repository and accept only write or above.
+	checkedPermission := false
+	for _, step := range resolve.Steps {
+		if strings.Contains(step.Run, "/collaborators/$COMMENTER/permission") &&
+			strings.Contains(step.Run, "admin|maintain|write) ;;") {
+			checkedPermission = true
+		}
+	}
+	if !checkedPermission {
+		t.Error("resolve job does not check the commenter's repository permission")
 	}
 
 	capture, ok := workflow.Jobs["capture"]

@@ -32,7 +32,10 @@ ADR-0022 records the decision. The mechanics, and the traps behind them:
    and a blank `_ ui.File \`ui:"<blueprint>"\`` field, and connect signals in
    Go once at build time (the callback-table invariant in AGENTS.md still
    applies). `ui.Bind` builds a fresh copy each call, so one blueprint can back
-   many pages (`page.blp`).
+   many pages (`page.blp`). It releases the builder before returning; each
+   bound object keeps one reference that Go never drops (puregotk has no
+   finalizers), so bind a dialog once and re-present it, as the About and
+   shortcuts dialogs are, rather than binding one per open.
 3. **`internal/installcheck` reads both sides without GTK.**
    `TestBlueprintBindingsMatchTheirUI` parses every binding struct's tags and
    wrapper types and the compiled XML: an id the blueprint lacks, or

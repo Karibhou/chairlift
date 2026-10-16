@@ -48,6 +48,10 @@ type Window struct {
 	adw.ApplicationWindow
 	ui windowUI // The bound internal/ui/window.blp tree
 
+	// Built on first use and re-presented; see onShowShortcuts.
+	shortcutsDialog *adw.Dialog
+	aboutDialog     *adw.Dialog
+
 	splitView    *adw.NavigationSplitView
 	sidebarList  *gtk.ListBox
 	shownRow     int // Sidebar index of the shown page; the only row the selection may rest on
@@ -529,7 +533,17 @@ func (w *Window) navigateBack() {
 // internal/navigation's one shortcut inventory. libadwaita 1.8 brings
 // AdwShortcutsDialog, which draws real keycaps and searches; older releases
 // cannot parse it, so they get an AdwDialog of the same entries instead.
+// The inventory is fixed for the session, so the dialog is built on first
+// use and re-presented after: a dialog built per open would be one more
+// that nothing frees.
 func (w *Window) onShowShortcuts() {
+	if w.shortcutsDialog == nil {
+		w.shortcutsDialog = w.buildShortcutsDialog()
+	}
+	w.shortcutsDialog.Present(&w.Widget)
+}
+
+func (w *Window) buildShortcutsDialog() *adw.Dialog {
 	if ui.SupportsShortcutsDialog() {
 		var view shortcutsUI
 		ui.Bind(&view)
@@ -541,8 +555,7 @@ func (w *Window) onShowShortcuts() {
 				view.General.Add(item)
 			}
 		}
-		view.Dialog.Present(&w.Widget)
-		return
+		return &view.Dialog.Dialog
 	}
 
 	var view legacyShortcutsUI
@@ -559,7 +572,7 @@ func (w *Window) onShowShortcuts() {
 			view.General.Add(&row.Widget)
 		}
 	}
-	view.Dialog.Present(&w.Widget)
+	return view.Dialog
 }
 
 // NavigationItems returns the visible, compacted page inventory used by this
@@ -570,12 +583,16 @@ func (w *Window) NavigationItems() []navigation.Item {
 
 // onShowAbout presents the About dialog. Its static credits live in
 // internal/ui/about.blp; the name and version are set here.
+// Built on first use and re-presented, like the shortcuts dialog.
 func (w *Window) onShowAbout() {
-	var view aboutUI
-	ui.Bind(&view)
-	view.Dialog.SetApplicationName(branding.AppName)
-	view.Dialog.SetVersion(version.Version)
-	view.Dialog.Present(&w.Widget)
+	if w.aboutDialog == nil {
+		var view aboutUI
+		ui.Bind(&view)
+		view.Dialog.SetApplicationName(branding.AppName)
+		view.Dialog.SetVersion(version.Version)
+		w.aboutDialog = &view.Dialog.Dialog
+	}
+	w.aboutDialog.Present(&w.Widget)
 }
 
 // AddToast adds a toast notification

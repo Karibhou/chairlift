@@ -49,9 +49,16 @@ var fileType = reflect.TypeOf(File{})
 // malformed tag: those are programming errors in compiled-in data, and
 // TestBlueprintBindingsMatchTheirUI catches them before a binary is built.
 //
+// Bind releases the builder before it returns. Each bound object keeps the
+// reference its lookup took, and an object that is not bound is kept alive
+// by its parent or by the property that names it (a menu by its button), or
+// is freed with the builder. Nothing is freed later by Go: puregotk adds no
+// finalizers, so a caller that binds a dialog per use leaks one per use; bind
+// it once and re-present it instead.
+//
 // Bind must run on the GTK main thread, after the libadwaita types are
 // registered (adw.Init or AdwApplication startup).
-func Bind(target any) *gtk.Builder {
+func Bind(target any) {
 	value := reflect.ValueOf(target)
 	if value.Kind() != reflect.Pointer || value.Elem().Kind() != reflect.Struct {
 		panic(fmt.Sprintf("ui.Bind: want a pointer to a struct, got %T", target))
@@ -98,7 +105,7 @@ func Bind(target any) *gtk.Builder {
 		ptr.SetGoPointer(object.GoPointer())
 		value.Field(i).Set(bound)
 	}
-	return builder
+	builder.Unref()
 }
 
 // SupportsShortcutsDialog reports whether the running libadwaita has
