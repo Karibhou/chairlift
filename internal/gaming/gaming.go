@@ -101,8 +101,9 @@ var components = []Component{
 	{
 		// The one runtime component: MangoHud is a Vulkan layer extending
 		// org.freedesktop.Platform, not an application, and `flatpak list
-		// --app` never reports it. Protontricks runs on that runtime, so the
-		// layer matches the Platform branch Protontricks uses.
+		// --app` never reports it. The layer must match the Platform branch
+		// of the app that loads it: an installed Flatpak Steam when there is
+		// one (see layerBranch), otherwise the branch Protontricks uses.
 		ID:          "org.freedesktop.Platform.VulkanLayer.MangoHud",
 		Kind:        flatpak.KindRuntime,
 		Name:        "MangoHud",
@@ -304,7 +305,7 @@ func Enable() (installed []string, failures []error) {
 		}
 		ref := id
 		if component.BranchOf != "" {
-			branch, err := runtimeBranch(component.BranchOf)
+			branch, err := layerBranch(component)
 			if err != nil {
 				failures = append(failures, fmt.Errorf("%s: %w", id, err))
 				continue
@@ -324,10 +325,28 @@ func Enable() (installed []string, failures []error) {
 // installs from.
 const flathubRemote = "flathub"
 
+// steamAppID is the Flatpak Steam client. It is not part of the stack, but
+// when it is installed it is what loads the MangoHud layer into games.
+const steamAppID = "com.valvesoftware.Steam"
+
+// layerBranch returns the branch a multi-branch component is installed in:
+// the runtime branch of an installed Flatpak Steam, since that is the app
+// whose games load the layer, and otherwise the branch of
+// component.BranchOf.
+func layerBranch(component Component) (string, error) {
+	if runtime, err := flatpak.AppRuntime(steamAppID); err == nil {
+		if branch, err := flatpak.RefBranch(runtime); err == nil {
+			return branch, nil
+		}
+	}
+	return runtimeBranch(component.BranchOf)
+}
+
 // runtimeBranch returns the branch of the runtime appID runs on: the
-// installed copy's when there is one (Steam installs ahead of MangoHud, so
-// selecting both answers from the fresh install), otherwise the one Flathub
-// currently publishes it against, which is what a later install would get.
+// installed copy's when there is one (Protontricks installs ahead of
+// MangoHud, so enabling answers from the fresh install), otherwise the one
+// Flathub currently publishes it against, which is what a later install
+// would get.
 func runtimeBranch(appID string) (string, error) {
 	runtime, installedErr := flatpak.AppRuntime(appID)
 	if installedErr != nil {

@@ -235,7 +235,6 @@ type UserHome struct {
 	developerDevcontainerGate actionstate.Gate
 	gamingGroup               *adw.PreferencesGroup
 	gamingRow                 *adw.ActionRow
-	gamingSwitch              *gtk.Switch
 	gamingGate                actionstate.Gate
 	developerOptions          []*developerOptionRow
 	wslBackend                string

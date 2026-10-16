@@ -413,10 +413,9 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group.SetTitle("Gaming")
 	group.SetDescription("Apps for playing games on this computer.")
 
-	presentation := pageview.GamingRow(false)
 	row := adw.NewActionRow()
-	row.SetTitle(presentation.Title)
-	row.SetSubtitle(presentation.Subtitle)
+	row.SetTitle(pageview.GamingRow(false).Title)
+	row.SetSubtitle(pageview.GamingCheckingSubtitle)
 	uh.gamingSpinner = newActivitySpinner()
 	row.AddSuffix(&uh.gamingSpinner.Widget)
 
@@ -432,7 +431,6 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group.Add(&row.Widget)
 	page.Add(group)
 	uh.gamingGroup, uh.gamingRow = group, row
-	uh.gamingSwitch = toggle.widget
 
 	go func() {
 		state, err := gaming.Status()
@@ -700,6 +698,7 @@ func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *ad
 		return
 	}
 	toggle.widget.SetSensitive(false)
+	before := row.GetSubtitle()
 	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
 	setActivitySpinner(uh.gamingSpinner, true)
 
@@ -728,36 +727,25 @@ func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *ad
 			toggle.widget.SetSensitive(true)
 
 			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(kept))
+			active := decision.Confirm == enabled
+			if refreshErr == nil {
+				active = state.Enabled
+			}
+			toggle.set(active)
 			if dryrun.Enabled() {
-				// Dry-run preview reverted; restore switch and subtitle to observed state
-				if refreshErr == nil {
-					toggle.set(state.Enabled)
-					row.SetSubtitle(pageview.GamingRow(state.Enabled).Subtitle)
-				} else {
-					toggle.set(!enabled)
-				}
-			} else if refreshErr == nil {
-				toggle.set(state.Enabled)
-				if decision.Confirm {
-					result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
-					if len(kept) > 0 {
-						result += " Apps installed for everyone were kept."
-					}
-					row.SetSubtitle(result)
-				} else {
-					row.SetSubtitle(pageview.GamingResultSubtitle(enabled, len(changed), len(failures)) + " Try again.")
-				}
+				row.SetSubtitle(before)
 			} else {
-				toggle.set(decision.Confirm == enabled)
-				if decision.Confirm {
-					result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
-					if len(kept) > 0 {
-						result += " Apps installed for everyone were kept."
-					}
-					row.SetSubtitle(result)
-				} else {
-					row.SetSubtitle(pageview.GamingResultSubtitle(enabled, len(changed), len(failures)) + " Try again.")
+				result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
+				if len(kept) > 0 {
+					result += " Apps installed for everyone were kept."
 				}
+				if len(failures) > 0 {
+					result += " Try again."
+				}
+				if refreshErr != nil {
+					result += " Couldn't refresh the list of installed apps."
+				}
+				row.SetSubtitle(result)
 			}
 			if len(failures) > 0 {
 				uh.toastAdder.ShowErrorToast(decision.Toast)

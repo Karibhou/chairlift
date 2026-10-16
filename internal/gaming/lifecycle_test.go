@@ -405,6 +405,26 @@ func TestEnableInstallsMangoHudInTheBranchProtontricksRunsOn(t *testing.T) {
 	}
 }
 
+// Steam is not part of the stack, but when a Flatpak Steam is installed it is
+// what loads MangoHud into games, so its Platform branch wins over
+// Protontricks'.
+func TestEnableInstallsMangoHudInTheBranchAnInstalledSteamRunsOn(t *testing.T) {
+	log := fakeFlatpak(t, "case \"$1\" in\n"+
+		"info) if [ \"$3\" = "+steamAppID+" ]; then echo 'org.freedesktop.Platform/x86_64/24.08'; exit 0; fi; echo '"+protontricksRuntime+"'; exit 0 ;;\n"+
+		"remote-info) echo 'org.freedesktop.Platform/x86_64/25.08'; exit 0 ;;\n"+
+		"install|uninstall) exit 0 ;;\n"+
+		"esac\n"+listingScript(listing{systemApps: []string{protonPlus, protontrick, goverlay}}))
+
+	installed, failures := Enable()
+	if len(failures) != 0 || !slices.Contains(installed, mangohud) {
+		t.Fatalf("Enable(MangoHud) = %v, %v; want it installed", installed, failures)
+	}
+	want := "install -y --system " + mangohud + "//24.08"
+	if calls := installs(invocations(t, log)); !slices.Contains(calls, want) {
+		t.Errorf("Enable(MangoHud) installed %q, want %q", calls, want)
+	}
+}
+
 // A branch that cannot be read is a MangoHud failure, never a bare-ID install
 // that would stop at flatpak's prompt anyway.
 func TestEnableReportsAnUnreadableMangoHudBranchAsAFailure(t *testing.T) {
