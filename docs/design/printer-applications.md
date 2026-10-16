@@ -38,7 +38,7 @@ The consequence is deliberate: IPP and the web page are reachable only from
 this computer (`http://localhost:<port>/`, `ipp://localhost:<port>/ipp/print`).
 Other computers cannot print to or administer the application, and the
 in-container DNS-SD advertisement is not visible on the host or the LAN. The
-group description and off-state subtitle say "this computer" accordingly.
+off-state subtitle says "this computer" accordingly.
 
 There is no pkexec route, helper subcommand, PolicyKit action, privileged
 container, or host image layering for printer applications. Device passthrough

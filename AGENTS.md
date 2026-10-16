@@ -1038,7 +1038,7 @@ An agent must not break these:
   unauthenticated, so the unit publishes only `127.0.0.1:<port>:<port>` and
   must never use `Network=host` or a non-loopback `PublishPort`. IPP and the
   web page are reachable only from this computer; LAN printing and DNS-SD do
-  not work, and the copy must say so rather than claim network sharing. The
+  not work, and the copy must avoid claiming network sharing. The
   Features page's **Printers** group (`printers_group`, floored on the
   `Podman` capability, i.e. `podman` on `$PATH`;
   `internal/views/printers_page.go`) shows one switch per family. Readiness
