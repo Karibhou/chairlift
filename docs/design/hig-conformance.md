@@ -29,6 +29,7 @@ AdwApplicationWindow (360×294 minimum)
       └─ GtkStack: pages │ welcome │ conclusion
          └─ AdwNavigationSplitView (collapses below 550sp)
             ├─ sidebar: header bar + primary menu, navigation-sidebar list
+            │  of nav-row.blp rows (GNOME Settings' panel-row metrics)
             └─ content: one AdwNavigationPage over a stack of destinations,
                each an AdwToolbarView: header bar over an AdwPreferencesPage
 ```
@@ -65,6 +66,7 @@ AdwApplicationWindow (360×294 minimum)
 | Dialogs | Avatar chooser: Apply with no Cancel | Cancel and Apply replace the close button |
 | Shortcuts | No Ctrl+W, no check accelerator, no back from Powerwash, no mnemonics; two dead actions | Added; `win.help` and `win.preferences` removed |
 | Navigation | Collapsed Powerwash showed two back arrows leading to different places | The header's automatic back button is off on that page |
+| Sidebar | Rows were boxed-list `AdwActionRow`s, taller and more padded than GNOME Settings' | `nav-row.blp` is Settings' panel row: a plain list row, 12px top and bottom, 6px sides, 12px icon gap, named by its title; sidebar width is libadwaita's default, as in Settings |
 | Icons | Applications and System components shared one icon; Agents used the favorites star, Maintenance the Preferences gear, Apps a MIME type | Distinct, conventional glyphs, checked against the Adwaita catalog |
 | Buttons | A destructive Uninstall on every installed row; several suggested buttons per view | One suggested action per view; destructive styling on the dialog response |
 | Buttons | Icon-only row buttons not flat | Flat |
@@ -79,7 +81,6 @@ AdwApplicationWindow (360×294 minimum)
 | --- | --- | --- |
 | i18n | About 730 user-visible literals are not translatable; `gotext` is used in one package and never configured | A project of its own: a domain, `po/`, extraction, and an install step |
 | Navigation | Powerwash is a stack sibling with its own Back button rather than an `AdwNavigationView` subpage | Changes the `navigation.Resolve` transition contract; the double-arrow defect is fixed |
-| Sidebar | Rows are `AdwActionRow`s in a `navigation-sidebar` list; `AdwSidebar` needs libadwaita 1.9 | Above the 1.6 floor; `TestUpdateBadgeStaysNoninteractive` pins the badge shape |
 | CSS | `dim-label` instead of `dimmed`; `GtkSpinner` instead of `AdwSpinner` | `dimmed` needs 1.7. `AdwSpinner` is within the floor but touches every spinner's lifecycle |
 | Dialogs | Switching the release channel and Roll Back confirm only through PolicyKit | A behavior change to the privileged flows, for its own review |
 | Dialogs | Closing during an update is refused with a banner rather than offered as a choice | Same |

@@ -501,7 +501,9 @@ An agent must not break these:
   make the privileged path configurable from ChairLift's user-writable
   configuration.
 - **Static widget trees are Blueprint; Go binds them by struct tag.** The
-  window shell, every page skeleton (`page.blp`: a header bar over an
+  window shell, its sidebar rows (`nav-row.blp`, GNOME Settings' panel-row
+  shape and spacing: a plain list row, not an `AdwActionRow`), every page
+  skeleton (`page.blp`: a header bar over an
   `AdwPreferencesPage`, with no `GtkScrolledWindow` around the page, which
   scrolls itself), the Updates destination, the first-run bookends, and the
   About, shortcuts, and avatar dialogs are `internal/ui/*.blp`, compiled to

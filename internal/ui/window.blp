@@ -16,10 +16,9 @@ Adw.ToastOverlay toasts {
       StackPage {
         name: "pages";
 
+        // Sidebar sizing is libadwaita's default, as in GNOME Settings
+        // (shell/cc-window.blp).
         child: Adw.NavigationSplitView split_view {
-          min-sidebar-width: 200;
-          max-sidebar-width: 260;
-
           sidebar: Adw.NavigationPage sidebar_page {
             tag: "sidebar";
 

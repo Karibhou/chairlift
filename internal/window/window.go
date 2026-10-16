@@ -56,7 +56,7 @@ type Window struct {
 	toasts       *adw.ToastOverlay
 
 	pages             map[string]*adw.ToolbarView
-	navRows           map[string]*adw.ActionRow // Store references to nav rows for badges
+	navRows           map[string]*gtk.ListBoxRow // Store references to nav rows for badges
 	config            *config.Config
 	capabilities      capability.Set // Resolved once; the policy floor for every entry path
 	configError       *config.LoadError
@@ -99,7 +99,7 @@ func init() {
 				w := &Window{
 					ApplicationWindow: parent,
 					pages:             make(map[string]*adw.ToolbarView),
-					navRows:           make(map[string]*adw.ActionRow),
+					navRows:           make(map[string]*gtk.ListBoxRow),
 					config:            cfg,
 					configError:       configErr,
 				}
@@ -281,23 +281,23 @@ func (w *Window) bindSidebar() {
 	w.sidebarList.ConnectRowSelected(&rowSelectedCb)
 }
 
-// createNavRow creates a navigation row for the sidebar
-func (w *Window) createNavRow(item navigation.Item) *adw.ActionRow {
-	row := adw.NewActionRow()
-	row.SetTitle(item.Title)
-	row.SetActivatable(true)
-
-	// Add icon
-	icon := gtk.NewImageFromIconName(item.Icon)
-	row.AddPrefix(&icon.Widget)
+// createNavRow binds one sidebar row from internal/ui/nav-row.blp, the
+// shape GNOME Settings gives its panel rows.
+func (w *Window) createNavRow(item navigation.Item) *gtk.ListBoxRow {
+	var view navRowUI
+	ui.Bind(&view)
+	view.Icon.SetFromIconName(item.Icon)
+	view.Title.SetLabel(item.Title)
+	row := view.Row
 
 	// Add badge for updates row (hidden by default)
 	if item.Name == "updates" {
 		w.updateBadge = gtk.NewLabel("")
 		w.updateBadge.AddCssClass("circular")
 		w.updateBadge.AddCssClass("warning")
+		w.updateBadge.SetValign(gtk.AlignCenterValue)
 		w.updateBadge.SetVisible(false)
-		row.AddSuffix(&w.updateBadge.Widget)
+		view.Content.Append(&w.updateBadge.Widget)
 	}
 
 	// Store the page name in the row (using SetName for identification)

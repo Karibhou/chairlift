@@ -63,3 +63,12 @@ type aboutUI struct {
 	_      ui.File          `ui:"about"`
 	Dialog *adw.AboutDialog `ui:"about_dialog"`
 }
+
+// navRowUI is one sidebar row: internal/ui/nav-row.blp.
+type navRowUI struct {
+	_       ui.File         `ui:"nav-row"`
+	Row     *gtk.ListBoxRow `ui:"row"`
+	Content *gtk.Box        `ui:"content"`
+	Icon    *gtk.Image      `ui:"icon"`
+	Title   *gtk.Label      `ui:"title"`
+}
