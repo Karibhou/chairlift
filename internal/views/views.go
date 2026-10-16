@@ -235,12 +235,8 @@ type UserHome struct {
 	developerDevcontainerGate actionstate.Gate
 	gamingGroup               *adw.PreferencesGroup
 	gamingRow                 *adw.ActionRow
-	gamingComponents          []*gamingComponentRow
-	gamingInstall             *gtk.Button
-	gamingRemove              *gtk.Button
+	gamingSwitch              *gtk.Switch
 	gamingGate                actionstate.Gate
-	gamingButtons             buttonRoute
-	gamingDialogs             dialogRoute
 	developerOptions          []*developerOptionRow
 	wslBackend                string
 	wslCombo                  *adw.ComboRow

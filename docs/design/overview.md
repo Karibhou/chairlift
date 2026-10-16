@@ -678,13 +678,13 @@ ChairLift PolicyKit action for gaming mode, and none may be added.
 
 Its components are not all applications, and `internal/gaming` models the
 difference rather than assuming it away. Each entry in the stack carries a
-`flatpak.Kind` — five are `KindApplication`, and MangoHud
-(`org.freedesktop.Platform.VulkanLayer.MangoHud`) is `KindRuntime`, because
-it ships as a Vulkan-layer extension of `org.freedesktop.Platform` rather
-than as an app. `flatpak list --app` and `flatpak list --runtime` are
-mutually exclusive filters, so the inventory runs one query per
-(scope, kind) pair — four in total — and keys its result on a
-`gaming.Ref{Kind, ID}` rather than on the ID alone. An application-only
+`flatpak.Kind` — ProtonPlus, Protontricks, and GOverlay are `KindApplication`,
+and MangoHud (`org.freedesktop.Platform.VulkanLayer.MangoHud`) is
+`KindRuntime`, because it ships as a Vulkan-layer extension of
+`org.freedesktop.Platform` rather than as an app. `flatpak list --app` and
+`flatpak list --runtime` are mutually exclusive filters, so the inventory
+runs one query per (scope, kind) pair — four in total — and keys its result
+on a `gaming.Ref{Kind, ID}` rather than on the ID alone. An application-only
 inventory reported MangoHud missing however it had been installed, which
 made Enable reinstall it on every run and left Disable unable to remove the
 ref ChairLift had put there (issue #75). Failure handling follows the same
@@ -704,25 +704,22 @@ component rather than guess when neither answers. The inventory records each
 ref's installed branches per scope (`flatpak list --columns=…,branch`), and
 Disable removes every installed branch by its qualified ref.
 
-The Features page offers individual selections, not a single all-or-nothing
-switch. Enable and Disable validate the selected IDs before mutation. Enable
+The Features page offers a single clean toggle for Gaming Mode. Enable
 installs only components missing from both scopes, so a copy an earlier
-release installed per-user is not duplicated system-wide. Disable removes a
-selected component from exactly the scopes it is installed in — `--user` for
-a per-user copy, `--system` for a system copy, both when both exist — and
-never touches an unselected component; its confirmation dialog says that a
-system-wide copy goes for every account. The exception is a system copy the
-OS image declares it ships — a `[Flatpak Preinstall]` group in
-`/usr/share/flatpak/preinstall.d` or `/etc/flatpak/preinstall.d`, or a
-`flatpak` entry in `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`
-(Flatseal on Bluefin and Dakota). That copy predates gaming mode and is left
-in place: removing it would take a distro default from every account, and
-Flatpak records that uninstall as a permanent opt-out, so `flatpak
-preinstall` would not restore it. Such a component is reported as left in
-place, not removed, and a declaration that cannot be read fails the removal
-before anything runs. A component with a removable copy left is reported as a
-failure, partial outcomes stay visible, and a dry-run keeps the confirmed
-inventory unchanged.
+release installed per-user is not duplicated system-wide. Disable removes
+each installed component from exactly the scopes it is installed in — `--user`
+for a per-user copy, `--system` for a system copy, both when both exist.
+The exception is a system copy the OS image declares it ships — a
+`[Flatpak Preinstall]` group in `/usr/share/flatpak/preinstall.d` or
+`/etc/flatpak/preinstall.d`, or a `flatpak` entry in
+`/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`. That copy predates
+gaming mode and is left in place: removing it would take a distro default from
+every account, and Flatpak records that uninstall as a permanent opt-out, so
+`flatpak preinstall` would not restore it. Such a component is reported as
+left in place, not removed, and a declaration that cannot be read fails the
+removal before anything runs. A component with a removable copy left is
+reported as a failure, partial outcomes stay visible, and a dry-run keeps the
+confirmed inventory unchanged.
 
 ### Desktop integration switches (`internal/shellextensions`)
 

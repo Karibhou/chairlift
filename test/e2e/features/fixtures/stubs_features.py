@@ -22,12 +22,10 @@ CALLS_LOG = "features-calls.log"
 # internal/gaming's stack, in install order, with the listing kind each
 # component is published as (MangoHud is a runtime extension).
 GAMING_COMPONENTS = (
-    ("Steam", "com.valvesoftware.Steam", "app"),
-    ("ProtonUp-Qt", "net.davidotek.pupgui2", "app"),
+    ("ProtonPlus", "com.vysp3r.ProtonPlus", "app"),
     ("Protontricks", "com.github.Matoking.protontricks", "app"),
     ("GOverlay", "io.github.benjamimgois.goverlay", "app"),
     ("MangoHud", "org.freedesktop.Platform.VulkanLayer.MangoHud", "runtime"),
-    ("Flatseal", "com.github.tchx84.Flatseal", "app"),
 )
 
 # ubluehelper.DevGroups: membership in any one is "developer mode on".
@@ -128,7 +126,7 @@ def gaming_installed(context):
 
 @stub("features-gaming-partial")
 def gaming_partial(context):
-    """Only Steam installed: one core component of two, so gaming is off."""
+    """Only ProtonPlus installed: one core component of four, so gaming is off."""
     _fake_flatpak(context, system=GAMING_COMPONENTS[:1])
 
 

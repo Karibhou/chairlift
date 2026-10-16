@@ -405,19 +405,15 @@ const GamingCheckingSubtitle = "Checking what is installed…"
 // error names commands and application ids, so it is logged rather than shown.
 const GamingUnavailableSubtitle = "Couldn't check which gaming apps are installed."
 
-// GamingRow returns the gaming switch row text. ready reports whether the
-// apps gaming needs are all present (internal/gaming.State.Enabled), and
-// installed of total counts the whole set.
-func GamingRow(ready bool, installed, total int) Row {
+// GamingRow returns the gaming switch row text. active reports whether
+// the gaming stack is installed (internal/gaming.State.Enabled).
+func GamingRow(active bool) Row {
 	row := Row{Title: "Gaming Mode"}
-	switch {
-	case ready && installed >= total:
-		row.Subtitle = fmt.Sprintf("All %d gaming apps are installed.", total)
-	case installed > 0:
-		row.Subtitle = fmt.Sprintf("%d of %d gaming apps installed.", installed, total)
-	default:
-		row.Subtitle = "Choose the gaming apps to install. Downloads can be large."
+	if active {
+		row.Subtitle = "ProtonPlus, Protontricks, and gaming overlays are installed."
+		return row
 	}
+	row.Subtitle = "Install the tools for running Windows games, with a performance overlay. Downloads can be large."
 	return row
 }
 
@@ -428,23 +424,6 @@ func GamingWorkingSubtitle(enabled bool) string {
 		return "Installing…"
 	}
 	return "Removing…"
-}
-
-// GamingComponentStatus returns where one gaming component is installed, for
-// its row's subtitle. ChairLift installs system-wide; a copy installed only
-// for this account is one an earlier release (or the user) put there. Both
-// copies may exist, and Remove Selected removes each one it finds.
-func GamingComponentStatus(user, system bool) string {
-	switch {
-	case user && system:
-		return "Installed system-wide and for your account"
-	case system:
-		return "Installed system-wide"
-	case user:
-		return "Installed for your account"
-	default:
-		return "Not installed"
-	}
 }
 
 // GamingResultSubtitle returns the subtitle after a gaming toggle completes.
