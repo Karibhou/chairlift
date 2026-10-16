@@ -23,7 +23,7 @@ Bluefin wordmark, introduction and Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform every action. **Back** and **Next** only
 navigate. The matching conclusion quotes Edith Wharton. **Finish** saves
 completion and returns to Control Center; a save failure reports an
-error toast. **Dismiss setup**
+error toast. **Dismiss Setup**
 (or Escape) records a skip without undoing previous completion.
 
 ---
@@ -36,7 +36,7 @@ The Bluefin wordmark leads the page, with the one action button directly
 under it and a single line of status under the button: **Up to date ·
 checked at** a time, how many updates are available, or **Restart to finish
 updating**. If something went wrong, a second line says what. **System
-updates** groups System Components and Operating System; **Apps and tools**
+Updates** groups System Components and Operating System; **Apps and Tools**
 groups Applications and Developer Tools. Each row shows its own state, so you
 can see which source is holding you up without opening anything. A source
 your administrator turned off says **Disabled by administrator**; one this
