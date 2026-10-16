@@ -11,7 +11,7 @@ const (
 	AvatarChooseLabel      = "Choose…"
 	AvatarPickerTitle      = "Choose a Profile Picture"
 	AvatarApplyLabel       = "Apply"
-	AvatarPickerPrompt     = "Pick a dinosaur to preview it"
+	AvatarPickerPrompt     = "Pick a dinosaur!"
 )
 
 // AvatarCurrentRow describes the page row for the picture the account

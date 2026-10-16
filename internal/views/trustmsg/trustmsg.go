@@ -27,5 +27,5 @@ func UpgradeMessage(pkgName string, trustGroupAvailable bool) string {
 // and the command that would trust it belong in the log, not in a toast a
 // person cannot act on from the terminal-free UI.
 func BundleMessage(bundleName string) string {
-	return fmt.Sprintf("Couldn't install %s. It needs a software source this computer doesn't trust yet.", bundleName)
+	return fmt.Sprintf("Couldn't install %s. It needs a source this computer doesn't trust yet.", bundleName)
 }

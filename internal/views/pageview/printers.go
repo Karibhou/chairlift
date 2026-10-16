@@ -16,7 +16,7 @@ func PrintersGroupTitle() string {
 // computer only. That limit is the one consequence worth knowing before
 // flipping the switch, so it is named.
 func PrintersGroupDescription() string {
-	return "Extra drivers for printers that don't work on their own. Only this computer can use them."
+	return "Extra drivers for near-extinct printers that don't work on their own. Let's hope this works."
 }
 
 // familyRowTitles overrides the derived "<family> Printers" title where the

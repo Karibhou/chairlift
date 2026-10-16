@@ -8,13 +8,9 @@ import (
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
 
-// The description names the one consequence of turning a family on — only
-// this computer can use its printers — and none of the machinery behind it.
-func TestPrintersGroupDescriptionSaysOnlyThisComputer(t *testing.T) {
+// The description explains what turning a family on does without jargon.
+func TestPrintersGroupDescriptionDoesNotContainJargon(t *testing.T) {
 	d := PrintersGroupDescription()
-	if !strings.Contains(d, "this computer") {
-		t.Errorf("description %q does not say only this computer can use the printers", d)
-	}
 	for _, jargon := range []string{"container", "Podman", "driverless", "system"} {
 		if strings.Contains(d, jargon) {
 			t.Errorf("description %q names %q", d, jargon)

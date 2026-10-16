@@ -102,9 +102,9 @@ Feature: Apps destination
   Scenario: A confirmed app collection install is previewed and its button restored
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Coding Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
+    Then the "Monospace Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool."
-    And the "Coding Fonts" collection is checked
+    And the "Monospace Fonts" collection is checked
     And the "Full Desktop Suite" collection is unchecked
     When I click the "Install" button in the "Install Selected Collections" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
@@ -191,8 +191,8 @@ Feature: Apps destination
       | title |
       | just  |
     And the "just" row says "Command-line tool"
-    When I expand the "Coding Fonts" list under "App Collections"
-    Then the "Coding Fonts" list shows exactly
+    When I expand the "Monospace Fonts" list under "App Collections"
+    Then the "Monospace Fonts" list shows exactly
       | title            |
       | font-fira-code   |
       | font-jetbrains-mono |

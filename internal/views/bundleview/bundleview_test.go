@@ -68,7 +68,7 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 			id:           "artwork",
 			itemCount:    4,
 			wantTitle:    "Extra Wallpapers",
-			wantSubtitle: "Extra wallpapers, artwork, and wallpaper cycling for your desktop. Includes 4 apps and tools.",
+			wantSubtitle: "More dinosaur artwork, and wallpaper tools. Includes 4 apps and tools.",
 		},
 		{
 			name:         "curated collection Fonts",
