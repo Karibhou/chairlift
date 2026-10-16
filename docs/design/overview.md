@@ -1395,7 +1395,7 @@ The sidebar selection belongs to `navigateToPage` alone. `GtkListBox` selects
 whichever row receives keyboard focus, so Tab and the arrow keys would move the
 highlight onto a page the content does not show without ever emitting
 `row-activated`. `navigateToPage` records the resolved index in
-`Window.shownRow`, and `buildSidebar` connects one `row-selected` handler, once
+`Window.shownRow`, and `bindSidebar` connects one `row-selected` handler, once
 at build time, that re-selects that row whenever the selection lands anywhere
 else; the focus ring stays where the user moved it, and Return (or a click)
 still navigates through `row-activated`.

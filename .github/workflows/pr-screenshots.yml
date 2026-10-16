@@ -89,6 +89,12 @@ jobs:
           if [ "$head_repo" != "$GITHUB_REPOSITORY" ]; then
               echo "pull request #$PR comes from $head_repo; only branches in $GITHUB_REPOSITORY can be pushed to" >&2; exit 1
           fi
+          # The app token may bypass branch protection, so a protected head
+          # (main, a release branch) is never a push target.
+          protected="$(gh api "repos/$GITHUB_REPOSITORY/branches/$(jq -rn --arg r "$ref" '$r|@uri')" --jq .protected)"
+          if [ "$protected" != "false" ]; then
+              echo "pull request #$PR's head branch $ref is protected; refusing to push to it" >&2; exit 1
+          fi
           {
               echo "number=$PR"
               echo "ref=$ref"
@@ -107,10 +113,14 @@ jobs:
           ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
+      # No Go cache: an issue_comment run has the default branch's cache
+      # scope, and this job runs pull request code, which could otherwise
+      # seed the module cache that test.yml and release.yml restore.
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.6"
+          cache: false
 
       # Captures inside the pinned Dakota image under a private headless
       # Mutter session (test/e2e/dakota.sh); the runner supplies podman and Go.

@@ -32,7 +32,9 @@ type prScreenshotsWorkflow struct {
 //     above starts it, checked through the API, not the association;
 //   - every job's GITHUB_TOKEN is read-only, and the top level grants nothing;
 //   - capture, the one job that runs pull request code (`make screenshots`),
-//     never sees the app token and keeps no checkout credentials;
+//     never sees the app token, keeps no checkout credentials, and saves no
+//     Go cache into the default branch's cache scope;
+//   - a protected head branch is never a push target;
 //   - commit, the one job that mints the app token, runs no make, go, or
 //     script from the checkout.
 func TestPRScreenshotsNeverRunsPullRequestCodeBesideAWriteToken(t *testing.T) {
@@ -76,6 +78,15 @@ func TestPRScreenshotsNeverRunsPullRequestCodeBesideAWriteToken(t *testing.T) {
 	if !checkedPermission {
 		t.Error("resolve job does not check the commenter's repository permission")
 	}
+	refusedProtected := false
+	for _, step := range resolve.Steps {
+		if strings.Contains(step.Run, "--jq .protected") && strings.Contains(step.Run, `"$protected" != "false"`) {
+			refusedProtected = true
+		}
+	}
+	if !refusedProtected {
+		t.Error("resolve job does not refuse a protected head branch; the app token may bypass protection")
+	}
 
 	capture, ok := workflow.Jobs["capture"]
 	if !ok {
@@ -91,6 +102,12 @@ func TestPRScreenshotsNeverRunsPullRequestCodeBesideAWriteToken(t *testing.T) {
 		}
 		if strings.HasPrefix(step.Uses, "actions/checkout@") && step.With["persist-credentials"] != "false" {
 			t.Errorf("capture's checkout keeps credentials; set persist-credentials: false")
+		}
+		// An issue_comment run has the default branch's cache scope; a
+		// cache saved after pull request code ran would reach test.yml and
+		// release.yml.
+		if strings.HasPrefix(step.Uses, "actions/setup-go@") && step.With["cache"] != "false" {
+			t.Errorf("capture's setup-go caches; set cache: false")
 		}
 	}
 	if !ranScreenshots {
