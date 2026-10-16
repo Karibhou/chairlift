@@ -93,7 +93,7 @@ func (uh *UserHome) buildFreeSpaceGroup(page *adw.PreferencesPage) {
 	row.SetTitle(cleanupview.RowTitle)
 	row.SetSubtitle(cleanupview.RowSubtitle)
 
-	icon := gtk.NewImageFromIconName("edit-clear-all-symbolic")
+	icon := gtk.NewImageFromIconName("user-trash-symbolic")
 	row.AddPrefix(&icon.Widget)
 
 	button := gtk.NewButtonWithLabel(cleanupview.ButtonLabel)

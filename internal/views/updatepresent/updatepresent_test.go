@@ -427,7 +427,7 @@ func TestSourceIconMapsProviderKinds(t *testing.T) {
 		id   updateflow.SourceID
 		want string
 	}{
-		{updateflow.Applications, "system-software-install-symbolic"},
+		{updateflow.Applications, "view-grid-symbolic"},
 		{updateflow.DeveloperTools, "package-x-generic-symbolic"},
 		{updateflow.SystemComponents, "application-x-addon-symbolic"},
 		{updateflow.OperatingSystem, "drive-harddisk-system-symbolic"},

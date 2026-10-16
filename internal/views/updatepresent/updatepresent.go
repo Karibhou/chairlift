@@ -157,7 +157,7 @@ func soleItemSubtitle(item updateflow.Item) string {
 func SourceIcon(id updateflow.SourceID) string {
 	switch id {
 	case updateflow.Applications:
-		return "system-software-install-symbolic"
+		return "view-grid-symbolic"
 	case updateflow.DeveloperTools:
 		return "package-x-generic-symbolic"
 	case updateflow.SystemComponents:
