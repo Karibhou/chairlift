@@ -1096,8 +1096,8 @@ Each unit runs `ghcr.io/projectbluefin/<id>-printer-app:stable` with
 `Network=host`: PAPPL's web administration is unauthenticated and shares the
 IPP listener, so the port is reachable only from this computer. LAN clients
 cannot print to it and its DNS-SD advertisement stays inside the container;
-the group description and off-state subtitle say "this computer" rather than
-claim network sharing. `Enable` writes the unit, reloads systemd, starts the
+the group description explains driver availability without claiming network sharing.
+`Enable` writes the unit, reloads systemd, starts the
 service, and runs `systemctl --user enable --now podman-auto-update.timer`;
 a failure at any step rolls a fresh install back (stop, remove the unit,
 reload). The toggle handler (`onPrinterAppToggled`) is admitted by a

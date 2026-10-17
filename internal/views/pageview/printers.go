@@ -12,11 +12,9 @@ func PrintersGroupTitle() string {
 }
 
 // PrintersGroupDescription says what turning a family on does for a person:
-// extra drivers for printers that do not work on their own, usable from this
-// computer only. That limit is the one consequence worth knowing before
-// flipping the switch, so it is named.
+// extra drivers for printers that do not work on their own.
 func PrintersGroupDescription() string {
-	return "Extra drivers for printers that don't work on their own. Only this computer can use them."
+	return "Extra drivers for near-extinct printers that don't work on their own. Let's hope this works."
 }
 
 // familyRowTitles overrides the derived "<family> Printers" title where the

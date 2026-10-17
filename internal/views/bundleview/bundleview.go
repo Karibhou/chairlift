@@ -77,7 +77,7 @@ type catalogEntry struct {
 var catalog = map[string]catalogEntry{
 	"artwork": {
 		title:    "Extra Wallpapers",
-		summary:  "Extra wallpapers, artwork, and wallpaper cycling for your desktop.",
+		summary:  "More dinosaur artwork, and wallpaper tools.",
 		curated:  true,
 		order:    1,
 		defaults: true,
@@ -99,14 +99,14 @@ var catalog = map[string]catalogEntry{
 		members:  []string{"dakota-fonts"},
 	},
 	"fonts-dev": {
-		title:    "Coding Fonts",
+		title:    "Monospace Fonts",
 		summary:  "Fixed-width fonts made for reading code.",
 		curated:  true,
 		order:    4,
 		defaults: true,
 	},
 	"ai-tools": {
-		title:    "AI Tools",
+		title:    "Agentic Tools",
 		summary:  "AI assistants and model runners for the terminal.",
 		curated:  true,
 		order:    5,

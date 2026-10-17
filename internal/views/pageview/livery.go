@@ -15,8 +15,8 @@ const LiveryPageDescription = "Choose a profile picture and customize the icons 
 // Each section names the surface it changes rather than the old Livery
 // taxonomy. Configuration identities remain the original livery_page groups.
 const (
-	LiveryAppGridFragment = "The button that shows all your apps."
-	LiveryPanelFragment   = "The menu button in the top bar."
+	LiveryAppGridFragment = "The button that shows all apps."
+	LiveryPanelFragment   = "The menu button in the top left corner."
 	LiveryDockFragment    = "The Files app, wherever it appears."
 )
 
