@@ -52,7 +52,9 @@ command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
 IMAGE_PYTHON="$(podman run --rm --pull=missing "$IMAGE" python3 --version)"
 VENV_KEY="$(printf '%s\n%s\n' "$IMAGE_PYTHON" "$(sha256sum "$REQUIREMENTS" | cut -d' ' -f1)" | sha256sum | cut -c1-16)"
 VENV="$CACHE/chairlift-atspi-venv-$VENV_KEY"
-if [ ! -x "$VENV/bin/python" ]; then
+# Its absolute interpreter symlink may be valid only inside Dakota, not on the host.
+if ! podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
+    -v "$CACHE:$CACHE:ro" "$IMAGE" test -x "$VENV/bin/python"; then
     # Built with the container's interpreter so its site-packages (PyGObject,
     # pyatspi) are the ones the suite sees; into a temporary directory first
     # so an interrupted build never leaves a half-made venv under the key.
@@ -64,7 +66,9 @@ if [ ! -x "$VENV/bin/python" ]; then
         || { rm -rf "$VENV.partial"; exit 1; }
     # The suite only ever runs `python -m behave`, which resolves the venv
     # from its own location, so the rename is safe.
-    mv "$VENV.partial" "$VENV"
+    # Replace an unusable cache; never nest .partial inside an existing venv.
+    rm -rf "$VENV"
+    mv -T "$VENV.partial" "$VENV"
 fi
 
 CONTAINER_GOROOT="$GOROOT"

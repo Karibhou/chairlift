@@ -142,7 +142,11 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   feature's first tag (behave selects by effective tags), so a new feature
   cannot silently stop running on pull requests (add its tag to a shard). Both
   E2E jobs restore the suite venv through `.github/actions/dakota-venv`, keyed
-  on the image's Python and the pinned requirements. `dakota.sh` sets
+  on the image's Python and the pinned requirements. Cached interpreter
+  executability is checked inside Dakota, not on the host: its absolute Python
+  symlink may be absent on an Ubuntu runner. An unusable versioned cache is
+  replaced, never used as a parent directory for a nested `.partial` venv.
+  `dakota.sh` sets
   `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
   failed scenarios upload their accessibility tree and a `screen.png` in
   `atspi-results-<shard>` (`build/atspi/<tags|all>/`). Dakota harnesses
