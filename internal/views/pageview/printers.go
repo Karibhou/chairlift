@@ -59,6 +59,14 @@ func PrinterAppSubtitle(s printerapp.State, port int) string {
 	}
 }
 
+// PrinterAppUnverifiedSubtitle adds, to an installed family's subtitle, that
+// it was installed before driver signatures were checked and how to switch
+// to a checked driver. The row keeps its state first so "Running" or a
+// failure is still the first thing read.
+func PrinterAppUnverifiedSubtitle(subtitle string) string {
+	return subtitle + " Installed before ChairLift checked driver signatures: turn it off and on again to use a checked driver."
+}
+
 // PrinterAppWorkingSubtitle is shown while the switch is acting.
 func PrinterAppWorkingSubtitle(enabling bool) string {
 	if enabling {

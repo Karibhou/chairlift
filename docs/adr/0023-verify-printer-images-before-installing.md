@@ -39,7 +39,8 @@ rootless account, state volume and loopback-only network boundary unchanged.
   package API; scheduled verified refresh and Updates-page integration are
   not implemented. Users can disable/re-enable to receive a newer verified
   image. Existing units are not automatically migrated and still need that
-  action; issue #582 remains open for migration and automatic verified updates.
+  action; the Features page row of such a unit (one still carrying
+  `AutoUpdate=registry`) says so and asks the person to turn it off and on; issue #582 remains open for migration and automatic verified updates.
 - Verification failure during refresh preserves the existing unit and running
   service. Later reload/restart failure is reported but does not restore an
   old unit or image. Disabling leaves printer state intact.

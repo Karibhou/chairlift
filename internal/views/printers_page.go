@@ -33,6 +33,9 @@ type printerRow struct {
 	// state is the last state the row rendered; a failed action and a
 	// dry-run preview both restore it.
 	state printerapp.State
+	// unverified marks a unit written before signatures were checked; the
+	// subtitle asks the person to turn it off and on again (ADR-0023).
+	unverified bool
 }
 
 // printerActionTimeout bounds one enable or disable end to end. A first
@@ -67,6 +70,7 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 		facts := printerapp.Observe(app, true)
 		state := printerapp.Resolve(facts)
 		pr := &printerRow{app: app, title: pageview.PrinterFamilyRow(family)}
+		pr.unverified = facts.UnitPresent && printerapp.InstalledBeforeVerification(app)
 		pr.row = adw.NewActionRow()
 		pr.row.SetTitle(pr.title)
 		// guardedSwitch, not a bare gtk.Switch: showing the machine's real
@@ -99,7 +103,11 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 // showPrinterAppState renders one state on a row. Main thread only.
 func (uh *UserHome) showPrinterAppState(pr *printerRow, state printerapp.State) {
 	pr.state = state
-	pr.row.SetSubtitle(pageview.PrinterAppSubtitle(state, pr.app.Port()))
+	subtitle := pageview.PrinterAppSubtitle(state, pr.app.Port())
+	if pr.unverified && state.On() {
+		subtitle = pageview.PrinterAppUnverifiedSubtitle(subtitle)
+	}
+	pr.row.SetSubtitle(subtitle)
 }
 
 // probePrinterApp asks systemd and diagnostics whether an installed unit's
@@ -147,6 +155,7 @@ func (uh *UserHome) onPrinterAppToggled(pr *printerRow, enabled bool) {
 			err = printerapp.Disable(ctx, pr.app)
 		}
 		facts := printerapp.Observe(pr.app, true)
+		unverified := facts.UnitPresent && printerapp.InstalledBeforeVerification(pr.app)
 		if err == nil && !dryRun && facts.UnitPresent {
 			active, probeErr := printerapp.WaitSettled(ctx, pr.app, printerSettleWait)
 			if probeErr != nil {
@@ -163,6 +172,7 @@ func (uh *UserHome) onPrinterAppToggled(pr *printerRow, enabled bool) {
 
 		sgtk.RunOnMainThread(func() {
 			pr.toggle.widget.SetSensitive(true)
+			pr.unverified = unverified
 
 			if err != nil {
 				// The error names commands and unit files; it is logged,

@@ -1038,7 +1038,9 @@ An agent must not break these:
   Diagnostics probe the installed quadlet's `Image=`, never the moving family
   tag after a verified pin was installed.
   Existing units are not automatically migrated; disabling and re-enabling
-  installs a verified pin. Scheduled verified refresh remains unimplemented.
+  installs a verified pin. A row whose installed unit still carries
+  `AutoUpdate=registry` (`printerapp.InstalledBeforeVerification`) appends a
+  subtitle telling the person to turn it off and on again. Scheduled verified refresh remains unimplemented.
   ADR-0020 is the network boundary: PAPPL's web administration is
   unauthenticated, so the unit publishes only `127.0.0.1:<port>:<port>` and
   must never use `Network=host` or a non-loopback `PublishPort`. IPP and the

@@ -1109,7 +1109,8 @@ the group description explains driver availability without claiming network shar
 service; a reload/start failure rolls a fresh install back (stop, remove,
 reload). `Refresh` verifies before rewriting and restarting an existing unit.
 Verification failure changes neither disk nor service state. ADR-0023 records
-this change from ADR-0020: old units require disable/re-enable to migrate;
+this change from ADR-0020: old units require disable/re-enable to migrate,
+and their row's subtitle asks for it (`InstalledBeforeVerification`);
 there is no scheduled verified refresh or Updates-page integration yet. The toggle handler (`onPrinterAppToggled`) is admitted by a
 per-family `actionstate.Gate`, runs `Enable`/`Disable` off the main thread
 under a bounded context, and settles the switch from `actionmsg.PrinterApp`:
