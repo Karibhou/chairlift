@@ -110,6 +110,8 @@ are listed in [org-adrs.md](org-adrs.md).
   — static widget trees are Blueprint compiled in Dakota and committed as the
   GtkBuilder XML the pure-Go binary embeds; Go binds them by struct tag and
   connects signals; blueprints stay within the libadwaita 1.6 floor
+- [adr/0023-verify-printer-images-before-installing.md](adr/0023-verify-printer-images-before-installing.md)
+  — Verify printer image signatures and install immutable digests instead of unchecked auto-updating tags.
 
 ### Design
 
