@@ -110,7 +110,7 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   regression fails `make e2e`. Keep the harnesses sending `SIGTERM` first and
   `SIGKILL` only on timeout.
 - **The live Docker installation gate has a private native user manager.**
-  `make e2e` also runs `TestIntegrationDockerRootlessInstall` through
+  `make e2e-docker` runs `TestIntegrationDockerRootlessInstall` through
   `test/e2e/dakota.sh` with `CHAIRLIFT_DOCKER_INTEGRATION=1`. That mode refuses
   rootful Podman, starts the same pinned Dakota image with native systemd,
   and provisions temporary subordinate IDs and an isolated Homebrew prefix.
