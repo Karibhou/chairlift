@@ -183,8 +183,8 @@ func runWithTimeout(cmd *exec.Cmd, timeout time.Duration) error {
 		} else {
 			_ = cmd.Process.Kill()
 		}
-		<-done
-		return fmt.Errorf("%s did not finish within %s", cmd.Path, timeout)
+		waitErr := <-done
+		return fmt.Errorf("%s did not finish within %s (after termination: %v)", cmd.Path, timeout, waitErr)
 	}
 }
 

@@ -219,7 +219,7 @@ def no_descriptor(context):
 
 @stub("features-developer")
 def developer_options(context):
-    """The debian nsl machine an older ChairLift created (running), a running Ubuntu guest, and Docker CLI with no system daemon."""
+    """Running WSL guests and Docker CLI, but no installed rootless user daemon."""
     fake_executable(context, "nsl", _recorder(context) + """
 case "$1" in
   list) printf '%s\n' 'VM\tSTATE\tIMAGE\tRESOURCES\tDATA DISK' 'shared\trunning\t-\t4 CPUs, 8 GiB\t20 GiB' '' 'MACHINE\tSTATE\tIMAGE\tTIER\tDEFAULT' 'debian\trunning\tdebian:13\tshared\t*' ;;
@@ -236,6 +236,7 @@ esac
 exit 0
 """)
     fake_executable(context, "systemctl", _recorder(context) + """
+if [ "$1" = --user ]; then shift; fi
 case "$1" in
   show) printf '%s\n' 'LoadState=not-found' 'ActiveState=inactive' ;;
 esac
@@ -249,6 +250,26 @@ esac
 exit 0
 """)
 
+
+@stub("features-docker-active")
+def docker_active(context):
+    """A running user service with no responding Docker socket."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+if [ "$1" = --user ]; then shift; fi
+case "$1" in
+  show) printf '%s\\n' 'LoadState=loaded' 'ActiveState=active' ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+@stub("features-docker-no-session")
+def docker_no_session(context):
+    """Native systemctl's error when this account has no reachable user bus."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+echo 'Failed to connect to user scope bus via local transport: No medium found' >&2
+exit 1
+""")
 
 def _shell_extensions(context, enabled, missing=False):
     installed = "" if missing else "tailscale-gnome-qs@tailscale-qs.github.io\nsyncthing-toggle@projectbluefin.io"

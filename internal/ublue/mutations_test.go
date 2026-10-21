@@ -81,8 +81,6 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 			wantArgs: []string{ubluehelper.CommandDXDisable},
 		},
 		{name: "EnableKVMAccess", call: EnableKVMAccess, wantArgs: []string{ubluehelper.CommandKVMEnable}},
-		{name: "SetDocker enabled", call: func(ctx context.Context) error { return SetDocker(ctx, true) }, wantArgs: []string{ubluehelper.CommandDockerEnable}},
-		{name: "SetDocker disabled", call: func(ctx context.Context) error { return SetDocker(ctx, false) }, wantArgs: []string{ubluehelper.CommandDockerDisable}},
 		{
 			name:     "Restart",
 			call:     Restart,
@@ -172,8 +170,6 @@ func TestEmittedCommandsAreAllHelperSupported(t *testing.T) {
 		ubluehelper.CommandAutoDisable,
 		ubluehelper.CommandDriverSwitch,
 		ubluehelper.CommandKVMEnable,
-		ubluehelper.CommandDockerEnable,
-		ubluehelper.CommandDockerDisable,
 	}
 	for _, command := range emitted {
 		if !supported[command] {

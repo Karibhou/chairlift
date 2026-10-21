@@ -14,7 +14,7 @@ import os
 from behave import step, then
 
 import chairlift_atspi as atspi
-from stubs_features import CALLS_LOG, GAMING_COMPONENTS, STEAM_PLATFORM_BRANCH, account_is_developer
+from stubs_features import CALLS_LOG, GAMING_COMPONENTS, STEAM_PLATFORM_BRANCH, account_is_developer, docker_no_session
 from stubs_printers import quadlet_dir
 
 UBLUE_HELPER = "/usr/bin/chairlift-helper"
@@ -190,6 +190,36 @@ def step_feeds_never(context):
         return installs or None
 
     _never(started, "developer feed onboarding")
+
+
+# ---------------------------------------------------------------- Rootless Docker
+
+
+@step("Docker's user bus becomes unavailable during an engine refresh")
+def step_docker_session_disappears(context):
+    docker_no_session(context)
+    row = atspi.row_containing(_content(context), "Virtual Machine Engine")
+    atspi.focus_by_tab(context.app, lambda node: atspi.same_node(node, row), "the Virtual Machine Engine row")
+    atspi.press("space")
+    atspi.press("End")
+    atspi.press("Return")
+
+
+@then('the rootless Docker installation is previewed {count:d} time')
+@then('the rootless Docker installation is previewed {count:d} times')
+def step_docker_preview(context, count):
+    packages = ("docker", "docker-engine", "rootlesskit", "slirp4netns", "docker-compose", "lazydocker", "dive")
+    lines = [f"[DRY-RUN] Would execute: brew install {package}" for package in packages]
+    lines.extend((
+        "[DRY-RUN] would execute: dockerd-rootless-setuptool.sh [install --force]",
+        "[DRY-RUN] would execute: systemctl [--user enable --now docker.service]",
+    ))
+    def previewed():
+        output = _log(context).splitlines()
+        return all(sum(entry.endswith(line) for entry in output) == count for line in lines)
+    assert atspi.poll(previewed), \
+        f"rootless Docker preview did not run exactly {count} times: {_log(context)}"
+    assert not _journal(context), f"rootless Docker invoked a privileged helper: {_journal(context)}"
 
 
 # ---------------------------------------------------------------- fakes

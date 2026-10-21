@@ -592,8 +592,8 @@ fixed surfaces: `data/io.projectbluefin.chairlift.bootc.policy`,
 
 The fourteen ublue commands include fixed `kvm-enable`, `docker-enable`, and
 `docker-disable` actions alongside pin/unpin. The parser accepts no arbitrary
-account, service, image or command argv. Developer options stay visible when
-their installed actions are missing, with the affected switches insensitive.
+account, service, image or command argv. Privileged developer options stay
+visible when their installed actions are missing, with affected controls insensitive.
 WSL Mode defaults to nsl on Linux amd64, with Lima as an alternative backend;
 an existing Lima-only machine retains Lima. Both require accessible `/dev/kvm`;
 a new permission grant needs a new login.
@@ -602,7 +602,12 @@ image's `/usr/lib/group` defines (nss-altfiles, as rpm-ostree composes ship
 them) into `/etc/group`, GID unchanged, because `usermod -aG` edits
 `/etc/group` alone and otherwise refuses the group
 (`internal/ubluehelper.EnsureLocalGroup`).
-Docker reports ready only with an accessible live daemon socket. A confirmed
+The GUI's Docker action instead installs Homebrew's engine and rootless tools,
+configures the account's `docker.service`, and uses `systemctl --user`. It
+requires no helper or group change and reports ready only when the user socket
+answers HTTP 200 `OK`. Homebrew's `bin` and `sbin` are inherited by the setup
+tool and its generated unit. The fixed system-Docker helper actions remain
+available independently; no GUI client wrapper remains for them. A confirmed
 Developer Mode enable installs the Dev Container CLI (`devcontainer`) through
 Homebrew when available; installation failure does not reverse developer access.
 IDEs and editors are not offered here (Bazaar or the Apps page).

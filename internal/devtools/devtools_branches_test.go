@@ -308,13 +308,20 @@ func assertMode(t *testing.T, path string, want os.FileMode) {
 	}
 }
 
-func fakeSystemctl(t *testing.T, report string) {
+func fakeSystemctl(t *testing.T, report string) string {
 	t.Helper()
 	dir := t.TempDir()
+	for _, name := range []string{"newuidmap", "newgidmap"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := os.WriteFile(filepath.Join(dir, "systemctl"), []byte("#!/bin/sh\nprintf '%s' '"+report+"'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	return dir
 }
 
 func pingServer(t *testing.T, status int, body string) (string, *atomic.Int32) {
@@ -324,13 +331,16 @@ func pingServer(t *testing.T, status int, body string) (string, *atomic.Int32) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	socket := filepath.Join(dir, "socket")
+	socket := filepath.Join(dir, "docker.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var hits atomic.Int32
-	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/_ping" {
+			t.Errorf("unexpected Docker request: %s %s", r.Method, r.URL.Path)
+		}
 		hits.Add(1)
 		w.WriteHeader(status)
 		_, _ = w.Write([]byte(body))
@@ -343,7 +353,15 @@ func pingServer(t *testing.T, status int, body string) (string, *atomic.Int32) {
 // A systemd that answers without one of the requested properties must not be
 // read as "no daemon": the row would then offer an enable that cannot work.
 func TestDockerStatusRejectsAnIncompleteSystemdReport(t *testing.T) {
-	for _, report := range []string{"LoadState=loaded\n", "ActiveState=active\n", ""} {
+	for _, report := range []string{
+		"LoadState=loaded\n", "ActiveState=active\n", "",
+		"LoadState=\nActiveState=active\n",
+		"LoadState=loaded\nActiveState=\n",
+		"LoadState=garbage\nActiveState=active\n",
+		"LoadState=loaded\nActiveState=garbage\n",
+		"LoadState=loaded\nLoadState=not-found\nActiveState=active\n",
+		"LoadState=loaded\nActiveState=active\nActiveState=inactive\n",
+	} {
 		fakeSystemctl(t, report)
 		if state, err := dockerStatus(context.Background(), filepath.Join(t.TempDir(), "absent")); err == nil {
 			t.Fatalf("report %q accepted as %+v", report, state)

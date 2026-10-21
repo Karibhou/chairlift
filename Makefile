@@ -163,14 +163,24 @@ e2e: build-e2e schemas
 ifeq ($(E2E_COVERDIR),)
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
-		test/e2e/dakota.sh -v -skip '^TestATSPIBehaveSuite$$'
+		test/e2e/dakota.sh -v -skip '^(TestATSPIBehaveSuite|TestIntegrationDockerRootlessInstall)$$'
+	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
+		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
+		CHAIRLIFT_DOCKER_INTEGRATION=1 \
+		test/e2e/dakota.sh -v -count=1 -timeout 30m -run '^TestIntegrationDockerRootlessInstall$$'
 else
 	@rm -rf "$(E2E_COVERDIR)" && mkdir -p "$(E2E_COVERDIR)"
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
 		E2E_COVERDIR=$(abspath $(E2E_COVERDIR)) \
 		GOCOVERDIR=$(abspath $(E2E_COVERDIR)) \
-		test/e2e/dakota.sh -v -skip '^TestATSPIBehaveSuite$$'
+		test/e2e/dakota.sh -v -skip '^(TestATSPIBehaveSuite|TestIntegrationDockerRootlessInstall)$$'
+	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
+		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
+		E2E_COVERDIR=$(abspath $(E2E_COVERDIR)) \
+		GOCOVERDIR=$(abspath $(E2E_COVERDIR)) \
+		CHAIRLIFT_DOCKER_INTEGRATION=1 \
+		test/e2e/dakota.sh -v -count=1 -timeout 30m -run '^TestIntegrationDockerRootlessInstall$$'
 	$(GOCMD) tool covdata textfmt -i=$(abspath $(E2E_COVERDIR)) -o=e2e-coverage.out
 	@echo "==> e2e statement coverage written to e2e-coverage.out"
 endif

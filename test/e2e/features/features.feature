@@ -1,9 +1,9 @@
 @features
 Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Printers
   Optional tools are explicit choices. Gaming Mode installs gaming tools
-  system-wide with a single toggle; the fixed helper grants only the access
-  each developer option needs. Dry runs restore every control and preserve
-  observed installed state.
+  system-wide with a single toggle. Rootless Docker is installed through
+  Homebrew for this account, without administrator access. Dry runs restore
+  every control and preserve observed installed state.
 
   @stub.features-gaming-installed @stub.features-devmenu
   Scenario: Showing installed Gaming Mode and Developer Mode runs no mutation
@@ -63,12 +63,75 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Pr
     And the action journal is empty
 
   @stub.features-gaming-none @stub.features-developer
-  Scenario: Docker CLI presence never claims a daemon is available
+  Scenario: Docker CLI without a user daemon offers rootless installation
     Given ChairLift is running
     When I open the "Features" page
     Then the switch in the "Enable Docker" row is off
+    And the switch in the "Enable Docker" row accepts input
+    And the "Enable Docker" row says "Installs Docker through Homebrew and runs it for this account without administrator access."
+    And the action journal is empty
+
+  @stub.features-gaming-none @stub.features-developer
+  Scenario: Rootless Docker previews installation and stays retryable
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Enable Docker" row accepts input
+    When I toggle the switch in the "Enable Docker" row
+    Then the rootless Docker installation is previewed 1 time
+    And I see "[DRY-RUN] Preview: Enable Docker — no changes made"
+    And the switch in the "Enable Docker" row is off
+    And the switch in the "Enable Docker" row accepts input
+    When I toggle the switch in the "Enable Docker" row
+    Then the rootless Docker installation is previewed 2 times
+    And the switch in the "Enable Docker" row is off
+    And the switch in the "Enable Docker" row accepts input
+    And the action journal is empty
+    And the fake brew was never asked to "install"
+    And the systemctl tool was never asked to mutate
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-docker-active
+  Scenario: An unresponsive rootless Docker daemon remains stoppable in preview
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Enable Docker" row is on
+    And the switch in the "Enable Docker" row accepts input
+    And the "Enable Docker" row says "Docker is running, but its socket is not responding."
+    When I toggle the switch in the "Enable Docker" row
+    Then the application log contains "[DRY-RUN] would execute: systemctl [--user disable --now docker.service]"
+    And the switch in the "Enable Docker" row is on
+    And the switch in the "Enable Docker" row accepts input
+    And the action journal is empty
+    And the fake brew was never asked to "uninstall"
+    And the systemctl tool was never asked to mutate
+
+  @stub.features-gaming-none @stub.features-developer @env.XDG_RUNTIME_DIR=relative
+  Scenario: Missing rootless host prerequisites keep Docker visible but insensitive
+    Given ChairLift is running
+    When I open the "Features" page
+    Then I see "Enable Docker"
+    And the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row refuses input
-    And the "Enable Docker" row says "Docker isn't available on this system, so containers can't run here."
+    And the "Enable Docker" row says "Log out and back in to start your user session before setting up Docker."
+    And the action journal is empty
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-docker-no-session
+  Scenario: Docker without a user manager explains the missing session
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Enable Docker" row refuses input
+    And the "Enable Docker" row says "Log out and back in to start your user session before setting up Docker."
+    And the action journal is empty
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-docker-active
+  Scenario: A failed developer refresh preserves the observed running Docker switch
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Enable Docker" row is on
+    And the switch in the "Enable Docker" row accepts input
+    When Docker's user bus becomes unavailable during an engine refresh
+    Then the switch in the "Enable Docker" row refuses input
+    And the switch in the "Enable Docker" row is on
+    And the "Enable Docker" row says "Log out and back in to start your user session before setting up Docker."
     And the action journal is empty
 
   @stub.features-gaming-none

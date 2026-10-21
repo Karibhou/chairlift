@@ -67,16 +67,21 @@ if [ ! -x "$VENV/bin/python" ]; then
     mv "$VENV.partial" "$VENV"
 fi
 
+CONTAINER_GOROOT="$GOROOT"
+if [ "${CHAIRLIFT_DOCKER_INTEGRATION:-}" = 1 ]; then
+    # The live install owns its entire Homebrew prefix, including Cellar.
+    CONTAINER_GOROOT=/opt/chairlift-go
+fi
 MOUNTS=(
     -v "$ROOT:$ROOT"
     -v "$CACHE:$CACHE"
     -v "$GOMODCACHE:$GOMODCACHE"
     -v "$GOCACHE:$GOCACHE"
-    -v "$GOROOT:$GOROOT:ro"
+    -v "$GOROOT:$CONTAINER_GOROOT:ro"
 )
 ENVIRONMENT=(
     -e HOME=/tmp/home
-    -e PATH="$GOROOT/bin:/usr/bin:/usr/sbin"
+    -e PATH="$CONTAINER_GOROOT/bin:/usr/bin:/usr/sbin" -e GOROOT="$CONTAINER_GOROOT"
     -e GOMODCACHE="$GOMODCACHE" -e GOCACHE="$GOCACHE"
     -e GOTOOLCHAIN=local
     -e CHAIRLIFT_ATSPI_PYTHON="$VENV/bin/python"
@@ -109,6 +114,41 @@ done
 for name in CHAIRLIFT_ATSPI_TAGS CHAIRLIFT_ATSPI_KNOWN_ISSUES; do
     [ -n "${!name:-}" ] && ENVIRONMENT+=(-e "$name=${!name}")
 done
+
+# The live Docker gate needs a real delegated user manager and nested UID maps.
+# --privileged is permitted ONLY inside rootless Podman: it removes the outer
+# container's seccomp/cgroup restrictions without acquiring host root powers.
+if [ "${CHAIRLIFT_DOCKER_INTEGRATION:-}" = 1 ]; then
+    [ "$(podman info --format '{{.Host.Security.Rootless}}')" = true ] || {
+        echo "Docker integration requires rootless Podman; refusing privileged host-root container" >&2
+        exit 1
+    }
+    MOUNTS+=(
+        -v "$ROOT:/opt/chairlift-checkout"
+        -v "$GOMODCACHE:/opt/chairlift-gomodcache"
+        -v "$GOCACHE:/opt/chairlift-gocache"
+        -v "$VENV:/opt/chairlift-atspi-venv:ro"
+    )
+    ENVIRONMENT+=(
+        -e GOMODCACHE=/opt/chairlift-gomodcache -e GOCACHE=/opt/chairlift-gocache
+        -e CHAIRLIFT_ATSPI_PYTHON=/opt/chairlift-atspi-venv/bin/python
+    )
+    NAME="chairlift-docker-e2e-$$"
+    cleanup_docker() { podman rm --force "$NAME" >/dev/null; }
+    trap cleanup_docker EXIT
+    podman run --detach --name "$NAME" --pull=missing --userns=keep-id --user 0 \
+        --privileged --systemd=always --tmpfs /tmp:rw,mode=1777 \
+        --mount type=bind,source=/dev/null,destination=/proc/cmdline,ro \
+        --mount type=bind,source=/usr/bin/false,destination=/usr/libexec/bootc-update-stage,ro \
+        --tmpfs /usr/share/chairlift:ro,notmpcopyup \
+        "${MOUNTS[@]}" "${ENVIRONMENT[@]}" -e CHAIRLIFT_DOCKER_INTEGRATION=1 \
+        -w /opt/chairlift-checkout "$IMAGE" /usr/lib/systemd/systemd --unit=multi-user.target
+    podman exec --user 0 "$NAME" bash /opt/chairlift-checkout/test/e2e/docker_fixture.sh "$(id -u)" "$(id -g)" "$ROOT"
+    podman exec --user "$(id -u):$(id -g)" --workdir "$ROOT" "${ENVIRONMENT[@]}" \
+        -e XDG_RUNTIME_DIR=/tmp/chairlift-docker-runtime -e CHAIRLIFT_DOCKER_INTEGRATION=1 "$NAME" \
+        "$CONTAINER_GOROOT/bin/go" test "$@" ./test/e2e
+    exit $?
+fi
 
 exec podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
     --tmpfs /tmp:rw,mode=1777 \
