@@ -69,7 +69,7 @@ so they cost nothing on any other host.
 
 ### 🔄 Unified Updates
 
-The Updates page leads with the system's status — "System is up to date", or
+The Updates page leads with the system's status — "Up to date · checked at …", or
 how many updates are waiting — above an **Update Sources** list of the four
 things that can be updated: Applications, Developer Tools, System Components,
 and Operating System. One primary action covers all of them: **Check Again**
@@ -277,9 +277,10 @@ chairlift
 2. **Apps**: Manage installed Homebrew packages, search for formulae and
    casks, install app collections, and launch the configured external Flatpak
    manager
-3. **Agents**: Run a language model on this computer
+3. **Agents**: Run a language model on this computer, plus Troubleshooting
+   with Goose
 4. **Features**: Enable, disable, and update configured system features, plus
-   Developer Mode, Gaming Mode, and Enhanced Troubleshooting
+   Developer Mode and Gaming Mode
 5. **Livery**: Choose the icons shown on the app-grid button, the top-bar menu,
    and Files — a personal brand from Simple Icons, a foundation mark, or a CNCF
    project's artwork, optionally advancing at each login
@@ -386,7 +387,7 @@ migrated in memory to Updates where applicable; see
 [legacy configuration compatibility](CONFIG.md#legacy-system-page-compatibility).
 Retired v0.12.x `maintenance_page`, `updates_page`, and `features_page` groups
 are also validated, then ignored (`features_page.troubleshooting_group` is
-migrated to Help); see
+migrated to Agents); see
 [legacy group compatibility](CONFIG.md#legacy-maintenance-updates-and-features-group-compatibility).
 
 ---
