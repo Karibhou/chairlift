@@ -8,6 +8,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
+
 // PrintersGroupTitle is the Features page's printer applications heading.
 func PrintersGroupTitle() string {
 	return "Printers"
