@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
-
 // PrintersGroupTitle is the Features page's printer applications heading.
 func PrintersGroupTitle() string {
 	return "Printers"
@@ -64,7 +64,7 @@ func PrinterAppSubtitle(s printerapp.State, port int) string {
 // to a checked driver. The row keeps its state first so "Running" or a
 // failure is still the first thing read.
 func PrinterAppUnverifiedSubtitle(subtitle string) string {
-	return subtitle + " Installed before ChairLift checked driver signatures: turn it off and on again to use a checked driver."
+	return subtitle + " Installed before " + branding.AppName + " checked driver signatures: turn it off and on again to use a checked driver."
 }
 
 // PrinterAppWorkingSubtitle is shown while the switch is acting.

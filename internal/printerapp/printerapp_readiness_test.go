@@ -157,7 +157,7 @@ func TestResolveNeverReportsReadyFromUnitPresenceAlone(t *testing.T) {
 
 // A unit written before signatures were checked still carries the registry
 // auto-update label; one written by Enable today never does (#582).
-func TestInstalledBeforeVerificationRecognisesOnlyAutoUpdatingUnits(t *testing.T) {
+func TestLegacyUnitRecognisesOnlyAutoUpdatingUnits(t *testing.T) {
 	dir, _ := stubUnitDir(t)
 	app := Select(Families()[0])
 
