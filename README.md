@@ -388,7 +388,7 @@ migrated in memory to Updates where applicable; see
 Retired v0.12.x `maintenance_page`, `updates_page`, and `features_page` groups
 are also validated, then ignored (`features_page.troubleshooting_group` is
 migrated to Agents); see
-[legacy group compatibility](CONFIG.md#legacy-maintenance-updates-and-features-group-compatibility).
+[legacy group compatibility](CONFIG.md#legacy-maintenance-updates-features-and-apps-group-compatibility).
 
 ---
 
