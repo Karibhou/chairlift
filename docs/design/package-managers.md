@@ -660,7 +660,7 @@ The coordinator runs optional post-update maintenance only after live completed
 source work with no failed/pending updates and with the user's
 `MaintenanceAfterUpdates` preference enabled. While it runs, `Snapshot.Maintaining`
 keeps the phase `PhaseUpdating` with no action, so the panel shows the cleanup
-step and the progress bar instead of "System is up to date" before cleanup
+step and the progress bar instead of "Up to date · checked at …" before cleanup
 (which may prompt for a password) has finished. Manual cleanup presents every
 step through `cleanupview`; reclaimed bytes require two successful readings
 and the minimum reportable difference. Preview never reports measured savings.
