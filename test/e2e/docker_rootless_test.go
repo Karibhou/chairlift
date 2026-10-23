@@ -17,7 +17,7 @@ import (
 // the live switch, then checks both the native socket and observed UI state.
 func TestIntegrationDockerRootlessInstall(t *testing.T) {
 	if os.Getenv("CHAIRLIFT_DOCKER_INTEGRATION") != "1" {
-		t.Fatal("run through CHAIRLIFT_DOCKER_INTEGRATION=1 test/e2e/dakota.sh: a private native user manager and subordinate UID maps are required")
+		t.Skip("run through CHAIRLIFT_DOCKER_INTEGRATION=1 test/e2e/dakota.sh: a private native user manager and subordinate UID maps are required")
 	}
 	app := filepath.Join(e2eBuildDir(t), "e2e", "chairlift")
 	requireExecutable(t, app)
