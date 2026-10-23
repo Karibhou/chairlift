@@ -69,7 +69,10 @@ index when the tag names one.
 Newly installed units have no `AutoUpdate=registry`, and ChairLift no longer
 enables Podman's timer. It does not disable a shared timer used by other
 containers. Existing units are not automatically migrated: turn the family
-off and back on to install a verified pin. `Refresh` is a verified package
+off and back on to install a verified pin. The Features page row of a family
+whose installed unit still carries `AutoUpdate=registry`
+(`InstalledBeforeVerification`) says so in its subtitle and asks for exactly
+that off-and-on, so an unchecked older install is not silent. `Refresh` is a verified package
 API, not a scheduled job or an Updates-page action. Automatic verified refresh
 and migration remain tracked by issue #582; installed pins otherwise remain
 fixed until disable/re-enable or an explicit API refresh. Diagnostic image

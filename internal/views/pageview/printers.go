@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
 
@@ -57,6 +58,14 @@ func PrinterAppSubtitle(s printerapp.State, port int) string {
 	default:
 		return "Turn on to use these printers from this computer."
 	}
+}
+
+// PrinterAppUnverifiedSubtitle adds, to an installed family's subtitle, that
+// it was installed before driver signatures were checked and how to switch
+// to a checked driver. The row keeps its state first so "Running" or a
+// failure is still the first thing read.
+func PrinterAppUnverifiedSubtitle(subtitle string) string {
+	return subtitle + " Installed before " + branding.AppName + " checked driver signatures: turn it off and on again to use a checked driver."
 }
 
 // PrinterAppWorkingSubtitle is shown while the switch is acting.

@@ -125,3 +125,21 @@ func TestPrinterAppFailureToastNamesTheRowAndDoesNotClaimAStop(t *testing.T) {
 		t.Errorf("failed-enable toast = %q", on)
 	}
 }
+
+// A family installed before signatures were checked keeps its state first
+// and then says, without jargon, how to switch to a checked driver (#582).
+func TestPrinterAppUnverifiedSubtitleKeepsStateAndSaysWhatToDo(t *testing.T) {
+	base := PrinterAppSubtitle(printerapp.StateReady, 18010)
+	got := PrinterAppUnverifiedSubtitle(base)
+	if !strings.HasPrefix(got, base) {
+		t.Errorf("subtitle %q does not lead with the state %q", got, base)
+	}
+	if !strings.Contains(got, "turn it off and on again") {
+		t.Errorf("subtitle %q does not say what to do", got)
+	}
+	for _, jargon := range []string{"cosign", "digest", "registry", "AutoUpdate", "quadlet", "Podman"} {
+		if strings.Contains(got, jargon) {
+			t.Errorf("subtitle %q names %q", got, jargon)
+		}
+	}
+}
