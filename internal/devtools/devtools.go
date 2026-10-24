@@ -1,6 +1,6 @@
 // Package devtools implements the user-scope parts of Bluefin's documented
-// developer workstation: WSL Mode (nsl or Lima) and Docker CLI tools.
-// Only fixed ublue helper commands grant host access or control Docker.
+// developer workstation: WSL Mode (nsl or Lima) and rootless Docker.
+// Only fixed ublue helper commands grant host virtualization access.
 package devtools
 
 import (
@@ -131,6 +131,7 @@ func command(ctx context.Context, mutate bool, program string, args ...string) (
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Env = homebrew.WithBrewPath(os.Environ(), homebrew.ExecutablePath())
 	cmd.WaitDelay = 5 * time.Second
 	var capture interface {
 		io.Writer
@@ -560,37 +561,80 @@ type DockerState struct {
 	Available bool
 	Active    bool
 	Ready     bool
+	// Unavailable explains missing host prerequisites, not a missing install.
+	Unavailable string
 }
 
-// DockerStatus reads the system daemon independently of the optional CLI.
-// Ready requires an accessible local socket that answers Docker's ping.
+const dockerSessionUnavailable = "Log out and back in to start your user session before setting up Docker."
+
+// DockerStatus observes only this account's rootless service and socket.
+// A missing user unit is installable; CLI presence is never readiness.
 func DockerStatus(ctx context.Context) (DockerState, error) {
-	return dockerStatus(ctx, "/var/run/docker.sock")
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if !filepath.IsAbs(runtimeDir) {
+		return dockerStatus(ctx, "")
+	}
+	return dockerStatus(ctx, filepath.Join(runtimeDir, "docker.sock"))
+}
+
+func rootlessDockerUnavailable(goos, runtimeDir string, lookup func(string) (string, error)) string {
+	if goos != "linux" {
+		return "Rootless Docker requires Linux."
+	}
+	if !filepath.IsAbs(runtimeDir) {
+		return dockerSessionUnavailable
+	}
+	for _, tool := range []string{"newuidmap", "newgidmap"} {
+		if _, err := lookup(tool); err != nil {
+			return "Rootless Docker needs newuidmap and newgidmap from your operating system."
+		}
+	}
+	return ""
 }
 
 func dockerStatus(ctx context.Context, socket string) (DockerState, error) {
 	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
-	output, err := command(ctx, false, "systemctl", "show", "docker.service", "--property=LoadState,ActiveState")
+	state := DockerState{Unavailable: rootlessDockerUnavailable(runtime.GOOS, filepath.Dir(socket), exec.LookPath)}
+	output, err := command(ctx, false, "systemctl", "--user", "show", "docker.service", "--property=LoadState,ActiveState")
 	if err != nil {
-		return DockerState{}, err
+		if strings.Contains(output, "Failed to connect") && strings.Contains(output, "bus") {
+			if state.Unavailable == "" {
+				state.Unavailable = dockerSessionUnavailable
+			}
+			return state, &PrerequisiteError{Message: state.Unavailable, Err: err}
+		}
+		return state, err
 	}
-	state := DockerState{}
-	loadSeen, activeSeen := false, false
+	var load, active string
 	for line := range strings.SplitSeq(output, "\n") {
-		loadSeen = loadSeen || strings.HasPrefix(line, "LoadState=")
-		activeSeen = activeSeen || strings.HasPrefix(line, "ActiveState=")
-		if line == "LoadState=loaded" {
-			state.Available = true
-		}
-		if line == "ActiveState=active" {
-			state.Active = true
+		key, value, _ := strings.Cut(line, "=")
+		switch key {
+		case "LoadState":
+			if load != "" || value == "" {
+				return state, errors.New("docker user service reported an invalid LoadState")
+			}
+			load = value
+		case "ActiveState":
+			if active != "" || value == "" {
+				return state, errors.New("docker user service reported an invalid ActiveState")
+			}
+			active = value
 		}
 	}
-	if !loadSeen || !activeSeen {
-		return DockerState{}, errors.New("docker daemon state was not reported by systemd")
+	switch load {
+	case "loaded", "not-found", "masked", "error", "bad-setting", "merged", "stub":
+	default:
+		return state, errors.New("docker user service did not report a valid LoadState")
 	}
-	if !state.Active {
+	switch active {
+	case "active", "reloading", "inactive", "failed", "activating", "deactivating", "maintenance", "refreshing":
+	default:
+		return state, errors.New("docker user service did not report a valid ActiveState")
+	}
+	state.Available = load == "loaded"
+	state.Active = active == "active"
+	if !state.Active || !filepath.IsAbs(socket) {
 		return state, nil
 	}
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -613,22 +657,36 @@ func dockerStatus(ctx context.Context, socket string) (DockerState, error) {
 }
 
 func SetDocker(ctx context.Context, enabled bool, progress func(string)) error {
+	state, err := DockerStatus(ctx)
+	if err != nil {
+		return err
+	}
 	if enabled {
-		state, err := DockerStatus(ctx)
-		if err != nil {
-			return err
-		}
-		if !state.Available {
-			return errors.New("the base image does not provide Docker's daemon; installing its CLI cannot enable containers")
+		if state.Unavailable != "" {
+			return &PrerequisiteError{Message: state.Unavailable, Err: errors.New(state.Unavailable)}
 		}
 		if progress != nil {
-			progress("Installing Docker tools…")
+			progress("Installing rootless Docker…")
 		}
-		for _, pkg := range []string{"docker", "docker-compose", "lazydocker", "dive"} {
+		for _, pkg := range []string{"docker", "docker-engine", "rootlesskit", "slirp4netns", "docker-compose", "lazydocker", "dive"} {
 			if err := homebrew.Install(pkg, false); err != nil {
 				return err
 			}
 		}
+		// Keep an accessible system daemon untouched while installing this user's daemon.
+		if output, err := command(ctx, true, "dockerd-rootless-setuptool.sh", "install", "--force"); err != nil {
+			if strings.Contains(output, "Missing system requirements") {
+				return &PrerequisiteError{
+					Message: "Ask your administrator to configure subordinate user/group IDs and networking support for rootless Docker.",
+					Err:     err,
+				}
+			}
+			return err
+		}
+	}
+	operation := "disable"
+	if enabled {
+		operation = "enable"
 	}
 	if progress != nil {
 		if enabled {
@@ -637,5 +695,21 @@ func SetDocker(ctx context.Context, enabled bool, progress func(string)) error {
 			progress("Stopping Docker…")
 		}
 	}
-	return ublue.SetDocker(ctx, enabled)
+	if _, err := command(ctx, true, "systemctl", "--user", operation, "--now", "docker.service"); err != nil {
+		return err
+	}
+	if dryrun.Enabled() {
+		return nil
+	}
+	state, err = DockerStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if enabled && !state.Ready {
+		return errors.New("rootless Docker's socket did not respond after starting the user service")
+	}
+	if !enabled && (state.Active || state.Ready) {
+		return errors.New("rootless Docker is still running after stopping the user service")
+	}
+	return nil
 }

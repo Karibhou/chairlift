@@ -682,7 +682,7 @@ surface is not permission to make the fixed provider helpers configurable.
 ## Developer workstation and gaming components
 
 [`internal/devtools`](../../internal/devtools/devtools.go) owns WSL backends
-and Docker CLI setup under `features_page.dx_group`. The developer-access switch
+and rootless Docker setup under `features_page.dx_group`. The developer-access switch
 does not install editors or switch to a different OS image (editors and IDEs
 are installed via Bazaar or the Apps page). A confirmed Developer Mode enable
 installs the Dev Container CLI (`devcontainer`) when Homebrew is available.
@@ -713,10 +713,28 @@ enables autostart and verifies `limactl shell ubuntu true`. Its disable removes
 autostart and stops Ubuntu without deleting its disk. A listed/running VM
 alone is not shell readiness.
 
-Docker readiness needs an accessible local socket answering `/_ping`, not
-installed tools; fixed helper words own the daemon lifecycle and invoking
-account's access. View mutations share `developerGate` and render post-action
-observations instead of assuming the requested state.
+Docker's GUI path is unprivileged and rootless. `devtools.SetDocker` installs
+`docker`, `docker-engine`, `rootlesskit`, `slirp4netns`, `docker-compose`,
+`lazydocker`, and `dive` through the existing Homebrew mutation boundary,
+then runs `dockerd-rootless-setuptool.sh install --force` and
+`systemctl --user enable --now docker.service`. The fixed `--force` permits
+coexistence with an accessible system Docker socket; it never stops or changes
+that daemon. Live readiness is still mandatory. The setup command inherits
+Homebrew's `bin` and `sbin`, because the engine resolves `runc` from `sbin`.
+`DockerStatus` reads the user unit and pings `$XDG_RUNTIME_DIR/docker.sock`;
+only HTTP 200 `OK` is ready. It never observes a root system daemon or an
+arbitrary `DOCKER_HOST`. A missing unit is installable, not an unsupported host;
+missing UID-map executables or an unreachable user bus remain visible
+prerequisites. A missing bus is still a failed observation: its original error
+is preserved, and the view must not replace previously observed active state.
+Setup-only missing OS requirements use `PrerequisiteError` to report the
+administrator's subordinate-ID/networking configuration action.
+Disable stops/disables the user unit and keeps packages, the unit, and data.
+Live completion re-reads state and fails if the requested readiness/stopped
+state is not observed. Dry-run executes no mutations. The fixed privileged
+system-Docker helper commands and policies remain unchanged and separate from
+this GUI path. View mutations share `developerGate`, reset on every result,
+and render post-action observations on the GTK main thread.
 
 [`internal/gaming`](../../internal/gaming/gaming.go) manages the gaming tools
 stack (ProtonPlus, Protontricks, GOverlay, MangoHud). Enable installs missing

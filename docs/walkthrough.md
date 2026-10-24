@@ -196,10 +196,12 @@ reader, the file, or anything you imported from it.
 Developer options also offer **WSL Mode** (nsl persistent Linux machines by
 default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64)
 and **Enable Docker**. WSL needs hardware virtualization and access to
-`/dev/kvm`; permission grants require a new login. Docker needs the base
-image's daemon and a socket this session can actually access; installing CLI
-tools is not readiness. Missing installed helper actions leave the affected
-switch visible but locked with its prerequisite explained.
+`/dev/kvm`; permission grants require a new login. Docker installs its engine
+and tools through Homebrew and runs rootlessly for this account, without
+administrator access. A ready Docker socket, not installed CLI tools, confirms
+success. Turning it off keeps your containers and installed packages. Missing
+UID-map tools or an unavailable user session keep the switch visible but locked,
+with an explanation; a missing Docker installation can be installed with one click.
 Use **Virtual Machine Engine** to choose the built-in engine or Lima;
 both run Ubuntu. An existing Lima Ubuntu machine is kept as the choice when no
 built-in machine exists, rather than creating a second one. Likewise, a Debian
@@ -362,9 +364,10 @@ RemoteDesktop API and frames through its ScreenCast API. Always `--dry-run`,
 so nothing on the capture machine changes. Hardware the runner doesn't have
 is stubbed, and `make ci` checks no released binary can read those stubs.
 
-The capture session has no Docker daemon and is not a booted OS-update
-target, so those controls disclose their unavailability instead of
-pretending an operation was tested. It needs podman and Go on the host.
+The capture session is not a booted OS-update target, and its Docker session
+prerequisites may be unavailable. A dry-run capture never installs or starts
+Docker; the separate live Docker integration gate proves that path. Capture
+needs podman and Go on the host.
 
 Run it locally when something's appearance changes and you want to preview
 before a release. It isn't regenerated per commit, since font and theme

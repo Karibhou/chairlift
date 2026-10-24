@@ -49,7 +49,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `applications_page` | `brew_group` | Apps installed casks then explicitly requested formulae, followed by Brewfile export; `loadHomebrewPackages`, `runHomebrewUninstall`, `runHomebrewPin`, `onBrewBundleDumpClicked` |
 | `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
-| `features_page` | `dx_group` | Features Developer Mode, WSL/Docker and selected IDE/editor installs; `onDeveloperToggled` / `onDeveloperOption`; fixed helper plus user-scope `internal/devtools` |
+| `features_page` | `dx_group` | Features Developer Mode, WSL, and rootless Docker; `onDeveloperToggled` / `onDeveloperOption`; fixed helper for developer/KVM access, user-scope `internal/devtools` for Docker |
 | `features_page` | `gaming_group` | Features gaming tools toggle; `onGamingToggled`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` lifecycle and readiness |
 | `agents_page` | `agents_group` | Agents service, the active model selector and the Manage Models link to llmman's own page; `internal/aistack`, `internal/contribute` |
@@ -115,9 +115,11 @@ Provider-specific safety remains with each live owner:
   PolicyKit) and `stage_feeds` (a user-data file) are opt-in
   work; their failures do not reverse or misreport the permission promotion.
   WSL defaults to nsl (Linux amd64), with Lima available explicitly and retained
-  for an existing Lima-only machine. Both need KVM access; Docker requires an
-  actually ready socket. Missing helper actions leave affected options visible
-  but insensitive.
+  for an existing Lima-only machine. Both need KVM access. Docker installs its
+  engine through Homebrew and runs rootlessly in a user service; readiness
+  requires its actual user socket. Missing UID-map tools or an unreachable user
+  session leave Docker visible but insensitive; missing helper actions do the
+  same for the privileged developer options.
 - Gaming distinguishes applications/runtimes and user/system scope, installs
   system-wide with a single toggle, and removes each component from every
   scope it is in when disabled — leaving a system copy the image ships in

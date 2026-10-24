@@ -143,15 +143,24 @@ to ChairLift's log, which is where to look when filing a bug report.
 Developer options include WSL Mode (an Ubuntu machine in systemd-vmspawn via
 nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
 Lima supports amd64 and arm64. Both require hardware virtualization and
-`/dev/kvm` access. The group also offers the base image's
-Docker daemon. A confirmed Developer Mode enable also installs the Dev Container
-CLI (`devcontainer`) when Homebrew is available; an install failure does not
-reverse developer access. IDEs and editors are installed from Bazaar
-or the Apps page, not from this group. Missing fixed helper actions keep affected switches discoverable but
-insensitive. KVM permission requires a new login; Docker readiness requires
-the real daemon socket to be accessible, not just installed CLI tools. These
-privileged operations use only `kvm-enable`, `docker-enable`, and
-`docker-disable` with fixed argv and the account derived from `PKEXEC_UID`.
+`/dev/kvm` access. **Enable Docker** installs the CLI, `docker-engine`,
+rootlesskit, slirp4netns, Docker Compose, lazydocker, and dive through Homebrew.
+It configures a rootless `docker.service` for this account, without administrator
+access or developer-group changes. It needs a running user session and the OS's
+`newuidmap`/`newgidmap` helpers; the setup tool validates subordinate UID/GID
+configuration. Readiness requires the account's `$XDG_RUNTIME_DIR/docker.sock`
+to answer Docker's ping. An active unit or installed CLI alone is not ready.
+Turning Docker off stops/disables only the user service and retains packages,
+the unit, and container data. Missing UID-map tools or an unreachable user session
+leave the control visible but insensitive with an explanation. The setup tool
+reports missing subordinate-ID or networking configuration as an administrator
+requirement; after it is fixed, installation can be retried.
+A confirmed Developer Mode enable also installs the Dev Container CLI
+(`devcontainer`) when Homebrew is available; an install failure does not reverse
+developer access. IDEs and editors are installed from Bazaar or Apps. The fixed
+`kvm-enable` action still grants KVM access, effective after a new login. The
+existing system-Docker helper commands and policies remain installed, but this
+rootless GUI action does not invoke them.
 
 The **Virtual Machine Engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting
 YAML. `wsl_backend` supplies the initial choice; an existing Lima Ubuntu machine

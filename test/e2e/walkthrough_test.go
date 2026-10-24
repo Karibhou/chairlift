@@ -107,8 +107,8 @@ func TestWalkthroughScreenshots(t *testing.T) {
 		}
 	case <-time.After(walkthroughTimeout):
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		<-done
-		t.Fatalf("walkthrough did not finish within %s\noutput:\n%s", walkthroughTimeout, output.String())
+		waitErr := <-done
+		t.Fatalf("walkthrough did not finish within %s (after termination: %v)\noutput:\n%s", walkthroughTimeout, waitErr, output.String())
 	}
 
 	if !strings.Contains(output.String(), "walkthrough complete") {

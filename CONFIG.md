@@ -173,11 +173,15 @@ section above); administrators can remove them when convenient.
 - `printers_group`: Printer applications; one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`, with no `pkexec` route (shown only when `podman` is on `$PATH`). Each unit runs its family's `ghcr.io/projectbluefin/<id>-printer-app:stable` image and is kept current by `podman-auto-update.timer`, which turning a family on enables. The application is published on `127.0.0.1` only ([ADR-0020](docs/adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)): its unauthenticated settings page and IPP are reachable only from this computer (`http://localhost:<port>/`, `ipp://localhost:<port>/ipp/print`), so other computers on the network cannot print to it and it is not advertised over DNS-SD. The rows evaluate systemd state, journal logs, and container images to diagnose and surface actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator
 
 The Developer group also offers WSL Mode (nsl by default, with Lima as alternative)
-and Docker. nsl requires an x86-64 Linux host; Lima supports amd64 and arm64.
-Both require hardware virtualization and access to `/dev/kvm`. Missing fixed
-helper actions disable only affected switches, not their discoverability.
-KVM permission changes require a new login; Docker needs an accessible daemon
-socket for this session. No user-configurable privileged argv is accepted.
+and rootless Docker. nsl requires an x86-64 Linux host; Lima supports amd64 and
+arm64. Both require hardware virtualization and access to `/dev/kvm`. Missing
+fixed helper actions disable only the affected privileged switches, not their
+discoverability; KVM permission changes require a new login. Docker installs its
+engine and tools through Homebrew and manages this account's user service,
+without a helper or group change. It requires native UID-map helpers and a
+user session; readiness comes from `$XDG_RUNTIME_DIR/docker.sock`, not CLI
+presence. Disable keeps the installation and data. No user-configurable
+privileged argv is accepted.
 The **Virtual Machine Engine** chooser (Built-in for nsl, or Lima) changes the backend used in the current window;
 `wsl_backend` configures the initial choice. With the nsl default, an existing
 Lima Ubuntu machine and no ChairLift nsl machine select Lima instead of creating

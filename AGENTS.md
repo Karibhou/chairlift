@@ -109,6 +109,17 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   asserts the `main: application exited` marker after its `SIGTERM`, so a
   regression fails `make e2e`. Keep the harnesses sending `SIGTERM` first and
   `SIGKILL` only on timeout.
+- **The live Docker installation gate has a private native user manager.**
+  `make e2e-docker` runs `TestIntegrationDockerRootlessInstall` through
+  `test/e2e/dakota.sh` with `CHAIRLIFT_DOCKER_INTEGRATION=1`. That mode refuses
+  rootful Podman, starts the same pinned Dakota image with native systemd,
+  and provisions temporary subordinate IDs and an isolated Homebrew prefix.
+  Its `--privileged` flag applies only inside rootless Podman's user namespace;
+  it grants no host root and mounts no host user bus or Docker socket. Preserve
+  Dakota's native UID-map file capabilities. The live AT-SPI click installs
+  actual packages, verifies rootless Docker's socket and observed ready UI,
+  then disables it while preserving its installation and data. Ordinary
+  accessibility scenarios remain dry-run and run in the unprivileged fixture.
 - **Every destination is driven through AT-SPI, on Dakota.** `make e2e-atspi`
   runs `TestATSPIBehaveSuite` — the behave + dogtail suite in
   `test/e2e/features/`, in projectbluefin/testsuite's shape — through
@@ -131,7 +142,11 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   feature's first tag (behave selects by effective tags), so a new feature
   cannot silently stop running on pull requests (add its tag to a shard). Both
   E2E jobs restore the suite venv through `.github/actions/dakota-venv`, keyed
-  on the image's Python and the pinned requirements. `dakota.sh` sets
+  on the image's Python and the pinned requirements. Cached interpreter
+  executability is checked inside Dakota, not on the host: its absolute Python
+  symlink may be absent on an Ubuntu runner. An unusable versioned cache is
+  replaced, never used as a parent directory for a nested `.partial` venv.
+  `dakota.sh` sets
   `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
   failed scenarios upload their accessibility tree and a `screen.png` in
   `atspi-results-<shard>` (`build/atspi/<tags|all>/`). Dakota harnesses
@@ -665,9 +680,10 @@ An agent must not break these:
   bare `"brew"` at an exec site, and no private copy of the fallback path.
   Resolving brew is not enough for its children: a cask preflight runs tools
   beside brew by bare name (`rpm2cpio | cpio` for `goose-linux`), and a
-  direct launch gives them no Homebrew on `$PATH`. `runBrewCommandAt` and
-  the Goose launch's `llmman launch` therefore run with
-  `homebrew.WithBrewPath`, which puts brew's directory first on `PATH`.
+  direct launch gives them no Homebrew on `$PATH`. Homebrew commands,
+  developer-tool commands, and the Goose launch use `homebrew.WithBrewPath`,
+  which supplies the resolved prefix's `bin` and `sbin` without duplicating
+  existing entries. Rootless Docker needs `sbin` for Homebrew's `runc`.
 - **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
@@ -746,11 +762,23 @@ An agent must not break these:
   choice is not stored: `wsl_backend` sets the default, and the first read
   follows an existing Lima machine when no managed nsl machine exists
   (`devtools.ResolveBackend`). A running machine stays stoppable even when
-  the start prerequisites are unmet. Docker uses the
-  fixed enable/disable actions for its system daemon and requires actual socket
-  readiness for this session, not installed CLI tools alone. Missing installed
-  helper actions leave the affected switches insensitive with an explanation
-  rather than hiding the options. A confirmed Developer Mode enable installs
+  the start prerequisites are unmet. Docker installs `docker-engine`, the CLI,
+  rootlesskit, slirp4netns, and the existing Docker tools through Homebrew,
+  then uses `dockerd-rootless-setuptool.sh install --force` and the account's
+  `systemctl --user` Docker service. `--force` permits coexistence with a system
+  Docker socket without changing that daemon. It requires native UID-map helpers and
+  a user session; readiness requires HTTP 200 `OK` from
+  `$XDG_RUNTIME_DIR/docker.sock`, never CLI presence or an active unit alone.
+  Missing installation is actionable; missing UID-map tools or an unreachable
+  user session leave the option visible and insensitive with an explanation.
+  Failed reads preserve observed state and their original errors. Setup-only
+  OS requirements report an administrator action and remain retryable.
+  Disable keeps packages, the unit, and container data. The GUI's Docker path
+  is unprivileged and does not change groups; the existing fixed system-Docker
+  helper commands and policies remain separate and unchanged. Missing helper
+  actions still leave affected privileged developer controls insensitive rather
+  than hidden.
+  A confirmed Developer Mode enable installs
   the Dev Container CLI (`devcontainer`) through Homebrew when available;
   its own gate refuses overlapping installs, previews use Homebrew's dry-run
   boundary without refreshing inventories, and failures never reverse developer

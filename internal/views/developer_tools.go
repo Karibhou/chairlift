@@ -225,13 +225,15 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 						}
 					}
 				case "docker":
-					item.active = docker.Active
-					item.canEnable = docker.Available && brew && status.Supports(ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable)
-					item.allowed = dockerErr == nil && status.Supports(ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable) && (docker.Active || item.canEnable)
+					if dockerErr == nil {
+						item.active = docker.Active
+					}
+					item.canEnable = brew && docker.Unavailable == ""
+					item.allowed = dockerErr == nil && (item.active || item.canEnable)
 					item.toggle.set(item.active)
 					item.row.SetSubtitle(dockerSubtitle(docker, dockerErr))
-					if !status.Supports(ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable) {
-						item.row.SetSubtitle("Docker isn't available on this computer.")
+					if !item.active && !brew && docker.Unavailable == "" {
+						item.row.SetSubtitle("Homebrew is required to install rootless Docker.")
 					}
 				}
 			}
@@ -285,16 +287,16 @@ func wslSubtitle(backend string, state devtools.WSLState, err error) string {
 
 func dockerSubtitle(state devtools.DockerState, err error) string {
 	switch {
-	case err != nil:
-		return "Couldn't check whether Docker is running."
+	case err != nil && state.Unavailable == "":
+		return "Couldn't check Docker's user service. Check your login session."
 	case state.Ready:
-		return "Docker is ready. Anyone using Docker can control this whole computer."
+		return "Rootless Docker is ready for this account."
 	case state.Active:
-		return "Docker is running. Log out and back in to use it."
-	case !state.Available:
-		return "Docker isn't available on this system, so containers can't run here."
+		return "Docker is running, but its socket is not responding."
+	case state.Unavailable != "":
+		return state.Unavailable
 	default:
-		return "Asks for your administrator password. Anyone using Docker can control this whole computer."
+		return "Installs Docker through Homebrew and runs it for this account without administrator access."
 	}
 }
 

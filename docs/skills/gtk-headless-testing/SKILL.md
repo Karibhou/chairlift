@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.1.1
-last_updated: 2026-10-04
+version: 2.1.2
+last_updated: 2026-10-21
 tags:
   - testing
   - gtk
@@ -129,6 +129,14 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 
 **Traps, each learned the hard way:**
 
+- **A cached Dakota venv is not a host executable.** Its `bin/python` can
+  symlink to an absolute interpreter path that exists only inside the pinned
+  image. A host `test -x` then rejects a working cache on Ubuntu, and a plain
+  `mv partial existing-directory` nests another venv instead of publishing it.
+  `dakota.sh` checks executability inside Dakota with the cache mounted
+  read-only, and replaces an unusable cache with a non-nesting rename after
+  the new environment is complete. The ordinary and live Docker E2E runs
+  deliberately reuse that same cache in one job.
 - **The host cannot run the suite.** `/usr/share/chairlift/config.yml` on a
   Bluefin host outranks every `config.dev.yml` fixture; `before_all` refuses
   to start rather than test the wrong file, and `environment.py` also checks

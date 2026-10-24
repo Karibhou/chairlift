@@ -303,17 +303,6 @@ func EnableKVMAccess(ctx context.Context) error {
 	return err
 }
 
-// SetDocker controls only the image's fixed Docker daemon and this account's
-// access. CLI installation stays unprivileged in Homebrew.
-func SetDocker(ctx context.Context, enabled bool) error {
-	command := ubluehelper.CommandDockerDisable
-	if enabled {
-		command = ubluehelper.CommandDockerEnable
-	}
-	_, _, err := runHelper(ctx, pkexecCommand, command)
-	return err
-}
-
 // Restart restarts the machine. It is the only ChairLift action that ends the
 // user's session, so callers must confirm before reaching it.
 func Restart(ctx context.Context) error {
