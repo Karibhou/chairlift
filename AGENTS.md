@@ -796,6 +796,11 @@ An agent must not break these:
   and reported as such, so undoing gaming mode never removes a distro default
   for every account; an unreadable declaration fails the removal closed. A
   component with a removable copy left is a failure, not a removal.
+  Components a previous release installed that this build no longer manages
+  (the Steam, ProtonUp-Qt, and Flatseal entries dropped when the stack moved
+  to ProtonPlus) are cleaned up the same way — a user copy removed, a system
+  copy kept only when the image ships it — and are reported in the status so
+  an upgrade never leaves them behind invisibly.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget

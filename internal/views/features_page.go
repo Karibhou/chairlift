@@ -700,7 +700,7 @@ func (uh *UserHome) confirmGamingDisable(toggle *guardedSwitch, row *adw.ActionR
 		toggle.set(true)
 		return
 	}
-	dialog := adw.NewAlertDialog("Turn Off Gaming Mode?", "Gaming tools are removed wherever they are installed: system-wide copies for every account on this computer, and copies installed only for your account. Tools that came with the system are left in place. Game data is kept.")
+	dialog := adw.NewAlertDialog("Turn Off Gaming Mode?", "Gaming tools are removed wherever they are installed: system-wide copies for every account on this computer, and copies installed only for your account. Steam, ProtonUp-Qt, and Flatseal left over from an earlier Gaming Mode are removed too. Tools that came with the system are left in place. Game data is kept.")
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("remove", "Remove")
 	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)

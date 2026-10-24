@@ -729,12 +729,15 @@ reported as a failure, partial outcomes stay visible, and a dry-run keeps the
 confirmed inventory unchanged.
 
 Steam, ProtonUp-Qt, and Flatseal were part of the stack before the single
-toggle and are no longer gaming components. ChairLift deliberately leaves
-copies an earlier release installed in place: Disable acts only on the
-current stack, and uninstalling Steam would take the user's library and
-launcher with it. Removing them is left to the user (GNOME Software or
-`flatpak uninstall`). On such hosts the toggle reflects only the current
-components.
+toggle and are no longer gaming components. They are tracked as retired so an
+upgrade does not leave their installs behind invisibly: Derive reports each one
+still installed, and the status notes how many. Disable cleans them up the same
+way as the current stack — a per-user copy is always removed, and a system copy
+is kept only when the OS image declares it ships it (the exception above),
+otherwise removed under Flatpak's PolicyKit. The system copy is kept for the
+same reason a current component's is: it predates gaming mode and removing it
+would take a distro default away from every account. On such hosts the toggle
+reflects only the current components, and the retired ones are called out.
 
 ### Desktop integration switches (`internal/shellextensions`)
 
