@@ -132,6 +132,12 @@ tap-info)
     if [ -f "$state/brew-taps.json" ]; then cat "$state/brew-taps.json"; else echo "[]"; fi
     exit 0 ;;
 info) echo '{{"formulae":[],"casks":[]}}'; exit 0 ;;
+trust)
+    # `brew trust --json=v1`: per-package trust entries. Nothing is trusted
+    # package by package unless a stub writes brew-trust.json.
+    if [ -f "$state/brew-trust.json" ]; then cat "$state/brew-trust.json"
+    else echo '{{"taps":[],"formulae":[],"casks":[],"commands":[]}}'; fi
+    exit 0 ;;
 esac
 exit 0
 """,
