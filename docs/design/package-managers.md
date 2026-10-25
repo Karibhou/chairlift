@@ -1035,3 +1035,21 @@ make e2e-atspi
 For documentation reconciliation, compare the linked live owners and follow
 [documentation consistency](../documentation-consistency.md); source and
 configuration win over historical plans or frozen external parity lists.
+
+## Collection package descriptions
+
+Apps renders Brewfile entries immediately. On first expansion of a collection,
+`homebrew.DescribeBundleItems` batches formula and cask metadata through
+`brew info --json=v2`, sharing the read timeout across both commands. It does
+not install packages or grant tap trust, and `brew info` never auto-taps: names
+in untapped taps fail as unavailable rather than cloning the tap. Homebrew may
+fetch metadata; an offline or failed query leaves package names and types
+visible with “Description unavailable”. Because Homebrew emits no JSON when any
+one name in a batch is unresolvable, a failed batch is retried one name at a
+time under the same deadline so the resolvable entries keep their descriptions.
+The row owns cancellation and rejects publication after destruction.
+
+Full identifiers and formula aliases match the returned metadata; formula and
+cask namespaces remain separate. Option-like tokens, URLs and Ruby paths are
+excluded from metadata commands. Flatpak, App Store and VS Code entries show
+their package type only until their own metadata providers are implemented.
