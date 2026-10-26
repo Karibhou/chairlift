@@ -761,8 +761,10 @@ An agent must not break these:
   Mode defaults to nsl (an Ubuntu machine inside systemd-vmspawn and
   QEMU/KVM) with Lima (Ubuntu LTS VM) as an alternative backend, both with an
   explicit `/dev/kvm` permission floor; the fixed `kvm-enable` action grants
-  access to the invoking account, effective after a new login. nsl's managed
-  machine is `ubuntu`, or the `debian` machine an older ChairLift created
+  access to the invoking account, effective after a new login. nsl also
+  requires the invoking session to belong to the `kvm` group even when the
+  device is writable. nsl's managed machine is `ubuntu`, or the `debian`
+  machine an older ChairLift created
   (`devtools.ParseNSLList`); WSL Mode reports, starts, and probes that one,
   creates `ubuntu` only when neither exists (never a second machine), and turns
   off with `nsl stop <machine>` on that machine only, which keeps data
