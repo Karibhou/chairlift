@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -344,8 +345,10 @@ func KVMAvailable() (exists, accessible bool) {
 	return true, true
 }
 
-// NSLKVMGroupMember checks the invoking session's groups, as nsl does in its
-// prerequisite check. /dev/kvm may be writable without kvm group membership.
+// NSLKVMGroupMember checks the invoking account's groups in the account
+// database, as nsl's prerequisite check does; nsl starts its VM through the kvm
+// group, so a grant counts without a new login. /dev/kvm may be writable
+// without kvm group membership.
 func NSLKVMGroupMember() (bool, error) {
 	group, err := exec.Command("getent", "group", "kvm").Output()
 	if err != nil {
@@ -355,9 +358,13 @@ func NSLKVMGroupMember() (bool, error) {
 	if len(fields) != 4 || fields[0] != "kvm" || fields[2] == "" {
 		return false, errors.New("invalid kvm group entry")
 	}
-	ids, err := exec.Command("id", "-G").Output()
+	account, err := user.Current()
 	if err != nil {
-		return false, fmt.Errorf("read session groups: %w", err)
+		return false, fmt.Errorf("look up current user: %w", err)
+	}
+	ids, err := exec.Command("id", "-G", "--", account.Username).Output()
+	if err != nil {
+		return false, fmt.Errorf("read account groups: %w", err)
 	}
 	for _, id := range strings.Fields(string(ids)) {
 		if id == fields[2] {
@@ -413,7 +420,18 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 			if err := nslEnableKVMAccess(ctx); err != nil {
 				return err
 			}
-			return ErrNewLogin
+			// Only device access waits for a new login; nsl reads kvm
+			// membership from the account database.
+			if !accessible {
+				return ErrNewLogin
+			}
+			member, err := NSLKVMGroupMember()
+			if err != nil {
+				return err
+			}
+			if !member {
+				return errors.New("virtual machine access was not granted to this account")
+			}
 		}
 		if !NSLInstalled() {
 			stage("Installing…")

@@ -196,8 +196,8 @@ reader, the file, or anything you imported from it.
 Developer options also offer **WSL Mode** (nsl persistent Linux machines by
 default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64)
 and **Enable Docker**. WSL needs hardware virtualization and access to
-`/dev/kvm`; nsl also needs membership in the `kvm` group. Permission grants
-require a new login. Docker installs its engine
+`/dev/kvm`; nsl also needs membership in the `kvm` group. Granting `/dev/kvm`
+access requires a new login; adding only `kvm` group membership does not. Docker installs its engine
 and tools through Homebrew and runs rootlessly for this account, without
 administrator access. A ready Docker socket, not installed CLI tools, confirms
 success. Turning it off keeps your containers and installed packages. Missing
