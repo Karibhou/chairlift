@@ -700,8 +700,12 @@ option and an in-session backend chooser. The first observation retains an
 existing Lima Ubuntu machine when no ChairLift nsl machine exists; it does not
 persist the chooser selection or silently migrate data. nsl requires Linux amd64;
 Lima supports Linux amd64 and arm64. Both require actual invoking-session
-`/dev/kvm` access; the fixed `kvm-enable` grant requires a new login before
-setup continues. nsl installs the `frostyard/tap/nsl` cask and runs `nsl doctor`.
+`/dev/kvm` access; nsl additionally requires the account's `kvm` group
+membership in the account database (as nsl's own check reads it), even when the
+device is writable. The fixed `kvm-enable` grant requires a new login before
+setup continues only when `/dev/kvm` was not accessible; a membership-only grant
+continues setup at once. nsl installs the
+`frostyard/tap/nsl` cask and runs `nsl doctor`.
 WSL Mode's nsl machine is `ubuntu`, or the `debian` machine an older ChairLift
 created (`devtools.ParseNSLList` prefers `ubuntu`; other machine names are the
 user's and are ignored). It creates an Ubuntu 26.04 machine (`ubuntu`) only when

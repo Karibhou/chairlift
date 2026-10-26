@@ -137,6 +137,15 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 		}
 		docker, dockerErr := devtools.DockerStatus(ctx)
 		kvmExists, kvmAccess := devtools.KVMAvailable()
+		var nslGroupErr error
+		if backend == devtools.BackendNSL && kvmExists {
+			member, err := devtools.NSLKVMGroupMember()
+			if err != nil {
+				log.Printf("views: nsl group check failed: %v", err)
+			}
+			nslGroupErr = err
+			kvmAccess = kvmAccess && err == nil && member
+		}
 		sgtk.RunOnMainThread(func() {
 			defer uh.developerGate.Reset()
 			if resolve {
@@ -212,6 +221,11 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 							item.allowed = false
 							item.toggle.set(item.active)
 							item.row.SetSubtitle(actionable)
+						} else if nslGroupErr != nil {
+							item.canEnable = false
+							item.allowed = false
+							item.toggle.set(item.active)
+							item.row.SetSubtitle(devtools.NeedsPrerequisite)
 						} else if !kvmAccess {
 							item.canEnable = status.Supports(ubluehelper.CommandKVMEnable)
 							item.allowed = item.canEnable

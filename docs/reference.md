@@ -143,8 +143,10 @@ to ChairLift's log, which is where to look when filing a bug report.
 Developer options include WSL Mode (an Ubuntu machine in systemd-vmspawn via
 nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
 Lima supports amd64 and arm64. Both require hardware virtualization and
-`/dev/kvm` access. **Enable Docker** installs the CLI, `docker-engine`,
-rootlesskit, slirp4netns, Docker Compose, lazydocker, and dive through Homebrew.
+`/dev/kvm` access. nsl also requires your account to belong to the `kvm`
+group, even when `/dev/kvm` is writable without it. **Enable Docker**
+installs the CLI, `docker-engine`, rootlesskit, slirp4netns, Docker Compose,
+lazydocker, and dive through Homebrew.
 It configures a rootless `docker.service` for this account, without administrator
 access or developer-group changes. It needs a running user session and the OS's
 `newuidmap`/`newgidmap` helpers; the setup tool validates subordinate UID/GID
