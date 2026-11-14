@@ -295,6 +295,9 @@ type USBDevice struct {
 	DevicePath   string
 	Manufacturer string
 	Product      string
+	VendorID     string
+	ProductID    string
+	Serial       string
 	IsPrinter    bool
 }
 
@@ -307,6 +310,55 @@ var usbSysfsRoot = defaultUSBSysfsRoot
 // which ones are printers based on device/interface classes (class 7 = Printer).
 func ScanUSBDevices() ([]USBDevice, error) {
 	return scanUSBDevicesFrom(usbSysfsRoot)
+}
+
+// USBIdentity identifies a printer independently of its current USB address.
+type USBIdentity struct {
+	VendorID  string
+	ProductID string
+	Serial    string
+}
+
+// String returns the identity in vendor:product:serial form.
+func (id USBIdentity) String() string {
+	return id.VendorID + ":" + id.ProductID + ":" + id.Serial
+}
+
+// ParseUSBIdentity parses a vendor:product:serial identity. Serial may be empty
+// and may contain colons.
+func ParseUSBIdentity(s string) (USBIdentity, error) {
+	parts := strings.SplitN(s, ":", 3)
+	if len(parts) != 3 || len(parts[0]) != 4 || len(parts[1]) != 4 {
+		return USBIdentity{}, fmt.Errorf("printerapp: invalid USB identity %q", s)
+	}
+	for _, value := range parts[:2] {
+		if _, err := strconv.ParseUint(value, 16, 16); err != nil {
+			return USBIdentity{}, fmt.Errorf("printerapp: invalid USB identity %q", s)
+		}
+	}
+	return USBIdentity{VendorID: strings.ToLower(parts[0]), ProductID: strings.ToLower(parts[1]), Serial: parts[2]}, nil
+}
+
+// ResolveUSBIdentity returns a path only when exactly one printer matches.
+func ResolveUSBIdentity(id USBIdentity) (path string, ok bool, err error) {
+	if _, err := ParseUSBIdentity(id.String()); err != nil {
+		return "", false, err
+	}
+	devices, err := ScanUSBDevices()
+	if err != nil {
+		return "", false, err
+	}
+	for _, device := range devices {
+		if !device.IsPrinter || !strings.EqualFold(device.VendorID, id.VendorID) ||
+			!strings.EqualFold(device.ProductID, id.ProductID) || device.Serial != id.Serial {
+			continue
+		}
+		if ok {
+			return "", false, nil
+		}
+		path, ok = device.DevicePath, true
+	}
+	return path, ok, nil
 }
 
 func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
@@ -344,6 +396,9 @@ func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
 
 		mfgBytes, _ := os.ReadFile(filepath.Join(devDir, "manufacturer"))
 		prodBytes, _ := os.ReadFile(filepath.Join(devDir, "product"))
+		vendorBytes, _ := os.ReadFile(filepath.Join(devDir, "idVendor"))
+		productIDBytes, _ := os.ReadFile(filepath.Join(devDir, "idProduct"))
+		serialBytes, _ := os.ReadFile(filepath.Join(devDir, "serial"))
 
 		manufacturer := strings.TrimSpace(string(mfgBytes))
 		product := strings.TrimSpace(string(prodBytes))
@@ -376,6 +431,9 @@ func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
 			DevicePath:   devPath,
 			Manufacturer: manufacturer,
 			Product:      product,
+			VendorID:     strings.TrimSpace(string(vendorBytes)),
+			ProductID:    strings.TrimSpace(string(productIDBytes)),
+			Serial:       strings.TrimSpace(string(serialBytes)),
 			IsPrinter:    isPrinter,
 		})
 	}

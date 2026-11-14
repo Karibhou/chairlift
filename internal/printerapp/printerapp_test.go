@@ -717,6 +717,9 @@ func TestScanUSBDevices(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(printerDir, "devnum"), []byte("8\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(printerDir, "manufacturer"), []byte("HP\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(printerDir, "product"), []byte("LaserJet M1212nf\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "idVendor"), []byte("03f0\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "idProduct"), []byte("052a\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "serial"), []byte("ABC123\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(printerDir, "bDeviceClass"), []byte("00\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(printerDir, "1-2:1.0", "bInterfaceClass"), []byte("07\n"), 0o644)
 
@@ -734,7 +737,65 @@ func TestScanUSBDevices(t *testing.T) {
 	}
 
 	d2 := devices[1]
-	if d2.DevicePath != "/dev/bus/usb/001/008" || !d2.IsPrinter || d2.Manufacturer != "HP" || d2.Product != "LaserJet M1212nf" {
+	if d2.DevicePath != "/dev/bus/usb/001/008" || !d2.IsPrinter || d2.Manufacturer != "HP" || d2.Product != "LaserJet M1212nf" || d2.VendorID != "03f0" || d2.ProductID != "052a" || d2.Serial != "ABC123" {
 		t.Errorf("device 2 = %+v; want HP LaserJet printer", d2)
+	}
+}
+
+func TestUSBIdentityResolution(t *testing.T) {
+	sysfs := t.TempDir()
+	prevRoot := usbSysfsRoot
+	usbSysfsRoot = sysfs
+	t.Cleanup(func() { usbSysfsRoot = prevRoot })
+
+	makeDevice := func(name, bus, dev, serial, class string) string {
+		t.Helper()
+		dir := filepath.Join(sysfs, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for file, value := range map[string]string{
+			"busnum": bus, "devnum": dev, "idVendor": "03f0",
+			"idProduct": "052a", "bDeviceClass": class,
+		} {
+			if err := os.WriteFile(filepath.Join(dir, file), []byte(value), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if serial != "" {
+			if err := os.WriteFile(filepath.Join(dir, "serial"), []byte(serial), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+	dir := makeDevice("1-1", "1", "8", "ABC:123", "07")
+	makeDevice("1-2", "1", "9", "", "07")
+	makeDevice("1-3", "1", "10", "ABC:123", "09")
+	id, err := ParseUSBIdentity("03F0:052a:ABC:123")
+	if err != nil || id.String() != "03f0:052a:ABC:123" {
+		t.Fatalf("identity = %+v, error = %v", id, err)
+	}
+	check := func(id USBIdentity, want string, wantOK bool) {
+		t.Helper()
+		path, ok, err := ResolveUSBIdentity(id)
+		if err != nil || path != want || ok != wantOK {
+			t.Fatalf("ResolveUSBIdentity(%+v) = %q, %v, %v; want %q, %v", id, path, ok, err, want, wantOK)
+		}
+	}
+	check(id, "/dev/bus/usb/001/008", true)
+	if err := os.WriteFile(filepath.Join(dir, "devnum"), []byte("15"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	check(id, "/dev/bus/usb/001/015", true)
+	noSerial := USBIdentity{VendorID: "03f0", ProductID: "052a"}
+	check(noSerial, "/dev/bus/usb/001/009", true)
+	makeDevice("1-4", "1", "11", "", "07")
+	check(noSerial, "", false)
+	check(USBIdentity{VendorID: "1234", ProductID: "5678"}, "", false)
+	for _, invalid := range []string{"", "03f0:052a", "xyz0:052a:", "03f0:052a0:"} {
+		if _, err := ParseUSBIdentity(invalid); err == nil {
+			t.Errorf("ParseUSBIdentity(%q) accepted invalid identity", invalid)
+		}
 	}
 }
