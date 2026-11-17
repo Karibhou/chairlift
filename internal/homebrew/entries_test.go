@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -261,6 +262,45 @@ func TestBundleTapsSkipsMalformedDirectives(t *testing.T) {
 func TestBundleTapsOnAMissingFileReturnsError(t *testing.T) {
 	if _, err := BundleTaps(filepath.Join(t.TempDir(), "absent.Brewfile")); err == nil {
 		t.Error("BundleTaps must fail on a missing file")
+	}
+}
+
+func TestBundleInstallCollectionPreparesDeclaredTrust(t *testing.T) {
+	for _, tc := range []struct {
+		name, info, failure string
+		want                []string
+		wantError           bool
+	}{
+		{"existing untrusted", `{"installed":true,"trusted":false}`, "", []string{"tap-info --json ublue-os/tap", "trust --tap ublue-os/tap", "bundle"}, false},
+		{"missing tap", `{"installed":false,"trusted":false}`, "", []string{"tap-info --json ublue-os/tap", "tap ublue-os/tap", "trust --tap ublue-os/tap", "bundle"}, false},
+		{"already trusted", `{"installed":true,"trusted":true}`, "", []string{"tap-info --json ublue-os/tap", "bundle"}, false},
+		{"old Homebrew", `{"installed":true}`, "", []string{"tap-info --json ublue-os/tap", "bundle"}, false},
+		{"trust fails", `{"installed":true,"trusted":false}`, "trust", []string{"tap-info --json ublue-os/tap", "trust --tap ublue-os/tap"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "Brewfile")
+			if err := os.WriteFile(path, []byte("tap \"ublue-os/tap\", trusted: true\ntap \"other/tap\"\ncask \"goose-linux\"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			script, argvLog := fakeBrewExecutable(t, "if [ \"$1\" = '"+tc.failure+"' ]; then exit 1; fi\nif [ \"$1\" = tap-info ]; then printf '%s' '[{\"name\":\"ublue-os/tap\","+tc.info[1:]+"]'; fi")
+			withHostResolution(t, script, "")
+			err := BundleInstallCollection(path)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("BundleInstallCollection error = %v, want error %v", err, tc.wantError)
+			}
+			data, err := os.ReadFile(argvLog)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := strings.Split(strings.TrimSpace(string(data)), "\n")
+			want := append([]string(nil), tc.want...)
+			if !tc.wantError {
+				want[len(want)-1] = "bundle install --file=" + path
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("commands = %q, want %q", got, want)
+			}
+		})
 	}
 }
 

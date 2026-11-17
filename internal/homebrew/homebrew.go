@@ -676,6 +676,39 @@ func BundleInstall(path string) error {
 	return err
 }
 
+// BundleInstallCollection prepares the taps explicitly trusted by a collection
+// before installing it. Homebrew may apply Brewfile trust too late for taps
+// that were already installed.
+func BundleInstallCollection(path string) error {
+	if dryrun.Enabled() {
+		return BundleInstall(path)
+	}
+	taps, err := BundleTaps(path)
+	if err != nil {
+		return err
+	}
+	for _, tap := range taps {
+		if !tap.Trusted {
+			continue
+		}
+		state, err := TapInfo(tap.Name)
+		if err != nil {
+			return err
+		}
+		if !state.Installed {
+			if err := Tap(tap.Name); err != nil {
+				return err
+			}
+		}
+		if state.HasTrust && !state.Trusted {
+			if err := TrustTap(tap.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return BundleInstall(path)
+}
+
 // BundleStatus represents the multi-state status of a Brewfile bundle.
 type BundleStatus string
 

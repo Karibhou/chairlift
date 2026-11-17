@@ -383,12 +383,10 @@ func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 	}()
 }
 
-// installBundleWhole installs a collection as a whole through `brew bundle`,
-// which keeps the tap directives and the trust flags the collection's own
-// Brewfile carries.
+// installBundleWhole prepares declared tap trust before installing each Brewfile.
 func installBundleWhole(paths []string) error {
 	for _, path := range paths {
-		if err := homebrew.BundleInstall(path); err != nil {
+		if err := homebrew.BundleInstallCollection(path); err != nil {
 			return err
 		}
 	}
